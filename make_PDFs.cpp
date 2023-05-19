@@ -66,7 +66,7 @@ bool pass_classifier(double energy, double class_result, double class_cut) {
 std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double classiferCut, bool is_reactorIBD) {
 
     // Define binning params
-    int nbins = 710;
+    int nbins = 100;
     double lowenergybin = 0.9;  // MeV
     double maxenergybin = 8.0;  // MeV
 
@@ -75,7 +75,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
 
     // Set branch addresses to unpack TTree
     TString *originReactor = NULL;
-    Double_t parentKE1;
+    // Double_t parentKE1;
     Double_t reconEnergy;
     Double_t reconX;
     Double_t reconY;
@@ -85,7 +85,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
     Int_t mcIndex;
     Double_t classResult;
 
-    EventInfo->SetBranchAddress("parentKE1", &parentKE1);
+    // EventInfo->SetBranchAddress("parentKE1", &parentKE1);
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
     EventInfo->SetBranchAddress("posy", &reconY);
@@ -96,8 +96,6 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
     if (is_reactorIBD) {
         EventInfo->SetBranchAddress("parentMeta1", &originReactor);
-    } else {
-        *originReactor = "alphaN";
     }
 
     RAT::DBLinkPtr linkdb;
@@ -109,7 +107,6 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int noscillated = 0;
     unsigned int noscillatedAnalysis = 0;
     unsigned int nvalidprompt = 0;
     TVector3 promptPos;
@@ -192,8 +189,9 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
                 }
             }
         }
+        a++;
     }
-    std::cout << "Number of entries surviving oscillation: " << noscillated << ", number of valid prompt events: "<< nvalidprompt << " number of entries surviving analysis cuts: " << noscillatedAnalysis << std::endl;
+    std::cout  << "Number of valid prompt events: "<< nvalidprompt << " number of entries surviving analysis cuts: " << noscillatedAnalysis << std::endl;
 
     return hists_map;
 }
@@ -214,7 +212,9 @@ int main(int argv, char** argc) {
     TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");
 
     // Loop through and apply tagging + cuts
+    std::cout << "Looping through reactor IBD events..." << std::endl; 
     std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, true);
+    std::cout << "Looping through alpha-n events..." << std::endl; 
     std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, false);
 
     // Normalise all the histograms
