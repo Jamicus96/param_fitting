@@ -200,10 +200,35 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree *EventInfo, double cla
 
 
 int main(int argv, char** argc) {
-    std::string IBD_events_address = argc[1];
+    std::string reactor_events_address = argc[1];
     std::string alphaN_events_address = argc[2];
     // std::string geoNu_events_address = argc[3];
     std::string output_file = argc[3];
+    double classifier_cut = std::stod(argc[4]);
+
+    // Read in files and get their TTrees
+    TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
+    TFile *alphaNFile = TFile::Open(alphaN_events_address.c_str());
+
+    TTree *reactorEventTree = (TTree *) reactorFile->Get("output");
+    TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");
 
     // Loop through and apply tagging + cuts
+    std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, true);
+    std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, false);
+
+    // Normalise all the histograms
+    // for (auto& x : reactor_hist_map) {  
+    //     x.second->Scale(1.0 / x.second->Integral(), "width");
+    // }
+
+    // Write un-normalised PDFs to file (scale between reactors is important. Only normalise them after adding them together)
+    TFile *outroot = new TFile(output_file.c_str(),"RECREATE");
+    for (auto& x : reactor_hist_map) {  
+        x.second->Write();  // loops through all the map entries (.first = key, .second = element), and writes them to the root file
+    }
+    outroot->Write();
+    outroot->Close();
+
+    return 0;
 }
