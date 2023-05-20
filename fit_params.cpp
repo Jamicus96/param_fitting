@@ -3,6 +3,7 @@
 #include <TH2.h>
 #include <RooRealVar.h>
 #include <RooDataHist.h>
+// #include "RooDataSet.h"
 #include <RooHistPdf.h>
 #include <RooAddPdf.h>
 #include <RooFitResult.h>
@@ -17,9 +18,100 @@
 #include <sstream>
 #include <RAT/DB.hh>
 #include <TRandom3.h>
+#include <TKey.h>
+#include <TObject.h>
+#include <TList.h>
+#include <TVectorD.h>
 
 using namespace RooFit;
 
+
+std::vector<std::string> SplitString(std::string str){
+    std::istringstream buf(str);
+    std::istream_iterator<std::string> beg(buf), end;
+    std::vector<std::string> tokens(beg, end); //each word of string now in vector
+    std::vector<std::string> info;
+    std::string dummy = "";
+
+    for(int i=0;i<tokens.size();i++){ //combine back to reactor name, core number
+        if(i==0){
+            dummy = tokens.at(i);
+            if(i!=tokens.size()-2){
+                dummy += " ";
+            }
+        }
+        else if(i!=tokens.size()-1){
+            dummy += tokens.at(i);
+            if(i!=tokens.size()-2){
+                dummy += " ";
+            }
+        }
+        else{
+            info.push_back(dummy);
+            info.push_back(tokens.at(i));
+        }
+    }
+
+    return info;
+}
+
+TVector3 LLAtoECEF(double longitude, double latitude, double altitude) {
+  // reference http://www.mathworks.co.uk/help/aeroblks/llatoecefposition.html
+  static double toRad = TMath::Pi()/180.;
+  static double Earthradius = 6378137.0; //Radius of the Earth (in meters)
+  static double f = 1./298.257223563; //Flattening factor WGS84 Model
+  static double L, rs, x, y, z;
+  L = atan( pow((1. - f),2)*tan(latitude*toRad))*180./TMath::Pi();
+  rs = sqrt( pow(Earthradius,2)/(1. + (1./pow((1. - f),2) - 1.)*pow(sin(L*toRad),2)));
+  x = (rs*cos(L*toRad)*cos(longitude*toRad) + altitude*cos(latitude*toRad)*cos(longitude*toRad))/1000; // in km
+  y = (rs*cos(L*toRad)*sin(longitude*toRad) + altitude*cos(latitude*toRad)*sin(longitude*toRad))/1000; // in km
+  z = (rs*sin(L*toRad) + altitude*sin(latitude*toRad))/1000; // in km
+
+  TVector3 ECEF = TVector3(x,y,z);
+
+  return ECEF;
+}
+
+double GetReactorDistanceLLA(const double &longitude, const double&latitude, const double &altitude) {
+    const TVector3 SNO_ECEF_coord_ = TVector3(672.87,-4347.18,4600.51);
+    double dist = (LLAtoECEF(longitude, latitude,altitude) - SNO_ECEF_coord_).Mag();
+  return dist;
+}
+
+/**
+ * @brief Lists all TH1D histograms from root file into a vector.
+ * 
+ * @param file_address 
+ * @return std::vector<TH1D*> 
+ */
+std::vector<TH1D*> read_hists_from_file(std::string file_address) {
+
+    TFile *fin = TFile::Open(file_address.c_str());
+    if (!fin->IsOpen()) {
+        std::cout << "Cannot open input file." << std::endl;
+        exit(1);
+    }
+    
+    // Iterate through list of objects in root file
+    TList* list = fin->GetListOfKeys() ;
+    if (!list) {std::cout << "No keys found in file\n" << std::endl; exit(1);}
+    TIter next(list);
+    TObject* obj;
+    TKey* key;
+    std::string name;
+    std::vector<TH1D*> hist_list;
+
+    // Go through list of histograms and add them to temp list if they are included in name list
+    while((key = (TKey*)next())){
+        obj = key->ReadObj() ;
+        if(obj->InheritsFrom(TH1::Class())){
+            // Check which histogram in file matches name
+            hist_list.push_back((TH1D*)obj);
+        }
+    }
+
+    return hist_list;
+}
 
 /**
  * @brief Computes list of constants needed for neutrino oscillation computations.
@@ -91,14 +183,41 @@ double survival_prob(const double E, const double L, const std::vector<double>& 
 }
 
 
-int main(int argv, char** argc) {
+TH1D* compute_tot_PDF(const std::vector<TH1D*>& hists, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13, double IBD_frac, double alphaN_frac) {
+    
+    unsigned int num_hists = hists.size();
+    std::string hist_name;
+    for (unsigned int n = 0; n < num_hists; ++n) {
+        hist_name = hists.at(n)->GetName();
+    }
+
+    // std::vector<std::string> originReactorVect = SplitString(originReactorString);
+    // linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+    // std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
+    // std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
+    // std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
+    // double baseline = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
+}
+
+int Fit_spectra(const std::vector<TH1D*>& hists) {
 
     // Get oscillation paramters from ratdb
-    // RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
-    // Double_t fDmSqr21 = linkdb->GetD("deltamsqr21");
-    // Double_t fDmSqr32 = linkdb->GetD("deltamsqr32");
-    // Double_t fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
-    // Double_t fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+    RAT::DB *db = RAT::DB::Get();
+    RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
+    // const double fDmSqr21 = linkdb->GetD("deltamsqr21");
+    const double fDmSqr32 = linkdb->GetD("deltamsqr32");
+    // const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
+    const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+
+    RooMsgService::instance().setGlobalKillBelow(RooFit::FATAL);
+}
+
+
+int main(int argv, char** argc) {
+    std::string PDFs_address = argc[1];
+
+    // Read in file
+    std::vector<TH1D*> hists = read_hists_from_file(PDFs_address);
 
     return 0;
 }
