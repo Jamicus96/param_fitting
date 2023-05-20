@@ -217,11 +217,6 @@ int main(int argv, char** argc) {
     std::cout << "Looping through alpha-n events..." << std::endl; 
     std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, false);
 
-    // Normalise all the histograms
-    // for (auto& x : reactor_hist_map) {  
-    //     x.second->Scale(1.0 / x.second->Integral(), "width");
-    // }
-
     // Write un-normalised PDFs to file (scale between reactors is important. Only normalise them after adding them together)
     TFile *outroot = new TFile(output_file.c_str(),"RECREATE");
     for (auto& x : reactor_hist_map) {  

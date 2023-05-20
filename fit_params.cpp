@@ -78,6 +78,17 @@ double GetReactorDistanceLLA(const double &longitude, const double&latitude, con
   return dist;
 }
 
+double get_baseline(RAT::DB *db, std::string core_name) {
+
+    std::vector<std::string> originReactorVect = SplitString(core_name);
+    RAT::DBLinkPtr linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+    std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
+    std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
+    std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
+
+    return GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
+}
+
 /**
  * @brief Lists all TH1D histograms from root file into a vector.
  * 
@@ -183,20 +194,52 @@ double survival_prob(const double E, const double L, const std::vector<double>& 
 }
 
 
-TH1D* compute_tot_PDF(const std::vector<TH1D*>& hists, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13, double IBD_frac, double alphaN_frac) {
+TH1D* compute_tot_PDF(RAT::DB *db, const std::vector<TH1D*>& hists, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13, double IBD_frac, double alphaN_frac) {
     
+    // Compute oscillation constants
+    const std::vector<double> params = compute_oscillation_constants(fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+
+    // Create histograms to sum reactor events and alphaN events, to make PDFs
+    TH1D* reactor_hist = (TH1D*)(hists.at(0)->Clone());
+    TH1D* alphaN_hist = (TH1D*)(hists.at(0)->Clone());
+
+    // Loop through all the histograms in the list, and add them to the relevant hist (with appropriate scaling)
     unsigned int num_hists = hists.size();
     std::string hist_name;
+    double E;
+    double L;
+    double value;
+    double prob;
     for (unsigned int n = 0; n < num_hists; ++n) {
         hist_name = hists.at(n)->GetName();
+        if (hist_name == "alphaN") {
+                alphaN_hist->Add(hists.at(n));
+        } else {
+            L = get_baseline(db, hist_name);
+            for (int i = 0; i < hists.at(n)->GetXaxis()->GetNbins(); i++) {
+                // Compute survival probability for particular energy at reactor baseline
+                E = hists.at(n)->GetXaxis()->GetBinCenter(i);
+                prob = survival_prob(E, L, params);
+
+                // Add value of bin from reactor core to total, scaled by survival probability
+                reactor_hist->AddBinContent(i, prob * hists.at(n)->GetBinContent(i));
+            }
+        }
     }
 
-    // std::vector<std::string> originReactorVect = SplitString(originReactorString);
-    // linkdb = db->GetLink("REACTOR",originReactorVect[0]);
-    // std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
-    // std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
-    // std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
-    // double baseline = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
+    // Normalise histograms
+    reactor_hist->Scale(1.0 / reactor_hist->Integral(), "width");
+    alphaN_hist->Scale(1.0 / alphaN_hist->Integral(), "width");
+
+    // Add histograms together (with scalings), to make the total PDF (normalised)
+    TH1D* total_PDF = (TH1D*)(reactor_hist->Clone());
+    total_PDF->SetName("Total_PDF");
+    total_PDF->SetTitle("Total PDF");
+
+    total_PDF->Add(reactor_hist, alphaN_hist, IBD_frac, alphaN_frac);
+    total_PDF->Scale(1.0 / total_PDF->Integral(), "width");
+
+    return total_PDF;
 }
 
 int Fit_spectra(const std::vector<TH1D*>& hists) {
