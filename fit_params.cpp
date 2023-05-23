@@ -4,6 +4,8 @@
 #include <RooRealVar.h>
 #include <RooDataHist.h>
 // #include "RooDataSet.h"
+#include <RooClassFactory.h>
+#include <RooTFnBinding.h>
 #include <RooHistPdf.h>
 #include <RooAddPdf.h>
 #include <RooFitResult.h>
@@ -22,6 +24,7 @@
 #include <TObject.h>
 #include <TList.h>
 #include <TVectorD.h>
+#include "Math/DistFunc.h"
 
 using namespace RooFit;
 
@@ -78,15 +81,20 @@ double GetReactorDistanceLLA(const double &longitude, const double&latitude, con
   return dist;
 }
 
-double get_baseline(RAT::DB *db, std::string core_name) {
+std::vector<double> get_baselines(RAT::DB *db, std::vector<TH1D*> hists) {
 
-    std::vector<std::string> originReactorVect = SplitString(core_name);
-    RAT::DBLinkPtr linkdb = db->GetLink("REACTOR",originReactorVect[0]);
-    std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
-    std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
-    std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
+    std::vector<double> baselines;
+    for (unsigned int n = 0; n < hists.size(); ++n) {
+        std::vector<std::string> originReactorVect = SplitString(hists.at(n)->GetName());
+        RAT::DBLinkPtr linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+        std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
+        std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
+        std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
 
-    return GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
+        baselines.push_back(GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]));
+    }
+
+    return baselines;
 }
 
 /**
@@ -95,7 +103,7 @@ double get_baseline(RAT::DB *db, std::string core_name) {
  * @param file_address 
  * @return std::vector<TH1D*> 
  */
-std::vector<TH1D*> read_hists_from_file(std::string file_address) {
+std::vector<std::vector<TH1D*>> read_hists_from_file(std::string file_address) {
 
     TFile *fin = TFile::Open(file_address.c_str());
     if (!fin->IsOpen()) {
@@ -110,18 +118,24 @@ std::vector<TH1D*> read_hists_from_file(std::string file_address) {
     TObject* obj;
     TKey* key;
     std::string name;
-    std::vector<TH1D*> hist_list;
+    std::vector<TH1D*> reactor_hists;
+    std::vector<TH1D*> alphaN_hists;
 
     // Go through list of histograms and add them to temp list if they are included in name list
     while((key = (TKey*)next())){
         obj = key->ReadObj() ;
         if(obj->InheritsFrom(TH1::Class())){
             // Check which histogram in file matches name
-            hist_list.push_back((TH1D*)obj);
+            name = obj->GetName();
+            if (name == "alphaN") {
+                alphaN_hists.push_back((TH1D*)obj);
+            } else {
+                reactor_hists.push_back((TH1D*)obj);
+            }
         }
     }
 
-    return hist_list;
+    return {reactor_hists, alphaN_hists};
 }
 
 /**
@@ -146,37 +160,34 @@ std::vector<double> compute_oscillation_constants(const double fDmSqr21, const d
     const double a1_vac = (1.0/3.0) * (fDmSqr21 * fDmSqr31 - fDmSqr21*fDmSqr21 - fDmSqr31*fDmSqr31);
     const double Y_ee_vac = (2.0/3.0) * a1_vac + H_ee_vac*H_ee_vac + H_neq2;
 
-    // Define electron density of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-    const double Ne = 8.13e23;
-    const double alpha = - 2.535e-31 * Ne;  // conversion factor in eV2/MeV
+    // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
+    const double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
 
     return {H_ee_vac, a0_vac, a1_vac, Y_ee_vac, alpha};
 }
 
 /**
- * @brief Computes survival probability for an electron antineutrino, in curst with constant matter density.
+ * @brief Re-compute oscillation constants to take into account matter effects.
+ * Essencially computes everything possible in oscillations that don't requite the baseline.
  * 
  * @param E  antineutrino recon energy (MeV)
- * @param L  baseline (km)
  * @param params = {H_ee_vac, a0_vac, a1_vac, Y_ee_vac, alpha}
- * @return double 
+ * @return std::vector<std::vector<double>> 
  */
-double survival_prob(const double E, const double L, const std::vector<double>& params) {
-
-    double scale = 1.267e3 * L / E; // for E in [MeV] and L in [km]
-    double A_CC = params[4] * L; // for A_CC in [eV^2] and nuE in [MeV]
+std::vector<std::vector<double>> re_compute_consts(const double E, const std::vector<double>& params) {
+    const double A_CC = params[4] * E; // for A_CC in [eV^2] and nuE in [MeV]
     
     // Compute new values for H_ee, Y, a0 and a1 (make sure and Y are updated after their use by others)
-    double alpha_1 = params[0] * A_CC + (1.0/3.0) * A_CC*A_CC;
+    const double alpha_1 = params[0] * A_CC + (1.0/3.0) * A_CC*A_CC;
 
-    double a0 = params[1] - params[3] * A_CC - (1.0/3.0) * params[0] * A_CC*A_CC - (2.0/27.0) * A_CC*A_CC*A_CC;
-    double a1 = params[2] - alpha_1;
-    double Y_ee = params[3] + (2.0/3.0) * alpha_1;
-    double H_ee = params[0] + (2.0/3.0) * A_CC;
+    const double a0 = params[1] - params[3] * A_CC - (1.0/3.0) * params[0] * A_CC*A_CC - (2.0/27.0) * A_CC*A_CC*A_CC;
+    const double a1 = params[2] - alpha_1;
+    const double Y_ee = params[3] + (2.0/3.0) * alpha_1;
+    const double H_ee = params[0] + (2.0/3.0) * A_CC;
 
     // Get eigenvalues of H, and constants X and theta
-    double arcCos = (1.0/3.0) * acos(1.5 * (a0/a1) * sqrt(- 3.0 / a1));
-    double preFact = 2.0 * sqrt(- a1 / 3.0);
+    const double arcCos = (1.0/3.0) * acos(1.5 * (a0/a1) * sqrt(- 3.0 / a1));
+    const double preFact = 2.0 * sqrt(- a1 / 3.0);
 
     double eigen[3];
     double X[3];
@@ -185,82 +196,151 @@ double survival_prob(const double E, const double L, const std::vector<double>& 
         X[i] = (1.0/3.0) + (eigen[i] * H_ee + Y_ee) / (3.0 * eigen[i]*eigen[i] + a1);
     }
 
-    double s_10 = sin(scale * (eigen[1] - eigen[0]));
-    double s_20 = sin(scale * (eigen[2] - eigen[0]));
-    double s_21 = sin(scale * (eigen[2] - eigen[1]));
-
-    // Compute probability
-    return 4.0 * (X[1]*X[0]*s_10*s_10 + X[2]*X[0]*s_20*s_20 + X[2]*X[1]*s_21*s_21);
+    return {eigen, X};
 }
 
+/**
+ * @brief Computes survival probability for an electron antineutrino, in curst with constant matter density.
+ * 
+ * @param E  antineutrino recon energy (MeV)
+ * @param L  baseline (km)
+ * @param params = {eigen[3], X[3]}
+ * @return double 
+ */
+double survival_prob(const double E, const double L, const std::vector<std::vector<double>>& params) {
 
-TH1D* compute_tot_PDF(RAT::DB *db, const std::vector<TH1D*>& hists, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13, double IBD_frac, double alphaN_frac) {
+    const double scale = 1.267e3 * L / E; // for E in [MeV] and L in [km]
+
+    const double s_10 = sin(scale * (params[0][1] - params[0][0]));
+    const double s_20 = sin(scale * (params[0][2] - params[0][0]));
+    const double s_21 = sin(scale * (params[0][2] - params[0][1]));
+
+    // Compute probability
+    return 4.0 * (params[1][1]*params[1][0]*s_10*s_10 + params[1][2]*params[1][0]*s_20*s_20 + params[1][2]*params[1][1]*s_21*s_21);
+}
+
+TH1D* compute_tot_reactor_spec(const std::vector<TH1D*>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
     
     // Compute oscillation constants
     const std::vector<double> params = compute_oscillation_constants(fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
 
     // Create histograms to sum reactor events and alphaN events, to make PDFs
     TH1D* reactor_hist = (TH1D*)(hists.at(0)->Clone());
-    TH1D* alphaN_hist = (TH1D*)(hists.at(0)->Clone());
 
-    // Loop through all the histograms in the list, and add them to the relevant hist (with appropriate scaling)
+    // Assume all the histograms have the same E binning
     unsigned int num_hists = hists.size();
-    std::string hist_name;
     double E;
-    double L;
-    double value;
     double prob;
-    for (unsigned int n = 0; n < num_hists; ++n) {
-        hist_name = hists.at(n)->GetName();
-        if (hist_name == "alphaN") {
-                alphaN_hist->Add(hists.at(n));
-        } else {
-            L = get_baseline(db, hist_name);
-            for (int i = 0; i < hists.at(n)->GetXaxis()->GetNbins(); i++) {
-                // Compute survival probability for particular energy at reactor baseline
-                E = hists.at(n)->GetXaxis()->GetBinCenter(i);
-                prob = survival_prob(E, L, params);
-
-                // Add value of bin from reactor core to total, scaled by survival probability
-                reactor_hist->AddBinContent(i, prob * hists.at(n)->GetBinContent(i));
-            }
+    std::vector<std::vector<double>> re_consts;
+    for (unsigned int i = 1; i < hists.at(0)->GetXaxis()->GetNbins(); ++i) {
+        E = hists.at(0)->GetXaxis()->GetBinCenter(i);
+        re_consts = re_compute_consts(E, params);
+        for (unsigned int j = 0; j < num_hists; ++j) {
+            // Compute survival probability for particular energy at reactor baseline
+            prob = survival_prob(E, L.at(j), re_consts);
+            // Add value of bin from reactor core to total, scaled by survival probability
+            reactor_hist->AddBinContent(i, prob * hists.at(j)->GetBinContent(i));
         }
     }
 
-    // Normalise histograms
-    reactor_hist->Scale(1.0 / reactor_hist->Integral(), "width");
-    alphaN_hist->Scale(1.0 / alphaN_hist->Integral(), "width");
-
-    // Add histograms together (with scalings), to make the total PDF (normalised)
-    TH1D* total_PDF = (TH1D*)(reactor_hist->Clone());
-    total_PDF->SetName("Total_PDF");
-    total_PDF->SetTitle("Total PDF");
-
-    total_PDF->Add(reactor_hist, alphaN_hist, IBD_frac, alphaN_frac);
-    total_PDF->Scale(1.0 / total_PDF->Integral(), "width");
-
-    return total_PDF;
+    return reactor_hist;
 }
 
-int Fit_spectra(const std::vector<TH1D*>& hists) {
+double ML_fit(RooRealVar E, RooRealVar reactor_frac, RooRealVar alphaN_frac, RooDataHist dataHist, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
 
-    // Get oscillation paramters from ratdb
-    RAT::DB *db = RAT::DB::Get();
-    RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
-    // const double fDmSqr21 = linkdb->GetD("deltamsqr21");
-    const double fDmSqr32 = linkdb->GetD("deltamsqr32");
-    // const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
-    const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+    // Compute total reactor IBD spectrum
+    TH1D* reactor_spec = compute_tot_reactor_spec(hists.at(0), L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+    // Normalise histograms
+    // reactor_hist->Scale(1.0 / reactor_hist->Integral(), "width");
 
-    RooMsgService::instance().setGlobalKillBelow(RooFit::FATAL);
+    // Create reactor IBD PDF
+    RooDataHist* tempData = new RooDataHist("tempData", "temporary data", E, reactor_spec);
+    RooHistPdf* reactor_PDF = new RooHistPdf("PDF", "PDF", E, *tempData);
+
+    // Create alphaN PDF
+    tempData = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
+    RooHistPdf* alphaN_PDF = new RooHistPdf("PDF", "PDF", E, *tempData);
+
+    //make model
+    RooAddPdf model("model", "r+a", RooArgList(*reactor_PDF, *alphaN_PDF), RooArgList(reactor_frac, alphaN_frac));
+
+    //fit to data
+    RooFitResult *result = model.fitTo(dataHist, Extended(true), PrintLevel(-1), SumW2Error(kFALSE), Save());
+
+    //get results
+    return result->minNll();
+}
+
+TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
+
+    //declare observables
+    RooRealVar E("E", "energy", 0.9, 8);
+    RooRealVar reactor_frac("reactor_frac", "reactorIBD fraction", 0.4, 0.8);
+    RooRealVar alphaN_frac("alphaN_frac", "alpha-n fraction", 0.2, 0.6);
+
+    // Make data hist (data that must be fit)
+    RooDataHist dataHist("dataHist", "data hist", E, data);
+
+    // Define varying parameters (should be evenly spaced, and contain "true" value ideally)
+    std::vector<double> Dm21 = {0.2*fDmSqr21, fDmSqr21, 1.8*fDmSqr21};
+    std::vector<double> Theta12 = {0.2*fSSqrTheta12, fSSqrTheta12, 1.8*fSSqrTheta12};
+
+    // Create 2-d hist to dump data into
+    double Dm21_step = Dm21.at(1) - Dm21.at(0);
+    double Theta12_step = Theta12.at(1) - Theta12.at(0);
+
+    double Dm21_lower = Dm21.at(0) - 0.5 * Dm21_step;
+    double Theta12_lower = Theta12.at(0) - 0.5 * Theta12_step;
+    double Dm21_upper = Dm21.at(Dm21.size()-1) + 0.5 * Dm21_step;
+    double Theta12_upper = Theta12.at(Theta12.size()-1) + 0.5 * Theta12_step;
+    
+    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", Theta12.size(), Theta12_lower, Theta12_upper, Dm21.size(), Dm21_lower, Dm21_upper);
+
+    // Compute best fit Log likelihood for each set of paramters (fraction of alpha-n vs reactor IBD events is fit in each loop)
+    double MLL;
+    for (unsigned int i = 0; i < Theta12.size(); ++i) {
+        for (unsigned int j = 0; j < Dm21.size(); ++j) {
+            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, hists, L, Dm21[j], fDmSqr32, Theta12[i], fSSqrTheta13);
+            minllHist->SetBinContent(i+1, j+1, MLL);
+        }
+    }
+
+    return minllHist;
 }
 
 
 int main(int argv, char** argc) {
     std::string PDFs_address = argc[1];
+    std::string out_address = argc[2];
 
     // Read in file
-    std::vector<TH1D*> hists = read_hists_from_file(PDFs_address);
+    std::vector<std::vector<TH1D*>> hists = read_hists_from_file(PDFs_address);
+
+    // Get baselines
+    RAT::DB *db = RAT::DB::Get();
+    std::vector<double> L = get_baselines(db, hists.at(0));
+
+    // Get oscillation constants
+    RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
+    const double fDmSqr21 = linkdb->GetD("deltamsqr21");
+    const double fDmSqr32 = linkdb->GetD("deltamsqr32");
+    const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
+    const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+
+    // Make fake dataset out of PDF hists (same function called to make PDFs)
+    TH1D* reactor_hist = compute_tot_reactor_spec(hists.at(0), L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+    TH1D* data = (TH1D*)reactor_hist->Clone();
+    data->Add(reactor_hist, 1.0);  // Add reactor events
+    data->Add(hists.at(1).at(0), 1.0);  // Add alpha-n events
+
+    // Do fitting for a range of values, summarised in 2-D hist
+    TH2D* minllHist = Fit_spectra(data, hists, L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+
+    // Write hist to file and close
+    TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
+    minllHist->Write();
+    outroot->Write();
+    outroot->Close();
 
     return 0;
 }
