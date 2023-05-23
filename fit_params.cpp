@@ -246,29 +246,31 @@ TH1D* compute_tot_reactor_spec(const std::vector<TH1D*>& hists, const std::vecto
     return reactor_hist;
 }
 
-double ML_fit(RooRealVar E, RooRealVar reactor_frac, RooRealVar alphaN_frac, RooDataHist dataHist, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
+double ML_fit(const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac, RooDataHist& dataHist, RooHistPdf& alphaN_PDF, const std::vector<TH1D*>& reactor_hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
 
     // Compute total reactor IBD spectrum
-    TH1D* reactor_spec = compute_tot_reactor_spec(hists.at(0), L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+    TH1D* reactor_spec = compute_tot_reactor_spec(reactor_hists, L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
     // Normalise histograms
     // reactor_hist->Scale(1.0 / reactor_hist->Integral(), "width");
 
     // Create reactor IBD PDF
-    RooDataHist* tempData = new RooDataHist("tempData", "temporary data", E, reactor_spec);
-    RooHistPdf* reactor_PDF = new RooHistPdf("PDF", "PDF", E, *tempData);
+    RooDataHist* tempData_react = new RooDataHist("tempData", "temporary data", E, reactor_spec);
+    RooHistPdf* reactor_PDF = new RooHistPdf("PDF", "PDF", E, *tempData_react);
 
-    // Create alphaN PDF
-    tempData = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
-    RooHistPdf* alphaN_PDF = new RooHistPdf("PDF", "PDF", E, *tempData);
+    // Make model
+    RooAddPdf model("model", "r+a", RooArgList(*reactor_PDF, alphaN_PDF), RooArgList(reactor_frac, alphaN_frac));
 
-    //make model
-    RooAddPdf model("model", "r+a", RooArgList(*reactor_PDF, *alphaN_PDF), RooArgList(reactor_frac, alphaN_frac));
-
-    //fit to data
+    // Fit to data
     RooFitResult *result = model.fitTo(dataHist, Extended(true), PrintLevel(-1), SumW2Error(kFALSE), Save());
 
-    //get results
-    return result->minNll();
+    // Get results
+    double minll = result->minNll();
+
+    // delete objects
+    delete(tempData_react);
+    delete(reactor_PDF);
+
+    return minll;
 }
 
 TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
@@ -280,6 +282,10 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
 
     // Make data hist (data that must be fit)
     RooDataHist dataHist("dataHist", "data hist", E, data);
+
+    // Create alphaN PDF
+    RooDataHist* tempData_alpha = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
+    RooHistPdf* alphaN_PDF = new RooHistPdf("PDF", "PDF", E, *tempData_alpha);
 
     // Define varying parameters (should be evenly spaced, and contain "true" value ideally)
     std::vector<double> Dm21 = {0.2*fDmSqr21, fDmSqr21, 1.8*fDmSqr21};
@@ -300,10 +306,14 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
     double MLL;
     for (unsigned int i = 0; i < Theta12.size(); ++i) {
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
-            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, hists, L, Dm21[j], fDmSqr32, Theta12[i], fSSqrTheta13);
+            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21[j], fDmSqr32, Theta12[i], fSSqrTheta13);
             minllHist->SetBinContent(i+1, j+1, MLL);
         }
     }
+
+    // delete objects
+    delete(tempData_alpha);
+    delete(alphaN_PDF);
 
     return minllHist;
 }
