@@ -95,6 +95,7 @@ std::vector<double> get_baselines(RAT::DB *db, std::vector<TH1D*> hists) {
         fLatitude  = linkdb->GetDArray("latitude");
         fLongitute = linkdb->GetDArray("longitude");
         fAltitude = linkdb->GetDArray("altitude");
+        linkdb->~DBLink();
 
         baselines.push_back(GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]));
     }
@@ -332,6 +333,7 @@ int main(int argv, char** argc) {
     std::vector<std::vector<TH1D*>> hists = read_hists_from_file(PDFs_address);
 
     // Get baselines
+    RAT::DB::Get()->SetAirplaneModeStatus(true);
     RAT::DB *db = RAT::DB::Get();
     std::vector<double> L = get_baselines(db, hists.at(0));
 
@@ -341,6 +343,7 @@ int main(int argv, char** argc) {
     const double fDmSqr32 = linkdb->GetD("deltamsqr32");
     const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+    linkdb->~DBLink();
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
     TH1D* reactor_hist = compute_tot_reactor_spec(hists.at(0), L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
