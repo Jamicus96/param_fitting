@@ -95,7 +95,6 @@ std::vector<double> get_baselines(RAT::DB *db, std::vector<TH1D*> hists) {
         fLatitude  = linkdb->GetDArray("latitude");
         fLongitute = linkdb->GetDArray("longitude");
         fAltitude = linkdb->GetDArray("altitude");
-        linkdb->~DBLink();
 
         baselines.push_back(GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]));
     }
@@ -139,6 +138,16 @@ std::vector<std::vector<TH1D*>> read_hists_from_file(std::string file_address) {
                 reactor_hists.push_back((TH1D*)obj);
             }
         }
+    }
+
+    // Error handling
+    if (reactor_hists.size() == 0) {
+        std::cout << "ERROR: No reactor IBD histograms!" << std::endl;
+        exit(1);
+    }
+    if (alphaN_hists.size() == 0) {
+        std::cout << "ERROR: No alpha-n histograms!" << std::endl;
+        exit(1);
     }
 
     return {reactor_hists, alphaN_hists};
@@ -195,11 +204,11 @@ std::vector<std::vector<double>> re_compute_consts(const double E, const std::ve
     const double arcCos = (1.0/3.0) * acos(1.5 * (a0/a1) * sqrt(- 3.0 / a1));
     const double preFact = 2.0 * sqrt(- a1 / 3.0);
 
-    double eigen[3];
-    double X[3];
+    std::vector<double> eigen = {0., 0., 0.};
+    std::vector<double> X = {0., 0., 0.};
     for(int i=0; i<3; ++i){
-        eigen[i] = preFact * cos(arcCos - (2.0/3.0) * M_PI * i);
-        X[i] = (1.0/3.0) + (eigen[i] * H_ee + Y_ee) / (3.0 * eigen[i]*eigen[i] + a1);
+        eigen.at(i) = preFact * cos(arcCos - (2.0/3.0) * M_PI * i);
+        X.at(i) = (1.0/3.0) + (eigen.at(i) * H_ee + Y_ee) / (3.0 * eigen.at(i)*eigen.at(i) + a1);
     }
 
     return {eigen, X};
@@ -310,6 +319,7 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
 
     // Compute best fit Log likelihood for each set of paramters (fraction of alpha-n vs reactor IBD events is fit in each loop)
     double MLL;
+    std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < Theta12.size(); ++i) {
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21[j], fDmSqr32, Theta12[i], fSSqrTheta13);
@@ -330,11 +340,14 @@ int main(int argv, char** argc) {
     std::string out_address = argc[2];
 
     // Read in file
+    std::cout << "Reading in hists from file..." << std::endl;
     std::vector<std::vector<TH1D*>> hists = read_hists_from_file(PDFs_address);
 
     // Get baselines
     RAT::DB::Get()->SetAirplaneModeStatus(true);
     RAT::DB *db = RAT::DB::Get();
+    db->LoadDefaults();
+    std::cout << "Getting baselines..." << std::endl;
     std::vector<double> L = get_baselines(db, hists.at(0));
 
     // Get oscillation constants
@@ -343,15 +356,16 @@ int main(int argv, char** argc) {
     const double fDmSqr32 = linkdb->GetD("deltamsqr32");
     const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
-    linkdb->~DBLink();
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
+    std::cout << "Creating fake dataset..." << std::endl;
     TH1D* reactor_hist = compute_tot_reactor_spec(hists.at(0), L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
     TH1D* data = (TH1D*)reactor_hist->Clone();
     data->Add(reactor_hist, 1.0);  // Add reactor events
     data->Add(hists.at(1).at(0), 1.0);  // Add alpha-n events
 
     // Do fitting for a range of values, summarised in 2-D hist
+    std::cout << "Fitting spectra to dataset..." << std::endl;
     TH2D* minllHist = Fit_spectra(data, hists, L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
 
     // Write hist to file and close

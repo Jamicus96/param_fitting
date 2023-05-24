@@ -222,6 +222,9 @@ int main(int argv, char** argc) {
     for (auto& x : reactor_hist_map) {  
         x.second->Write();  // loops through all the map entries (.first = key, .second = element), and writes them to the root file
     }
+    for (auto& x : alphaN_hist_map) {  
+        x.second->Write();  // loops through all the map entries (.first = key, .second = element), and writes them to the root file
+    }
     outroot->Write();
     outroot->Close();
 
