@@ -84,12 +84,17 @@ double GetReactorDistanceLLA(const double &longitude, const double&latitude, con
 std::vector<double> get_baselines(RAT::DB *db, std::vector<TH1D*> hists) {
 
     std::vector<double> baselines;
+    RAT::DBLinkPtr linkdb;
+    std::vector<std::string> originReactorVect;
+    std::vector<Double_t> fLatitude;
+    std::vector<Double_t> fLongitute;
+    std::vector<Double_t> fAltitude;
     for (unsigned int n = 0; n < hists.size(); ++n) {
-        std::vector<std::string> originReactorVect = SplitString(hists.at(n)->GetName());
-        RAT::DBLinkPtr linkdb = db->GetLink("REACTOR",originReactorVect[0]);
-        std::vector<Double_t> fLatitude  = linkdb->GetDArray("latitude");
-        std::vector<Double_t> fLongitute = linkdb->GetDArray("longitude");
-        std::vector<Double_t> fAltitude = linkdb->GetDArray("altitude");
+        originReactorVect = SplitString(hists.at(n)->GetName());
+        linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+        fLatitude  = linkdb->GetDArray("latitude");
+        fLongitute = linkdb->GetDArray("longitude");
+        fAltitude = linkdb->GetDArray("altitude");
 
         baselines.push_back(GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]));
     }
