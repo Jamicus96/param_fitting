@@ -270,7 +270,7 @@ double ML_fit(const RooRealVar& E, const RooRealVar& reactor_frac, const RooReal
 
     // Create reactor IBD PDF
     RooDataHist* tempData_react = new RooDataHist("tempData", "temporary data", E, reactor_spec);
-    RooHistPdf* reactor_PDF = new RooHistPdf("PDF", "PDF", E, *tempData_react);
+    RooHistPdf* reactor_PDF = new RooHistPdf("reactor_PDF", "reactor PDF", E, *tempData_react);
 
     // Make model
     RooAddPdf model("model", "r+a", RooArgList(*reactor_PDF, alphaN_PDF), RooArgList(reactor_frac, alphaN_frac));
@@ -300,16 +300,24 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
 
     // Create alphaN PDF
     RooDataHist* tempData_alpha = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
-    RooHistPdf* alphaN_PDF = new RooHistPdf("PDF", "PDF", E, *tempData_alpha);
+    RooHistPdf* alphaN_PDF = new RooHistPdf("alphaN_PDF", "alphaN PDF", E, *tempData_alpha);
 
-    // Define varying parameters (should be evenly spaced, and contain "true" value ideally)
-    std::vector<double> Dm21 = {0.2*fDmSqr21, fDmSqr21, 1.8*fDmSqr21};
-    std::vector<double> Theta12 = {0.2*fSSqrTheta12, fSSqrTheta12, 1.8*fSSqrTheta12};
+    // Define varying parameters (evenly spaced, and contains "true" value in the middle)
+    std::vector<double> Dm21 = {fDmSqr21};
+    std::vector<double> Theta12 = {fSSqrTheta12};
+    unsigned int N_steps_half = 50; // Total number of steps = 2 * N_steps_half + 1
+    double Dm21_min = 0.2 * fDmSqr21;
+    double Theta12_min = 0.2 * fSSqrTheta12;
+    double Dm21_step = (fDmSqr21 - Dm21_min) / (double)N_steps_half;
+    double Theta12_step = (fSSqrTheta12 - Theta12_min) / (double)N_steps_half;
+    for (unsigned int n = 1; n < N_steps_half+1; ++n) {
+        Dm21.push_back(fDmSqr21 + (double)n * Dm21_step);
+        Dm21.insert(Dm21.begin(), fDmSqr21 - (double)n * Dm21_step);
+        Theta12.push_back(fSSqrTheta12 + (double)n * Theta12_step);
+        Theta12.insert(Theta12.begin(), fSSqrTheta12 - (double)n * Theta12_step);
+    }
 
     // Create 2-d hist to dump data into
-    double Dm21_step = Dm21.at(1) - Dm21.at(0);
-    double Theta12_step = Theta12.at(1) - Theta12.at(0);
-
     double Dm21_lower = Dm21.at(0) - 0.5 * Dm21_step;
     double Theta12_lower = Theta12.at(0) - 0.5 * Theta12_step;
     double Dm21_upper = Dm21.at(Dm21.size()-1) + 0.5 * Dm21_step;
@@ -321,8 +329,10 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
     double MLL;
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < Theta12.size(); ++i) {
+        // std::cout << "i = " << i << std::endl;
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
-            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21[j], fDmSqr32, Theta12[i], fSSqrTheta13);
+            // std::cout << "j = " << j << std::endl;
+            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21.at(j), fDmSqr32, Theta12.at(i), fSSqrTheta13);
             minllHist->SetBinContent(i+1, j+1, MLL);
         }
     }
