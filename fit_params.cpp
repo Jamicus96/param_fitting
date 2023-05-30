@@ -288,7 +288,7 @@ double ML_fit(const RooRealVar& E, const RooRealVar& reactor_frac, const RooReal
     return minll;
 }
 
-TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
+TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr32, const double fSSqrTheta13) {
 
     //declare observables
     RooRealVar E("E", "energy", 0.9, 8);
@@ -302,40 +302,46 @@ TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, cons
     RooDataHist* tempData_alpha = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
     RooHistPdf* alphaN_PDF = new RooHistPdf("alphaN_PDF", "alphaN PDF", E, *tempData_alpha);
 
-    // Define varying parameters (evenly spaced, and contains "true" value in the middle)
-    std::vector<double> Dm21 = {fDmSqr21};
-    std::vector<double> Theta12 = {fSSqrTheta12};
-    unsigned int N_steps_half = 50; // Total number of steps = 2 * N_steps_half + 1
-    double Dm21_min = 0.2 * fDmSqr21;
-    double Theta12_min = 0.2 * fSSqrTheta12;
-    double Dm21_step = (fDmSqr21 - Dm21_min) / (double)N_steps_half;
-    double Theta12_step = (fSSqrTheta12 - Theta12_min) / (double)N_steps_half;
-    for (unsigned int n = 1; n < N_steps_half+1; ++n) {
-        Dm21.push_back(fDmSqr21 + (double)n * Dm21_step);
-        Dm21.insert(Dm21.begin(), fDmSqr21 - (double)n * Dm21_step);
-        Theta12.push_back(fSSqrTheta12 + (double)n * Theta12_step);
-        Theta12.insert(Theta12.begin(), fSSqrTheta12 - (double)n * Theta12_step);
+    // Define varying parameters (evenly spaced. plot theta_12, but use s_12^2 in calculations)
+    std::vector<double> Dm21;
+    std::vector<double> sinTheta12;
+    unsigned int N_steps = 500;
+    double Dm21_min = 1E-5; double Dm21_max = 10E-5;
+    double Theta12_min = 5.; double Theta12_max = 45.;  // degrees
+    double Dm21_step = (Dm21_max - Dm21_min) / (double)N_steps;
+    double Theta12_step = (Theta12_max - Theta12_min) / (double)(N_steps - 1);
+    for (unsigned int n = 0; n < N_steps; ++n) {
+        Dm21.push_back(Dm21_min + (double)n * Dm21_step);
+        sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
     }
 
     // Create 2-d hist to dump data into
-    double Dm21_lower = Dm21.at(0) - 0.5 * Dm21_step;
-    double Theta12_lower = Theta12.at(0) - 0.5 * Theta12_step;
-    double Dm21_upper = Dm21.at(Dm21.size()-1) + 0.5 * Dm21_step;
-    double Theta12_upper = Theta12.at(Theta12.size()-1) + 0.5 * Theta12_step;
+    double Dm21_lower = Dm21_min - 0.5 * Dm21_step;
+    double Theta12_lower = Theta12_min - 0.5 * Theta12_step;
+    double Dm21_upper = Dm21_max + 0.5 * Dm21_step;
+    double Theta12_upper = Theta12_max + 0.5 * Theta12_step;
     
-    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", Theta12.size(), Theta12_lower, Theta12_upper, Dm21.size(), Dm21_lower, Dm21_upper);
+    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", sinTheta12.size(), Theta12_lower, Theta12_upper, Dm21.size(), Dm21_lower, Dm21_upper);
 
     // Compute best fit Log likelihood for each set of paramters (fraction of alpha-n vs reactor IBD events is fit in each loop)
     double MLL;
     std::cout << "Looping over oscillation parameters..." << std::endl;
-    for (unsigned int i = 0; i < Theta12.size(); ++i) {
+    for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // std::cout << "i = " << i << std::endl;
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // std::cout << "j = " << j << std::endl;
-            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21.at(j), fDmSqr32, Theta12.at(i), fSSqrTheta13);
+            MLL = ML_fit(E, reactor_frac, alphaN_frac, dataHist, *alphaN_PDF, hists.at(0), L, Dm21.at(j), fDmSqr32, sinTheta12.at(i), fSSqrTheta13);
             minllHist->SetBinContent(i+1, j+1, MLL);
         }
     }
+
+    // Axis titles
+    minllHist->GetXaxis()->SetTitle("Theta_12");
+    minllHist->GetYaxis()->SetTitle("Delta m_21^2");
+    minllHist->GetYaxis()->SetTitleOffset(1); // Move x-axis label further away from the axis (0 is default)
+
+    // Remove stats box
+    minllHist->SetStats(0);
 
     // delete objects
     delete(tempData_alpha);
@@ -376,7 +382,7 @@ int main(int argv, char** argc) {
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    TH2D* minllHist = Fit_spectra(data, hists, L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+    TH2D* minllHist = Fit_spectra(data, hists, L, fDmSqr32, fSSqrTheta13);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
