@@ -1,16 +1,6 @@
 #include <TFile.h>
 #include <TH1.h>
 #include <TH2.h>
-#include <RooRealVar.h>
-#include <RooDataHist.h>
-// #include "RooDataSet.h"
-#include <RooClassFactory.h>
-#include <RooTFnBinding.h>
-#include <RooHistPdf.h>
-#include <RooAddPdf.h>
-#include <RooFitResult.h>
-#include <RooGaussian.h>
-#include <RooConstVar.h>
 #include <TMath.h>
 #include <iostream>
 #include <fstream>
@@ -25,9 +15,7 @@
 #include <TList.h>
 #include <TVectorD.h>
 #include "Math/DistFunc.h"
-
-using namespace RooFit;
-
+#include "fitting_utils.cpp"
 
 std::vector<std::string> SplitString(std::string str){
     std::istringstream buf(str);
@@ -153,154 +141,11 @@ std::vector<std::vector<TH1D*>> read_hists_from_file(std::string file_address) {
     return {reactor_hists, alphaN_hists};
 }
 
-/**
- * @brief Computes list of constants needed for neutrino oscillation computations.
- * 
- * @param fDmSqr21 
- * @param fDmSqr32 
- * @param fSSqrTheta12 
- * @param fSSqrTheta13 
- * @return std::vector<double> const 
- */
-std::vector<double> compute_oscillation_constants(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
 
-    const double fDmSqr31 = fDmSqr32 + fDmSqr21;
+TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>*>& hists, std::vector<double>* L, const double fDmSqr32, const double fSSqrTheta13) {
 
-    const double H_ee_vac = fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31 * (fSSqrTheta13 - (1.0/3.0));
-    const double H_neq2 = (1 - fSSqrTheta13) * (fDmSqr21*fDmSqr21 * fSSqrTheta12 * (1 + fSSqrTheta12 * (fSSqrTheta13 - 1))
-                          + fDmSqr31*fDmSqr31 * fSSqrTheta13 - 2.0 * fDmSqr21 * fDmSqr31 * fSSqrTheta12 * fSSqrTheta13);
-
-    const double a0_vac = - (2.0/27.0) * (fDmSqr21*fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31*fDmSqr31)
-                          + (1.0/9.0) * (fDmSqr21*fDmSqr21 * fDmSqr31 + fDmSqr21 * fDmSqr31*fDmSqr31);
-    const double a1_vac = (1.0/3.0) * (fDmSqr21 * fDmSqr31 - fDmSqr21*fDmSqr21 - fDmSqr31*fDmSqr31);
-    const double Y_ee_vac = (2.0/3.0) * a1_vac + H_ee_vac*H_ee_vac + H_neq2;
-
-    // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-    const double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
-
-    return {H_ee_vac, a0_vac, a1_vac, Y_ee_vac, alpha};
-}
-
-/**
- * @brief Re-compute oscillation constants to take into account matter effects.
- * Essencially computes everything possible in oscillations that don't requite the baseline.
- * 
- * @param E  antineutrino recon energy (MeV)
- * @param params = {H_ee_vac, a0_vac, a1_vac, Y_ee_vac, alpha}
- * @return std::vector<std::vector<double>> 
- */
-std::vector<std::vector<double>> re_compute_consts(const double E, const std::vector<double>& params) {
-    const double A_CC = params[4] * E; // for A_CC in [eV^2] and nuE in [MeV]
-    
-    // Compute new values for H_ee, Y, a0 and a1 (make sure and Y are updated after their use by others)
-    const double alpha_1 = params[0] * A_CC + (1.0/3.0) * A_CC*A_CC;
-
-    const double a0 = params[1] - params[3] * A_CC - (1.0/3.0) * params[0] * A_CC*A_CC - (2.0/27.0) * A_CC*A_CC*A_CC;
-    const double a1 = params[2] - alpha_1;
-    const double Y_ee = params[3] + (2.0/3.0) * alpha_1;
-    const double H_ee = params[0] + (2.0/3.0) * A_CC;
-
-    // Get eigenvalues of H, and constants X and theta
-    const double arcCos = (1.0/3.0) * acos(1.5 * (a0/a1) * sqrt(- 3.0 / a1));
-    const double preFact = 2.0 * sqrt(- a1 / 3.0);
-
-    std::vector<double> eigen = {0., 0., 0.};
-    std::vector<double> X = {0., 0., 0.};
-    for(int i=0; i<3; ++i){
-        eigen.at(i) = preFact * cos(arcCos - (2.0/3.0) * M_PI * i);
-        X.at(i) = (1.0/3.0) + (eigen.at(i) * H_ee + Y_ee) / (3.0 * eigen.at(i)*eigen.at(i) + a1);
-    }
-
-    return {eigen, X};
-}
-
-/**
- * @brief Computes survival probability for an electron antineutrino, in curst with constant matter density.
- * 
- * @param E  antineutrino recon energy (MeV)
- * @param L  baseline (km)
- * @param params = {eigen[3], X[3]}
- * @return double 
- */
-double survival_prob(const double E, const double L, const std::vector<std::vector<double>>& params) {
-
-    const double scale = 1.267e3 * L / E; // for E in [MeV] and L in [km]
-
-    const double s_10 = sin(scale * (params[0][1] - params[0][0]));
-    const double s_20 = sin(scale * (params[0][2] - params[0][0]));
-    const double s_21 = sin(scale * (params[0][2] - params[0][1]));
-
-    // Compute probability
-    return 4.0 * (params[1][1]*params[1][0]*s_10*s_10 + params[1][2]*params[1][0]*s_20*s_20 + params[1][2]*params[1][1]*s_21*s_21);
-}
-
-TH1D* compute_tot_reactor_spec(const std::vector<TH1D*>& hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
-    
-    // Compute oscillation constants
-    const std::vector<double> params = compute_oscillation_constants(fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
-
-    // Create histograms to sum reactor events and alphaN events, to make PDFs
-    TH1D* reactor_hist = (TH1D*)(hists.at(0)->Clone());
-
-    // Assume all the histograms have the same E binning
-    unsigned int num_hists = hists.size();
-    double E;
-    double prob;
-    std::vector<std::vector<double>> re_consts;
-    for (unsigned int i = 1; i < hists.at(0)->GetXaxis()->GetNbins(); ++i) {
-        E = hists.at(0)->GetXaxis()->GetBinCenter(i);
-        re_consts = re_compute_consts(E, params);
-        for (unsigned int j = 0; j < num_hists; ++j) {
-            // Compute survival probability for particular energy at reactor baseline
-            prob = survival_prob(E, L.at(j), re_consts);
-            // Add value of bin from reactor core to total, scaled by survival probability
-            reactor_hist->AddBinContent(i, prob * hists.at(j)->GetBinContent(i));
-        }
-    }
-
-    return reactor_hist;
-}
-
-double ML_fit(const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac, RooDataHist& dataHist, RooHistPdf& alphaN_PDF, const std::vector<TH1D*>& reactor_hists, const std::vector<double>& L, const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
-
-    // Compute total reactor IBD spectrum
-    TH1D* reactor_spec = compute_tot_reactor_spec(reactor_hists, L, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
-    // Normalise histograms
-    // reactor_hist->Scale(1.0 / reactor_hist->Integral(), "width");
-
-    // Create reactor IBD PDF
-    RooDataHist* tempData_react = new RooDataHist("tempData", "temporary data", E, reactor_spec);
-    RooHistPdf* reactor_PDF = new RooHistPdf("reactor_PDF", "reactor PDF", E, *tempData_react);
-
-    // Make model
-    RooAddPdf model("model", "r+a", RooArgList(*reactor_PDF, alphaN_PDF), RooArgList(reactor_frac, alphaN_frac));
-
-    // Fit to data
-    RooFitResult *result = model.fitTo(dataHist, Extended(true), PrintLevel(-1), SumW2Error(kFALSE), Save());
-
-    // Get results
-    double minll = result->minNll();
-
-    // delete objects
-    delete(tempData_react);
-    delete(reactor_PDF);
-
-    return minll;
-}
-
-TH2D* Fit_spectra(TH1D* data, const std::vector<std::vector<TH1D*>>& hists, const std::vector<double>& L, const double fDmSqr32, const double fSSqrTheta13) {
-
-    //declare observables
-    RooRealVar E("E", "energy", 0.9, 8);
-    RooRealVar reactor_frac("reactor_frac", "reactorIBD fraction", 0.4, 0.8);
-    RooRealVar alphaN_frac("alphaN_frac", "alpha-n fraction", 0.2, 0.6);
-
-    // Make data hist (data that must be fit)
-    RooDataHist dataHist("dataHist", "data hist", E, data);
-
-    // Create alphaN PDF
-    RooDataHist* tempData_alpha = new RooDataHist("tempData", "temporary data", E, hists.at(1).at(0));
-    RooHistPdf* alphaN_PDF = new RooHistPdf("alphaN_PDF", "alphaN PDF", E, *tempData_alpha);
+    // Create PDF fitting object
+    PDFspec model = PDFspec(hists.at(1)->at(0), hists.at(0), L);
 
     // Define varying parameters (evenly spaced. plot theta_12, but use s_12^2 in calculations)
     std::vector<double> Dm21;
