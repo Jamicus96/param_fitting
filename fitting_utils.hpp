@@ -19,16 +19,10 @@
 using namespace RooFit;
 
 
-// double fDmSqr21;  // \Delta m_{21}^2 [MeV^2]
-// double fDmSqr32;  // \Delta m_{32}^2 [MeV^2]
-// double fSSqrTheta12;  // s_{12}^2
-// double fSSqrTheta13;  // s_{13}^2
-
-
 class PDFspec {
     private:
         // Initial oscillation parameters that only depend on
-        // \Delta m_{21}^2, \Delta m_{32}^2, s_{12}^2, s_{13}^2 and electron density
+        // Dm_21^2, Dm_32^2, s_12^2, s_13^2 and electron density
         double H_ee_vac;
         double a0_vac;
         double a1_vac;
@@ -53,7 +47,7 @@ class PDFspec {
         RooDataHist* tempData_alpha;
         RooHistPdf* alphaN_PDF;
 
-        // PDF model and fit result
+        // PDF model and fit result (RooFit)
         RooAddPdf* model;
         RooFitResult *result;
 
@@ -66,14 +60,19 @@ class PDFspec {
         // Constructors
         PDFspec(TH1D* AlphaN_hist, std::vector<TH1D*>* Reactor_hists, std::vector<double>* Baselines);
 
+        // Destructor
+        ~PDFspec();
+
         // Member function
+        TH1D* Get_tot_reactor_spec() {return tot_reactor_hist;};
+        RooRealVar Get_energy_var() {return e;};
+
         void compute_oscillation_constants(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13);
         void re_compute_consts(const double E);
         double survival_prob(const double E, const double L);
 
         void compute_tot_reactor_spec(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13);
         double ML_fit(RooDataHist& dataHist);
-
 };
 
 //end header guard

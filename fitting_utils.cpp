@@ -46,14 +46,13 @@ PDFspec::PDFspec(TH1D* AlphaN_hist, std::vector<TH1D*>* Reactor_hists, std::vect
 }
 
 
-
 /**
  * @brief Set oscillation parameters that don't depend on energy or baseline
  * 
- * @param fDmSqr21 
- * @param fDmSqr32 
- * @param fSSqrTheta12 
- * @param fSSqrTheta13 
+ * @param fDmSqr21 Dm_21^2
+ * @param fDmSqr32 Dm_32^2
+ * @param fSSqrTheta12 s_12^2
+ * @param fSSqrTheta13 s_13^2
  */
 void PDFspec::compute_oscillation_constants(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13) {
 
@@ -139,6 +138,10 @@ void PDFspec::compute_tot_reactor_spec(const double fDmSqr21, const double fDmSq
             tot_reactor_hist->AddBinContent(i, survival_prob(E, baselines->at(j)) * reactor_hists->at(j)->GetBinContent(i));
         }
     }
+
+    // Create reactor PDF
+    tempData_react = new RooDataHist("tempData", "temporary data", e, tot_reactor_hist);
+    reactor_PDF = new RooHistPdf("reactor_PDF", "reactor PDF", e, *tempData_react);
 }
 
 /**
@@ -157,4 +160,21 @@ double PDFspec::ML_fit(RooDataHist& dataHist) {
 
     // Get results
     return result->minNll();
+}
+
+
+/**
+ * @brief Destroy the PDFspec::PDFspec object
+ * 
+ */
+PDFspec::~PDFspec() {
+    delete(baselines);
+    delete(reactor_hists);
+    delete(tot_reactor_hist);
+    delete(tempData_react);
+    delete(reactor_PDF);
+    delete(tempData_alpha);
+    delete(alphaN_PDF);
+    delete(model);
+    delete(result);
 }
