@@ -15,7 +15,7 @@
 #include <TList.h>
 #include <TVectorD.h>
 #include "Math/DistFunc.h"
-#include "fitting_utils.cpp"
+#include "fitting_utils.hpp"
 
 
 TH2D* Fit_spectra(PDFspec& model, RooDataHist& dataHist, const double fDmSqr32, const double fSSqrTheta13);
