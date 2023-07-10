@@ -19,10 +19,15 @@
 using namespace RooFit;
 
 
-class PDFspec {
+class reactorINFO {
     private:
         // Initial oscillation parameters that only depend on
         // Dm_21^2, Dm_32^2, s_12^2, s_13^2 and electron density
+        double fDmSqr21;
+        double fDmSqr32;
+        double fSSqrTheta12;
+        double fSSqrTheta13;
+
         double H_ee_vac;
         double a0_vac;
         double a1_vac;
@@ -34,45 +39,35 @@ class PDFspec {
         std::vector<double> X_mat;  // Values from matrix governing oscillation
 
         // Raw reactor information
-        std::vector<double>* baselines;  // Baselines [km]
-        std::vector<TH1D*>* reactor_hists;  // Un-oscillated reactor IBD spectra
+        std::vector<double> baselines;  // Baselines [km]
+        std::vector<TH1D*> reactor_hists;  // Un-oscillated reactor IBD spectra
         unsigned int num_reactors;
         unsigned int hists_Nbins;
 
-        // PDFs, after oscillation (RooFit)
-        TH1D* tot_reactor_hist;
-        RooDataHist* tempData_react;
-        RooHistPdf* reactor_PDF;
-
-        RooDataHist* tempData_alpha;
-        RooHistPdf* alphaN_PDF;
-
-        // PDF model and fit result (RooFit)
-        RooAddPdf* model;
-        RooFitResult *result;
-
-        // Other RooFit paramters
-        RooRealVar e;  // Energy (MeV)
-        RooRealVar reactor_frac;
-        RooRealVar alphaN_frac;
+        // Oscillated reactor hist
+        std::vector<TH1D*> osc_reactor_hist;
 
     public:
         // Constructors
-        PDFspec(TH1D* AlphaN_hist, std::vector<TH1D*>* Reactor_hists, std::vector<double>* Baselines);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr32, const double SSqrTheta13);
 
         // Destructor
-        ~PDFspec();
+        ~reactorINFO() {};
 
         // Member function
-        TH1D* Get_tot_reactor_spec() {return tot_reactor_hist;};
-        RooRealVar Get_energy_var() {return e;};
+        double& Dm21_2() {return fDmSqr21;};
+        double& Dm32_2() {return fDmSqr32;};
+        double& s12_2() {return fSSqrTheta12;};
+        double& s13_2() {return fSSqrTheta13;};
+        const std::vector<TH1D*>& Get_osc_reactor_specs() {return osc_reactor_hist;};
 
-        void compute_oscillation_constants(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13);
+        void compute_oscillation_constants();
         void re_compute_consts(const double E);
         double survival_prob(const double E, const double L);
 
-        void compute_tot_reactor_spec(const double fDmSqr21, const double fDmSqr32, const double fSSqrTheta12, const double fSSqrTheta13);
-        double ML_fit(RooDataHist& dataHist);
+        void compute_osc_reactor_spec();
 };
 
 //end header guard
