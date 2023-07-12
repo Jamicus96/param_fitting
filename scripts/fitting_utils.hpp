@@ -5,19 +5,6 @@
 // include
 #include <iostream>
 #include <TH1.h>
-#include <RooRealVar.h>
-#include <RooDataHist.h>
-// #include "RooDataSet.h"
-#include <RooClassFactory.h>
-#include <RooTFnBinding.h>
-#include <RooHistPdf.h>
-#include <RooAddPdf.h>
-#include <RooFitResult.h>
-#include <RooGaussian.h>
-#include <RooConstVar.h>
-
-using namespace RooFit;
-
 
 class reactorINFO {
     private:
@@ -53,15 +40,18 @@ class reactorINFO {
         reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
         reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr32, const double SSqrTheta13);
 
-        // Destructor
-        ~reactorINFO() {};
-
         // Member function
         double& Dm21_2() {return fDmSqr21;};
+        const double& Dm21_2() const {return fDmSqr21;};
         double& Dm32_2() {return fDmSqr32;};
+        const double& Dm32_2() const {return fDmSqr32;};
         double& s12_2() {return fSSqrTheta12;};
+        const double& s12_2() const {return fSSqrTheta12;};
         double& s13_2() {return fSSqrTheta13;};
-        const std::vector<TH1D*>& Get_osc_reactor_specs() {return osc_reactor_hist;};
+        const double& s13_2() const {return fSSqrTheta13;};
+
+        std::vector<TH1D*>& Get_osc_reactor_specs() {return osc_reactor_hist;};
+        const std::vector<TH1D*>& Get_osc_reactor_specs() const {return osc_reactor_hist;};
 
         void compute_oscillation_constants();
         void re_compute_consts(const double E);

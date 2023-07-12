@@ -17,19 +17,53 @@
 #include "Math/DistFunc.h"
 #include "fitting_utils.hpp"
 
+#include <RooRealVar.h>
+#include <RooDataHist.h>
+// #include "RooDataSet.h"
+#include <RooClassFactory.h>
+#include <RooTFnBinding.h>
+#include <RooHistPdf.h>
+#include <RooAddPdf.h>
+#include <RooFitResult.h>
+#include <RooGaussian.h>
+#include <RooConstVar.h>
 
-TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data);
+using namespace RooFit;
+
+
+TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist);
+const std::vector<std::vector<double>>& make_var_param_vals(double Dm21_min, double Dm21_max, double Theta12_min, double Theta12_max, unsigned int N_steps);
 double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, TH1D& alphaN_hist);
-void get_baselines(RAT::DB *db, std::vector<TH1D*>& reactor_hists, std::vector<double>& baslines);
-double GetReactorDistanceLLA(const double &longitude, const double&latitude, const double &altitude);
+void get_baselines(RAT::DB* db, std::vector<TH1D*>& reactor_hists, std::vector<double>& baslines);
+double GetReactorDistanceLLA(const double& longitude, const double& latitude, const double& altitude);
 TVector3 LLAtoECEF(double longitude, double latitude, double altitude);
 std::vector<std::string> SplitString(std::string str);
 
 
 int main(int argv, char** argc) {
+    // file args
     std::string PDFs_address = argc[1];
     std::string out_address = argc[2];
+
+    // 2d hist limit args
+    double Dm21_lower = atof(argc[3]); // 1E-5
+    double Dm21_upper = atof(argc[4]); // 10E-5
+    double Theta12_lower = atof(argc[5]); // 5. degrees
+    double Theta12_upper = atof(argc[6]); // 45. degrees
+    unsigned int N_bins = atoi(argc[7]);
+
+    // variable paramters limit args
+    double Dm21_min = atof(argc[8]);
+    double Dm21_max = atof(argc[9]);
+    double Theta12_min = atof(argc[10]); // degrees
+    double Theta12_max = atof(argc[11]); // degrees
+    unsigned int N_steps = atoi(argc[12]);
+
+    // double Dm21_lower = Dm21_min - 0.5 * Dm21_step;
+    // double Theta12_lower = Theta12_min - 0.5 * Theta12_step;
+    // double Dm21_upper = Dm21_max + 0.5 * Dm21_step;
+    // double Theta12_upper = Theta12_max + 0.5 * Theta12_step;
 
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
@@ -63,9 +97,15 @@ int main(int argv, char** argc) {
     data->Add(osc_hist.at(0), 1.0);  // Add reactor events
     data->Add(&alphaN_hist, 1.0);  // Add alpha-n events
 
+    // Make list of Dm_21^2 and s_12^2 values to iterate over
+    std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Theta12_min, Theta12_max, N_steps);
+
+    // Set up 2d log-likelihood histogram
+    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", N_bins, Theta12_lower, Theta12_upper, N_bins, Dm21_lower, Dm21_upper);
+
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    TH2D* minllHist = Fit_spectra(spectrum, alphaN_hist, data);
+    TH2D* minllHist = Fit_spectra(spectrum, alphaN_hist, data, var_params, minllHist);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -86,9 +126,13 @@ int main(int argv, char** argc) {
  * @param data data to fit model to
  * @return TH2D* 
  */
-TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data) {
+TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist) {
 
-    //declare observables
+    // Unpack
+    std::vector<double> sinTheta12 = var_params.at(0);
+    std::vector<double> Dm21 = var_params.at(1);
+
+    // Declare observables
     RooRealVar E("E", "energy", 0.9, 8);
     RooRealVar reactor_frac("reactor_frac", "reactorIBD fraction", 0.4, 0.8);
     RooRealVar alphaN_frac("alphaN_frac", "alpha-n fraction", 0.2, 0.6);
@@ -99,27 +143,6 @@ TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data) {
     // Create alphaN PDF
     RooDataHist tempData_alpha("tempData", "temporary data", E, &alphaN_hist);
     RooHistPdf alphaN_PDF("alphaN_PDF", "alphaN PDF", E, tempData_alpha);
-
-    // Define varying parameters (evenly spaced. plot theta_12, but use s_12^2 in calculations)
-    std::vector<double> Dm21;
-    std::vector<double> sinTheta12;
-    unsigned int N_steps = 500;
-    double Dm21_min = 1E-5; double Dm21_max = 10E-5;
-    double Theta12_min = 5.; double Theta12_max = 45.;  // degrees
-    double Dm21_step = (Dm21_max - Dm21_min) / (double)N_steps;
-    double Theta12_step = (Theta12_max - Theta12_min) / (double)(N_steps - 1);
-    for (unsigned int n = 0; n < N_steps; ++n) {
-        Dm21.push_back(Dm21_min + (double)n * Dm21_step);
-        sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
-    }
-
-    // Create 2-d hist to dump data into
-    double Dm21_lower = Dm21_min - 0.5 * Dm21_step;
-    double Theta12_lower = Theta12_min - 0.5 * Theta12_step;
-    double Dm21_upper = Dm21_max + 0.5 * Dm21_step;
-    double Theta12_upper = Theta12_max + 0.5 * Theta12_step;
-    
-    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", sinTheta12.size(), Theta12_lower, Theta12_upper, Dm21.size(), Dm21_lower, Dm21_upper);
 
     // Compute best fit Log likelihood for each set of paramters (fraction of alpha-n vs reactor IBD events is fit in each loop)
     double MLL;
@@ -143,6 +166,31 @@ TH2D* Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, TH1D* data) {
     minllHist->SetStats(0);
 
     return minllHist;
+}
+
+/**
+ * @brief Produces list of Dm_21^2 and s_12^2 values (packaged together) based on Dm_21^2 and theta_12 limits.
+ * 
+ * @param Dm21_min [MeV^2]
+ * @param Dm21_max [MeV^2]
+ * @param Theta12_min [degrees]
+ * @param Theta12_max [degrees]
+ * @param N_steps same number of steps in both directions
+ * @return const std::vector<std::vector<double>>& = {s_12^2, Dm_21^2}
+ */
+const std::vector<std::vector<double>>& make_var_param_vals(double Dm21_min, double Dm21_max, double Theta12_min, double Theta12_max, unsigned int N_steps) {
+    std::vector<double> Dm21;
+    std::vector<double> sinTheta12;
+
+    double Dm21_step = (Dm21_max - Dm21_min) / (double)N_steps;
+    double Theta12_step = (Theta12_max - Theta12_min) / (double)(N_steps - 1);
+    for (unsigned int n = 0; n < N_steps; ++n) {
+        Dm21.push_back(Dm21_min + (double)n * Dm21_step);
+        sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
+    }
+
+    std::vector<std::vector<double>> var_params = {sinTheta12, Dm21};
+    return var_params;
 }
 
 double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac) {
