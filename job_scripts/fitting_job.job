@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -q smp.q@@EPP
 #$ -j y
-#$ -o /mnt/lustre/scratch/epp/jp643/antinu/param_fitting/fitting_log.txt
+#$ -o output_log.txt
 ##############################################
 
 # Run with: qsub PDF_job.job
@@ -16,13 +16,14 @@ source /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/rat_source.
 #source /research/epp/neutrino/snoplus/RAT7/env_rat-7.0.5.sh
 # RAT7 using ROOT6
 #source /research/epp/neutrino/snoplus/RAT7/install/env_rat-7.0.5.sh
-cd /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/antinu/param_fitting/param_fitting/
+cd /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/antinu/param_fitting/
 
 
-# Run command
-PDF_DIR="/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/PDFs/"
-FIT_DIR="/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/likelihoods/"
+# Read in file names from list file
+COMMAND_LIST_FILE="/Address/CommandList.txt"
+COMMAND=$(sed "$SGE_TASK_ID"'q;d' ${COMMAND_LIST_FILE})
 
-./fit_params.exe ${PDF_DIR}PDFs.root ${FIT_DIR}min_ll.root
+# Run commands in a row
+$COMMAND
 
 echo "Finished job!"

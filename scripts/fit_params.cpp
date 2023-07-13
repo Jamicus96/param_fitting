@@ -58,12 +58,8 @@ int main(int argv, char** argc) {
     double Dm21_max = atof(argc[9]);
     double Theta12_min = atof(argc[10]); // degrees
     double Theta12_max = atof(argc[11]); // degrees
-    unsigned int N_steps = atoi(argc[12]);
-
-    // double Dm21_lower = Dm21_min - 0.5 * Dm21_step;
-    // double Theta12_lower = Theta12_min - 0.5 * Theta12_step;
-    // double Dm21_upper = Dm21_max + 0.5 * Dm21_step;
-    // double Theta12_upper = Theta12_max + 0.5 * Theta12_step;
+    unsigned int Dm21_nSteps = atoi(argc[12]);
+    unsigned int Theta12_nSteps = atoi(argc[13]);  // FIXME: propagate this
 
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;

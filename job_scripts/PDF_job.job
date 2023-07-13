@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -q smp.q@@EPP
 #$ -j y
-#$ -o /mnt/lustre/scratch/epp/jp643/antinu/param_fitting/log.txt
+#$ -o output_log.txt
 ##############################################
 
 # Run with: qsub PDF_job.job
@@ -16,13 +16,10 @@ source /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/rat_source.
 #source /research/epp/neutrino/snoplus/RAT7/env_rat-7.0.5.sh
 # RAT7 using ROOT6
 #source /research/epp/neutrino/snoplus/RAT7/install/env_rat-7.0.5.sh
-cd /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/antinu/param_fitting/param_fitting/
+cd /mnt/lustre/projects/epp/general/neutrino/jp643/rat_dependent/antinu/param_fitting/
 
 
 # Run command
-DATA_DIR="/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/data/"
-PDF_DIR="/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/PDFs/"
-
-./make_PDFs.exe ${DATA_DIR}1000_yr_full_scint_reactor.ntuple.root ${DATA_DIR}alpha_n_events.ntuple.root ${PDF_DIR}PDFs.root -9999
+your commands
 
 echo "Finished job!"
