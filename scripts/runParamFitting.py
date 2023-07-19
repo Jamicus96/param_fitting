@@ -33,7 +33,7 @@ def argparser():
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=45., help='theta_12 maximum.')
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
-    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=20, help='Number of bins in x and y directions.')
+    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=40, help='Number of bins in x and y directions.')
     parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=20, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
@@ -169,6 +169,10 @@ def get_param_lims_per_job(Dm21_min, Dm21_max, theta12_min, theta12_max, Nbins, 
     theta12_maxs = theta12_min + ((idx + 1.) * bins_per_job - 1.) * theta12_step
     theta12_maxs[-1] = theta12_max
 
+    # Work out lower bin number edges of these sections
+    Dm21_indices = np.arange(0, Nbins, bins_per_job)
+    theta12_indices = Dm21_indices
+
     # Work out overall 2d histogram edges (low edge of min bin and upper edge of max bin)
     Dm21_lower = Dm21_min - 0.5 * Dm21_step
     theta12_lower = theta12_min - 0.5 * theta12_step
@@ -180,7 +184,8 @@ def get_param_lims_per_job(Dm21_min, Dm21_max, theta12_min, theta12_max, Nbins, 
     job_lims = []
     for i in range(idx.size):
         for j in range(idx.size):
-            job_lims.append(str(Dm21_mins[i]) + ' ' + str(Dm21_maxs[i]) + ' ' + str(theta12_mins[j]) + ' ' + str(theta12_maxs[j]))
+            job_lims.append(str(Dm21_mins[i]) + ' ' + str(Dm21_maxs[i]) + ' ' + str(theta12_mins[j]) + ' ' + str(theta12_maxs[j])\
+                             + ' ' + str(Dm21_indices[i]) + ' ' + str(theta12_indices[j]))
 
     # Get number of bins for each job
     nBins_job = np.full((idx.size * idx.size, 2), bins_per_job)
@@ -237,7 +242,7 @@ def doFitting(args):
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')
-    command_base = path + 'scripts/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits.root '
+    command_base = path + 'scripts/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits_'
 
     # Make list of commands for job array to call
     jobScript_repo = fit_repo + 'job_scripts/'
@@ -246,7 +251,7 @@ def doFitting(args):
     commandList_file = open(commandList_address, 'w')
     for i, job_lim in enumerate(job_lims):
         # Create all the histogram making commands
-        command = command_base + str(args.N_IBD) + ' ' + str(args.IBD_err) + ' ' + str(args.N_alphaN) + ' ' + str(args.alphaN_err) + ' ' + hist_lims + ' '\
+        command = command_base + str(i) + '.root ' + str(args.N_IBD) + ' ' + str(args.IBD_err) + ' ' + str(args.N_alphaN) + ' ' + str(args.alphaN_err) + ' ' + hist_lims + ' '\
                                + str(args.Nbins) + ' ' + job_lim  + ' ' + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1]) + ' ' + str(int(args.verbose))
         commandList_file.write(command + '\n')
     commandList_file.close()

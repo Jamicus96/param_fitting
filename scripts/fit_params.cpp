@@ -30,7 +30,7 @@
 
 using namespace RooFit;
 
-void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const bool verbose);
+void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min, const double Theta12_max, const unsigned int Theta12_nSteps);
 double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_alphaN, RooGaussian& constraint_alphaN, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, TH1D& alphaN_hist);
@@ -59,8 +59,12 @@ int main(int argv, char** argc) {
     double Dm21_max = atof(argc[13]);
     double Theta12_min = atof(argc[14]);  // degrees
     double Theta12_max = atof(argc[15]);  // degrees
-    unsigned int Dm21_nSteps = atoi(argc[16]);
-    unsigned int Theta12_nSteps = atoi(argc[17]);
+
+    unsigned int start_idx_Dm21 = atoi(argc[16]);
+    unsigned int start_idx_theta = atoi(argc[17]);
+
+    unsigned int Dm21_nSteps = atoi(argc[18]);
+    unsigned int Theta12_nSteps = atoi(argc[19]);
 
     bool verbose = std::stoi(argc[18]);
 
@@ -109,6 +113,7 @@ int main(int argv, char** argc) {
 
     // Make list of Dm_21^2 and s_12^2 values to iterate over
     std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, Theta12_min, Theta12_max, Theta12_nSteps);
+    std::vector<unsigned int> start_idx = {start_idx_theta, start_idx_Dm21};
 
     // Set up 2d log-likelihood histogram
     TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", N_bins, Theta12_lower, Theta12_upper, N_bins, Dm21_lower, Dm21_upper);
@@ -119,7 +124,7 @@ int main(int argv, char** argc) {
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    Fit_spectra(spectrum, alphaN_hist, N_alphaN, alphaN_err, data, var_params, minllHist, verbose);
+    Fit_spectra(spectrum, alphaN_hist, N_alphaN, alphaN_err, data, var_params, minllHist, start_idx, verbose);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -143,7 +148,7 @@ int main(int argv, char** argc) {
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const bool verbose) {
+void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
@@ -177,7 +182,7 @@ void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN
             // std::cout << "j = " << j << std::endl;
             spectrum.Dm21_2() = Dm21.at(j);
             if (verbose) std::cout << "Dm_21^2 = " << spectrum.Dm21_2() << std::endl;
-            minllHist->SetBinContent(i+1, j+1, ML_fit(spectrum, *alphaN_PDF, norm_alphaN, constraint_alphaN, dataHist, E, reactor_frac, alphaN_frac));
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, ML_fit(spectrum, *alphaN_PDF, norm_alphaN, constraint_alphaN, dataHist, E, reactor_frac, alphaN_frac));
         }
     }
 
