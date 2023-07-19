@@ -21,6 +21,11 @@ def argparser():
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/likelihoods/', help='Folder to save recombined root files with tracking information in.')
+    
+    parser.add_argument('--N_IBD', type=float, dest='N_IBD', default=170, help='Number of un-oscillated IBD events (ratio to alpha-n matters)')
+    parser.add_argument('--IBD_err', type=float, dest='IBD_err', default=0.05, help='Fractional error in N_IBD.')
+    parser.add_argument('--N_alphaN', type=float, dest='N_alphaN', default=73, help='Number of IBD events (ratio to alpha-n matters)')
+    parser.add_argument('--alphaN_err', type=float, dest='alphaN_err', default=0.5, help='Fractional error in N_alphaN.')
 
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=10E-5, help='Dm_21^2 maximum.')
@@ -28,8 +33,8 @@ def argparser():
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=45., help='theta_12 maximum.')
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
-    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=200, help='Number of bins in x and y directions.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=200, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=20, help='Number of bins in x and y directions.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=20, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=70, help='Max number of tasks in an array running at any one time.')
@@ -119,9 +124,9 @@ def makePDFs(args):
 
     # Create command
     command = path + 'scripts/make_PDFs.exe '
-    command += ntuple_repo + 'reactorIBD.ntuple.root '
-    command += ntuple_repo + 'alphaN.ntuple.root '
-    command += pdf_repo + 'PDFs.root '
+    command += ntuple_repo + 'reactorIBD_1000years.ntuple.root '
+    command += ntuple_repo + 'alphaN_1000years.ntuple.root '
+    command += pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root '
     command += str(args.classCut)
 
     # Make job script
@@ -232,7 +237,7 @@ def doFitting(args):
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')
-    command_base = path + 'scripts/fit_params.exe ' + pdf_repo + 'PDFs.root ' + fit_repo + 'param_fits.root '
+    command_base = path + 'scripts/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits.root '
 
     # Make list of commands for job array to call
     jobScript_repo = fit_repo + 'job_scripts/'
@@ -241,7 +246,8 @@ def doFitting(args):
     commandList_file = open(commandList_address, 'w')
     for i, job_lim in enumerate(job_lims):
         # Create all the histogram making commands
-        command = command_base + hist_lims + ' ' + str(args.Nbins) + ' ' + job_lim  + ' ' + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1])
+        command = command_base + str(args.N_IBD) + ' ' + str(args.IBD_err) + ' ' + str(args.N_alphaN) + ' ' + str(args.alphaN_err) + ' ' + hist_lims + ' '\
+                               + str(args.Nbins) + ' ' + job_lim  + ' ' + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1]) + ' ' + str(int(args.verbose))
         commandList_file.write(command + '\n')
     commandList_file.close()
 

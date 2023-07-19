@@ -11,7 +11,7 @@
  * @param reactor_hists 
  * @param L 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs) {
 
     // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
     alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
@@ -22,18 +22,28 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>&
         X_mat.push_back(0.0);
     }
 
-    // Assign vectors
+    // Assign values
     reactor_hists = Reactor_hists;
-    baselines = Baselines;
     num_reactors = reactor_hists.size();
-    if (baselines.size() != num_reactors) {
-        std::cout << "ERROR: Number of baselines (" << baselines.size() << ") not equal to number of reactors (" << num_reactors << ")!" << std::endl;
-        exit(1);
-    }
     hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
+    N_IBD = N_IBDs;
+    IBD_err = IBD_errs;
+
+    tot_hist_int = 0.0;
+    for (unsigned int i = 0; i < num_reactors; ++i) {
+        tot_hist_int += reactor_hists.at(i)->Integral();
+        baselines.push_back(0.);
+    }
 
     // Create histogram to sum oscillated reactor events
-    osc_reactor_hist.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
+    for (unsigned int i = 0; i < 4; ++i) {
+        osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
+        norms.push_back(0.);
+    }
+    osc_hists.at(0)->SetName("BRUCE");      osc_hists.at(0)->SetTitle("BRUCE spectrum");
+    osc_hists.at(1)->SetName("DARLINGTON"); osc_hists.at(1)->SetTitle("DARLINGTON spectrum");
+    osc_hists.at(2)->SetName("PICKERING");  osc_hists.at(2)->SetTitle("PICKERING spectrum");
+    osc_hists.at(3)->SetName("WORLD");      osc_hists.at(3)->SetTitle("WORLD spectrum");
 }
 
 /**
@@ -47,8 +57,8 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>&
  * @param SSqrTheta12 
  * @param SSqrTheta13 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr21, const double DmSqr32,
-                        const double SSqrTheta12, const double SSqrTheta13) : reactorINFO::reactorINFO(Reactor_hists, Baselines) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr21, const double DmSqr32,
+                        const double SSqrTheta12, const double SSqrTheta13) : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs) {
 
     this->Dm21_2() = DmSqr21;
     this->Dm32_2() = DmSqr32;
@@ -65,8 +75,8 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>&
  * @param DmSqr32 
  * @param SSqrTheta13 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr32, const double SSqrTheta13)
-                        : reactorINFO::reactorINFO(Reactor_hists, Baselines) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr32, const double SSqrTheta13)
+                        : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs) {
 
     this->Dm32_2() = DmSqr32;
     this->s13_2() = SSqrTheta13;
@@ -144,17 +154,133 @@ void reactorINFO::compute_osc_reactor_spec() {
     // Compute oscillation constants
     this->compute_oscillation_constants();
 
-    // Reset total reactor histogram (i.e. empty it)
-    osc_reactor_hist.at(0)->Reset("ICES");
+    // Reset total reactor histograms (i.e. empty them)
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        osc_hists.at(i)->Reset("ICES");
+        norms.at(i) = 0;
+    }
 
     // Assume all the histograms have the same E binning
     double E;
+    unsigned int hist_idx;
+    std::string origin_reactor;
     for (unsigned int i = 1; i < hists_Nbins; ++i) {
         E = reactor_hists.at(0)->GetXaxis()->GetBinCenter(i);
         this->re_compute_consts(E);
         for (unsigned int j = 0; j < num_reactors; ++j) {
-            // Add value of bin from reactor core to total, scaled by survival probability
-            osc_reactor_hist.at(0)->AddBinContent(i, survival_prob(E, baselines.at(j)) * reactor_hists.at(j)->GetBinContent(i));
+            origin_reactor = SplitString(reactor_hists.at(j)->GetName())[0];
+            // Find which oscillated histogram to add to
+            if (origin_reactor == "BRUCE")           hist_idx = 0;
+            else if (origin_reactor == "DARLINGTON") hist_idx = 1;
+            else if (origin_reactor == "PICKERING")  hist_idx = 2;
+            else                                     hist_idx = 3;
+            // Add value of bin from reactor core to appropriate hist, scaled by survival probability
+            osc_hists.at(hist_idx)->AddBinContent(i, survival_prob(E, baselines.at(j)) * reactor_hists.at(j)->GetBinContent(i));
         }
+    }
+
+    // Compute hist norms, rescaling using N_IBD
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        norms.at(i) = osc_hists.at(i)->Integral() * N_IBD / tot_hist_int;
+    }
+}
+
+
+/**
+ * @brief Split reactor name strings for getting baselines
+ * 
+ * @param str 
+ * @return std::vector<std::string> 
+ */
+std::vector<std::string> SplitString(std::string str) {
+    std::istringstream buf(str);
+    std::istream_iterator<std::string> beg(buf), end;
+    std::vector<std::string> tokens(beg, end); //each word of string now in vector
+    std::vector<std::string> info;
+    std::string dummy = "";
+
+    for(int i=0;i<tokens.size();i++){ //combine back to reactor name, core number
+        if(i==0){
+            dummy = tokens.at(i);
+            if(i!=tokens.size()-2){
+                dummy += " ";
+            }
+        }
+        else if(i!=tokens.size()-1){
+            dummy += tokens.at(i);
+            if(i!=tokens.size()-2){
+                dummy += " ";
+            }
+        }
+        else{
+            info.push_back(dummy);
+            info.push_back(tokens.at(i));
+        }
+    }
+
+    return info;
+}
+
+/**
+ * @brief Coordinate conversion time, to get baselines
+ * 
+ * @param longitude 
+ * @param latitude 
+ * @param altitude 
+ * @return TVector3 
+ */
+TVector3 LLAtoECEF(double longitude, double latitude, double altitude) {
+  // reference http://www.mathworks.co.uk/help/aeroblks/llatoecefposition.html
+  static double toRad = TMath::Pi()/180.;
+  static double Earthradius = 6378137.0; //Radius of the Earth (in meters)
+  static double f = 1./298.257223563; //Flattening factor WGS84 Model
+  static double L, rs, x, y, z;
+  L = atan( pow((1. - f),2)*tan(latitude*toRad))*180./TMath::Pi();
+  rs = sqrt( pow(Earthradius,2)/(1. + (1./pow((1. - f),2) - 1.)*pow(sin(L*toRad),2)));
+  x = (rs*cos(L*toRad)*cos(longitude*toRad) + altitude*cos(latitude*toRad)*cos(longitude*toRad))/1000; // in km
+  y = (rs*cos(L*toRad)*sin(longitude*toRad) + altitude*cos(latitude*toRad)*sin(longitude*toRad))/1000; // in km
+  z = (rs*sin(L*toRad) + altitude*sin(latitude*toRad))/1000; // in km
+
+  TVector3 ECEF = TVector3(x,y,z);
+
+  return ECEF;
+}
+
+/**
+ * @brief Compute reactor baseline [km]
+ * 
+ * @param longitude 
+ * @param latitude 
+ * @param altitude 
+ * @return double 
+ */
+double GetReactorDistanceLLA(const double &longitude, const double&latitude, const double &altitude) {
+    const TVector3 SNO_ECEF_coord_ = TVector3(672.87,-4347.18,4600.51);
+    double dist = (LLAtoECEF(longitude, latitude,altitude) - SNO_ECEF_coord_).Mag();
+  return dist;
+}
+
+/**
+ * @brief Get vector of reactor baslines [km] from vector of reactor histograms
+ * 
+ * @param db 
+ * @param reactor_hists 
+ * @param baselines
+ */
+void reactorINFO::compute_baselines(RAT::DB* db) {
+
+    RAT::DBLinkPtr linkdb;
+    std::vector<std::string> originReactorVect;
+    std::vector<Double_t> fLatitude;
+    std::vector<Double_t> fLongitute;
+    std::vector<Double_t> fAltitude;
+    for (unsigned int n = 0; n < num_reactors; ++n) {
+        originReactorVect = SplitString(reactor_hists.at(n)->GetName());
+        linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+        fLatitude  = linkdb->GetDArray("latitude");
+        fLongitute = linkdb->GetDArray("longitude");
+        fAltitude = linkdb->GetDArray("altitude");
+
+        baselines.at(n) = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
     }
 }

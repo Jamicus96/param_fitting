@@ -4,7 +4,10 @@
 
 // include
 #include <iostream>
+#include <sstream>
 #include <TH1.h>
+#include <TVector3.h>
+#include <RAT/DB.hh>
 
 class reactorINFO {
     private:
@@ -26,19 +29,24 @@ class reactorINFO {
         std::vector<double> X_mat;  // Values from matrix governing oscillation
 
         // Raw reactor information
+        double N_IBD;  // number of unoscilalted reactor events
+        double IBD_err;  // fractional error in N_IBD
         std::vector<double> baselines;  // Baselines [km]
         std::vector<TH1D*> reactor_hists;  // Un-oscillated reactor IBD spectra
         unsigned int num_reactors;
         unsigned int hists_Nbins;
 
-        // Oscillated reactor hist
-        std::vector<TH1D*> osc_reactor_hist;
+        // Oscillated reactor hists (order: BRUCE, DARLINGTON, PICKERING, WORLD)
+        std::vector<TH1D*> osc_hists;
+        double tot_hist_int;
+        // std::map<std::string, unsigned int> osc_hists_map = {{"BRUCE", 0}, {"DARLINGTON", 1}, {"PICKERING", 2}, {"WORLD", 3}};
+        std::vector<double> norms;
 
     public:
         // Constructors
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines);
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, std::vector<double>& Baselines, const double DmSqr32, const double SSqrTheta13);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr32, const double SSqrTheta13);
 
         // Member function
         double& Dm21_2() {return fDmSqr21;};
@@ -49,9 +57,17 @@ class reactorINFO {
         const double& s12_2() const {return fSSqrTheta12;};
         double& s13_2() {return fSSqrTheta13;};
         const double& s13_2() const {return fSSqrTheta13;};
+        double& N_IBDs() {return N_IBD;};
+        const double& N_IBDs() const {return N_IBD;};
+        double& IBDs_err() {return IBD_err;};
+        const double& IBDs_err() const {return IBD_err;};
 
-        std::vector<TH1D*>& Get_osc_reactor_specs() {return osc_reactor_hist;};
-        const std::vector<TH1D*>& Get_osc_reactor_specs() const {return osc_reactor_hist;};
+        void compute_baselines(RAT::DB* db);
+
+        std::vector<TH1D*>& Get_osc_reactor_specs() {return osc_hists;};
+        const std::vector<TH1D*>& Get_osc_reactor_specs() const {return osc_hists;};
+        std::vector<double>& Get_osc_reactor_norms() {return norms;};
+        const std::vector<double>& Get_osc_reactor_norms() const {return norms;};
 
         void compute_oscillation_constants();
         void re_compute_consts(const double E);
@@ -59,6 +75,10 @@ class reactorINFO {
 
         void compute_osc_reactor_spec();
 };
+
+std::vector<std::string> SplitString(std::string str);
+TVector3 LLAtoECEF(double longitude, double latitude, double altitude);
+double GetReactorDistanceLLA(const double &longitude, const double&latitude, const double &altitude);
 
 //end header guard
 #endif
