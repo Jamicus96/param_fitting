@@ -33,12 +33,12 @@ def argparser():
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=45., help='theta_12 maximum.')
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
-    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=40, help='Number of bins in x and y directions.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=20, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=1000, help='Number of bins in x and y directions.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=60, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=70, help='Max number of tasks in an array running at any one time.')
-    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'fit'],
+    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
                         default=True, help='print and save extra info')
@@ -270,6 +270,76 @@ def doFitting(args):
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
 
 
+def makeCombiJobScript(example_jobScript, overall_folder, commands, verbose):
+    '''Create job script to run array of rat macros'''
+
+    new_job_address = overall_folder + 'job_scripts/'
+    new_job_address = checkRepo(new_job_address, verbose)
+    new_job_address += 'combi_job.job'
+
+    output_logFile_address = overall_folder + 'log_files/'
+    output_logFile_address = checkRepo(output_logFile_address, verbose)
+    output_logFile_address +=  'log_combi.txt'
+
+    new_jobScript = []
+    for line in example_jobScript:
+        # Replace placeholders in macro
+        if 'output_log.txt' in line:
+            new_line = line.replace('output_log.txt', output_logFile_address, 1)
+        elif 'your commands' in line:
+            new_line = line.replace('your commands', commands, 1)
+        else:
+            new_line = line
+
+        new_jobScript.append(new_line)
+
+    # Create job file
+    with open(new_job_address, "w") as f:
+        new_jobScript = "".join(new_jobScript)
+        f.write(new_jobScript)
+
+    return new_job_address
+
+def combi_fits(args):
+
+    # Check fitting repo
+    fit_repo = checkRepo(args.fit_repo, args.verbose)
+
+    # Get full path to this repo
+    path = getRepoAddress()
+
+    # Work out lower bin number edges of these sections
+    Dm21_start_indices = np.arange(0, args.Nbins, args.bins_per_job, dtype=int)
+    Dm21_end_indices = np.zeros(Dm21_start_indices.size, dtype=int)
+    Dm21_end_indices[:-1] = Dm21_start_indices[1:] - 1
+    Dm21_end_indices[-1] = args.Nbins - 1
+
+    theta12_start_indices = Dm21_start_indices
+    theta12_end_indices = Dm21_end_indices
+
+    # make job command
+    command = path + 'scripts/re_combine_fits.exe ' + fit_repo + 'param_fits_all.root'
+    k = 0
+    for i in range(Dm21_start_indices.size):
+        for j in range(theta12_start_indices.size):
+            command += ' ' + fit_repo + 'param_fits_' + str(k) + '.root '
+            command += str(Dm21_start_indices[i]) + ' ' + str(Dm21_end_indices[i]) + ' '
+            command += str(theta12_start_indices[j]) + ' ' + str(theta12_end_indices[j])
+            k += 1
+
+    # Make job script
+    jobScript_address = path + 'job_scripts/PDF_job.job'
+    with open(jobScript_address, "r") as f:
+        example_jobScript = f.readlines()
+    job_address = makeCombiJobScript(example_jobScript, fit_repo, command, args.verbose)
+
+    # Run job script!
+    command = 'qsub ' + job_address
+    if args.verbose:
+        print('Running command: ', command)
+        subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
+    
+
 ### MAIN ###
 
 def main():
@@ -280,6 +350,8 @@ def main():
         makePDFs(args)
     elif args.step == 'fit':
         doFitting(args)
+    elif args.step == 'combi':
+        combi_fits(args)
     else:
         print('WRONG work mode ({}). Exiting...'.format(args.step))
 
