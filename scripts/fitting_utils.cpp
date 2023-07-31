@@ -11,7 +11,7 @@
  * @param reactor_hists 
  * @param L 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist) {
 
     // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
     alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
@@ -28,6 +28,9 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs,
     hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
     N_IBD = N_IBDs;
     IBD_err = IBD_errs;
+    E_conv = *(TH2D*)(E_conv_hist.Clone());
+    std::cout << "Set up E conversion histogram:" << std::endl;
+    std::cout << "NbinsX = " << E_conv.GetXaxis()->GetNbins() << ", NbinsY = " << E_conv.GetYaxis()->GetNbins() << std::endl;
 
     tot_hist_int = 0.0;
     for (unsigned int i = 0; i < num_reactors; ++i) {
@@ -57,8 +60,8 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs,
  * @param SSqrTheta12 
  * @param SSqrTheta13 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr21, const double DmSqr32,
-                        const double SSqrTheta12, const double SSqrTheta13) : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr21, const double DmSqr32,
+                        const double SSqrTheta12, const double SSqrTheta13) : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs, E_conv_hist) {
 
     this->Dm21_2() = DmSqr21;
     this->Dm32_2() = DmSqr32;
@@ -75,8 +78,8 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs,
  * @param DmSqr32 
  * @param SSqrTheta13 
  */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr32, const double SSqrTheta13)
-                        : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs) {
+reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr32, const double SSqrTheta13)
+                        : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs, E_conv_hist) {
 
     this->Dm32_2() = DmSqr32;
     this->s13_2() = SSqrTheta13;
@@ -163,8 +166,10 @@ void reactorINFO::compute_osc_reactor_spec() {
     // Assume all the histograms have the same E binning
     double E;
     unsigned int hist_idx;
+    double weighted_av_P;
+    double weight;
     std::string origin_reactor;
-    for (unsigned int i = 1; i < hists_Nbins; ++i) {
+    for (unsigned int i = 1; i <= hists_Nbins; ++i) {
         E = reactor_hists.at(0)->GetXaxis()->GetBinCenter(i);
         this->re_compute_consts(E);
         for (unsigned int j = 0; j < num_reactors; ++j) {
@@ -174,8 +179,16 @@ void reactorINFO::compute_osc_reactor_spec() {
             else if (origin_reactor == "DARLINGTON") hist_idx = 1;
             else if (origin_reactor == "PICKERING")  hist_idx = 2;
             else                                     hist_idx = 3;
+
+            // Integrate survival prob over E_nu, weigther by E_nu(E_e) distribution -> weigthed average survival prob
+            weighted_av_P = 0.0;
+            for (unsigned int k = 1; k <= E_conv.GetYaxis()->GetNbins(); ++k) {
+                weight = E_conv.GetBinContent(i, k);
+                if (weight > 0.0) weighted_av_P += weight * survival_prob(E, baselines.at(j));
+            }
+
             // Add value of bin from reactor core to appropriate hist, scaled by survival probability
-            osc_hists.at(hist_idx)->AddBinContent(i, survival_prob(E, baselines.at(j)) * reactor_hists.at(j)->GetBinContent(i));
+            osc_hists.at(hist_idx)->AddBinContent(i, weighted_av_P * reactor_hists.at(j)->GetBinContent(i));
         }
     }
 

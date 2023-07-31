@@ -24,6 +24,8 @@
 
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
+std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist);
 
 
 int main(int argv, char** argc) {
@@ -56,15 +58,23 @@ int main(int argv, char** argc) {
     TH2D* minllHist = (TH2D*)hists.at(0)->Clone();
     minllHist->Reset("ICES");
 
-    // Do fitting for a range of values, summarised in 2-D hist
+    // Combine hist parts into one hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
     std::vector<double> min_vals = combine_hists(minllHist, hists, start_Dm_idx, end_Dm_idx, start_th_idx, end_th_idx);
 
     std::cout << "min_ll = " << min_vals.at(0) << ", at Dm_21^2 = " << min_vals.at(1) << " and theta_12 = " << min_vals.at(2) << std::endl;
 
+    std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist);
+
+    // Print hist to text file too
+    std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
+    print_to_txt(txt_fileName, new_hists.at(0));
+
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
     minllHist->Write();
+    new_hists.at(0)->Write();
+    new_hists.at(1)->Write();
     outroot->Write();
     outroot->Close();
     delete(outroot);
@@ -123,7 +133,7 @@ void read_hists_from_files(const std::vector<std::string>& hists_addresses, std:
 }
 
 
-std::vector<TH2D*>& likelihood_ratio_hists(TH2D* minllHist) {
+std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
     // now do likelihood ratio test on maximal likelihood
 
     std::cout << "Performing ratio test" << std::endl;
@@ -135,15 +145,15 @@ std::vector<TH2D*>& likelihood_ratio_hists(TH2D* minllHist) {
 
     TH2D* sigmaMinHist = (TH2D*)minllHist->Clone();
     TH2D* sigmaMaxHist = (TH2D*)minllHist->Clone();
-    sigmaMinHist->SetName("sigmaMinHist");
-    sigmaMaxHist->SetName("sigmaMaxHist");
+    sigmaMinHist->SetName("sigmaMinHist"); sigmaMinHist->SetTitle("2(l - l_min)");
+    sigmaMaxHist->SetName("sigmaMaxHist"); sigmaMaxHist->SetTitle("2(l - l_max)");
 
     double deltaMBestFitMax, thetaBestFitMax, deltaMBestFitMin, thetaBestFitMin;
 
     for (unsigned int i = 1; i < minllHist->GetNbinsX() + 1; i++) {
         for (unsigned int j = 1; j < minllHist->GetNbinsY() + 1; j++) {
-            sigmaMinHist->SetBinContent(i, j ,minllHist->GetBinContent(i, j) - minimisedLikelihood);
-            sigmaMaxHist->SetBinContent(i, j, minllHist->GetBinContent(i, j) - maximisedLikelihood);
+            sigmaMinHist->SetBinContent(i, j, 2.0 * (minllHist->GetBinContent(i, j) - minimisedLikelihood));
+            sigmaMaxHist->SetBinContent(i, j, 2.0 * (minllHist->GetBinContent(i, j) - maximisedLikelihood));
             if (minimisedLikelihood == minllHist->GetBinContent(i, j)) {
                 thetaBestFitMin = minllHist->GetXaxis()->GetBinCenter(i);
                 deltaMBestFitMin = minllHist->GetYaxis()->GetBinCenter(j);
@@ -158,9 +168,44 @@ std::vector<TH2D*>& likelihood_ratio_hists(TH2D* minllHist) {
     std::cout << "The minimum likelihood is " << minimisedLikelihood << " at deltaM21 = " << deltaMBestFitMin << " and theta12 = " << thetaBestFitMin << std::endl;
     std::cout << "The maximum likelihood is " << maximisedLikelihood << " at deltaM21 = " << deltaMBestFitMax << " and theta12 = " << thetaBestFitMax << std::endl;
 
-    std::vector<TH2D*> hists = {sigmaMinHist, sigmaMaxHist};
+    return {sigmaMinHist, sigmaMaxHist};
+}
 
-    return hists;
+/**
+ * @brief Prints hist values to text file, in format:
+ * NA Dm21_0 Dm21_1 Dm21_2 ... Dm21_N
+ * theta12_0 minLL_00 minLL_01 minLL_02 ... minLL_0N
+ * theta12_1 minLL_10 minLL_11 minLL_12 ... minLL_1N
+ * theta12_2 minLL_20 minLL_21 minLL_22 ... minLL_2N
+ * ... ... ... ... ... ...
+ * theta12_N minLL_N0 minLL_N1 minLL_N2 ... minLL_NN
+ * 
+ * @param txt_fileName 
+ * @param minllHist 
+ */
+void print_to_txt(std::string txt_fileName, TH2D* minllHist) {
+    std::ofstream datafile;
+    datafile.open(txt_fileName.c_str(), std::ios::trunc);
+
+    double Dm21;
+    double theta12;
+    double minLL;
+    datafile << "NA";
+    for (unsigned int j = 1; j < minllHist->GetNbinsY() + 1; ++j) {
+        Dm21 = minllHist->GetYaxis()->GetBinCenter(j);
+        datafile << " " << Dm21;
+    }
+    datafile << std::endl;
+
+    for (unsigned int i = 1; i < minllHist->GetNbinsX() + 1; ++i) {
+        theta12 = minllHist->GetXaxis()->GetBinCenter(i);
+        datafile << theta12;
+        for (unsigned int j = 1; j < minllHist->GetNbinsY() + 1; ++j) {
+            minLL = minllHist->GetBinContent(i + 1, j + 1);
+            datafile << " " << minLL;
+        }
+        datafile << std::endl;
+    }
 }
 
 

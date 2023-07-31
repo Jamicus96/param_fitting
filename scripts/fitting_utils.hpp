@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <TH1.h>
+#include <TH2.h>
 #include <TVector3.h>
 #include <RAT/DB.hh>
 
@@ -35,6 +36,7 @@ class reactorINFO {
         std::vector<TH1D*> reactor_hists;  // Un-oscillated reactor IBD spectra
         unsigned int num_reactors;
         unsigned int hists_Nbins;
+        TH2D E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
 
         // Oscillated reactor hists (order: BRUCE, DARLINGTON, PICKERING, WORLD)
         std::vector<TH1D*> osc_hists;
@@ -44,9 +46,9 @@ class reactorINFO {
 
     public:
         // Constructors
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs);
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
-        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, const double DmSqr32, const double SSqrTheta13);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr21, const double DmSqr32, const double SSqrTheta12, const double SSqrTheta13);
+        reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr32, const double SSqrTheta13);
 
         // Member function
         double& Dm21_2() {return fDmSqr21;};

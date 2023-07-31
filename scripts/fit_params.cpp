@@ -30,10 +30,10 @@
 
 using namespace RooFit;
 
-void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min, const double Theta12_max, const unsigned int Theta12_nSteps);
 double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_alphaN, RooGaussian& constraint_alphaN, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac);
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, TH1D& alphaN_hist);
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, TH2D& E_conv);
 
 
 int main(int argv, char** argc) {
@@ -78,8 +78,9 @@ int main(int argv, char** argc) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
     std::vector<TH1D*> reactor_hists;
-    TH1D alphaN_hist;
-    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hist);
+    std::vector<TH1D*> alphaN_hists;
+    TH2D E_conv;
+    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, E_conv);
 
     // Get baselines
     RAT::DB::Get()->SetAirplaneModeStatus(true);
@@ -95,7 +96,7 @@ int main(int argv, char** argc) {
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
 
     // Create PDF fitting object
-    reactorINFO spectrum(reactor_hists, N_IBD, IBD_err, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
+    reactorINFO spectrum(reactor_hists, N_IBD, IBD_err, E_conv, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13);
     spectrum.compute_baselines(db);
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
@@ -104,12 +105,15 @@ int main(int argv, char** argc) {
     std::vector<TH1D*> osc_hists = spectrum.Get_osc_reactor_specs();
     std::vector<double> norms = spectrum.Get_osc_reactor_norms();
     TH1D* data = (TH1D*)osc_hists.at(0)->Clone();
+    data->Reset("ICES");
 
     // Rescale each hist to have them integrate to the correct total number of events given by N_IBD (+oscillation) and N_alphaN
     for (unsigned int i; i < osc_hists.size(); ++i) {
         data->Add(osc_hists.at(i), norms.at(i) / osc_hists.at(i)->Integral());  // Add reactor events
     }
-    data->Add(&alphaN_hist, N_alphaN / alphaN_hist.Integral());  // Add alpha-n events
+    data->Add(alphaN_hists.at(0), N_alphaN / alphaN_hists.at(0)->Integral());  // Add alpha-n events
+
+    std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Make list of Dm_21^2 and s_12^2 values to iterate over
     std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, Theta12_min, Theta12_max, Theta12_nSteps);
@@ -124,7 +128,7 @@ int main(int argv, char** argc) {
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    Fit_spectra(spectrum, alphaN_hist, N_alphaN, alphaN_err, data, var_params, minllHist, start_idx, verbose);
+    Fit_spectra(spectrum, alphaN_hists, N_alphaN, alphaN_err, data, var_params, minllHist, start_idx, verbose);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -141,14 +145,14 @@ int main(int argv, char** argc) {
  * @brief Takes reactor and alpha-n data, and fits data to it for a range of Dm_21^2 and theta_12 values
  * 
  * @param spectrum  reactorINFO object that contains all the relevent reactor
- * @param alphaN_hist  alphaN pdf
+ * @param alphaN_hists  alphaN PDFs
  * @param N_alphaN  number of alphaN events
  * @param alphaN_err  fractional error of N_alphaN
  * @param data  data to fit model to 
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
+void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
@@ -163,7 +167,7 @@ void Fit_spectra(reactorINFO& spectrum, TH1D& alphaN_hist, const double N_alphaN
     RooDataHist dataHist("dataHist", "data hist", E, data);
 
     // Create alphaN PDF and norm + norm constraint
-    RooDataHist* tempData_alphaN = new RooDataHist("tempData", "temporary data", E, &alphaN_hist);
+    RooDataHist* tempData_alphaN = new RooDataHist("tempData", "temporary data", E, alphaN_hists.at(0));
     RooHistPdf* alphaN_PDF = new RooHistPdf("alphaN_PDF", "alphaN PDF", E, *tempData_alphaN);
 
     double lower_bound = (1.0 - 3.0 * alphaN_err) * N_alphaN;
@@ -282,9 +286,9 @@ double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_al
  * 
  * @param file_address 
  * @param reactor_hists 
- * @param alphaN_hist 
+ * @param alphaN_hists
  */
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, TH1D& alphaN_hist) {
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, TH2D& E_conv) {
 
     TFile *fin = TFile::Open(file_address.c_str());
     if (!fin->IsOpen()) {
@@ -304,18 +308,23 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
     bool alphaN_hist_found, reactor_hist_found = false;
     while((key = (TKey*)next())){
         obj = key->ReadObj() ;
-        if(obj->InheritsFrom(TH1::Class())){
+        if (obj->InheritsFrom(TH1::Class())) {
             // Check which histogram in file matches name
             name = obj->GetName();
             if (name == "alphaN") {
-                alphaN_hist = *(TH1D*)obj;
+                alphaN_hists.push_back((TH1D*)obj);
                 alphaN_hist_found = true;
+            } else if (name == "E_conversion") {
+                continue;
             } else {
                 reactor_hists.push_back((TH1D*)obj);
                 reactor_hist_found = true;
             }
         }
     }
+
+    // Get 2D hist
+    E_conv = *(TH2D*)fin->Get("E_conversion");
 
     // Error handling
     if (!reactor_hist_found) {

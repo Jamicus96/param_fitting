@@ -22,15 +22,15 @@ def argparser():
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/likelihoods/', help='Folder to save recombined root files with tracking information in.')
     
-    parser.add_argument('--N_IBD', type=float, dest='N_IBD', default=170, help='Number of un-oscillated IBD events (ratio to alpha-n matters)')
+    parser.add_argument('--N_IBD', type=float, dest='N_IBD', default=122, help='Number of un-oscillated IBD events')
     parser.add_argument('--IBD_err', type=float, dest='IBD_err', default=0.05, help='Fractional error in N_IBD.')
-    parser.add_argument('--N_alphaN', type=float, dest='N_alphaN', default=73, help='Number of IBD events (ratio to alpha-n matters)')
+    parser.add_argument('--N_alphaN', type=float, dest='N_alphaN', default=50, help='Number of alpha-n events')
     parser.add_argument('--alphaN_err', type=float, dest='alphaN_err', default=0.5, help='Fractional error in N_alphaN.')
 
-    parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=1E-5, help='Dm_21^2 minimum.')
-    parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=10E-5, help='Dm_21^2 maximum.')
-    parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=5., help='theta_12 minimum.')
-    parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=45., help='theta_12 maximum.')
+    parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
+    parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
+    parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
+    parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=1000, help='Number of bins in x and y directions.')
@@ -334,7 +334,7 @@ def combi_fits(args):
     job_address = makeCombiJobScript(example_jobScript, fit_repo, command, args.verbose)
 
     # Run job script!
-    command = 'qsub ' + job_address
+    command = 'qsub -l m_mem_free=4G ' + job_address
     if args.verbose:
         print('Running command: ', command)
         subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
