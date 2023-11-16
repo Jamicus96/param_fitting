@@ -30,10 +30,11 @@
 
 using namespace RooFit;
 
-void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, std::vector<TH1D*>& geoNu_hists, const double  N_geoNu, const double  geoNu_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min, const double Theta12_max, const unsigned int Theta12_nSteps);
-double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_alphaN, RooGaussian& constraint_alphaN, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac);
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, TH2D& E_conv);
+RooDataHist* Make_PDFs_norms_constraints(std::vector<TH1D*>& hists, const RooRealVar& E, std::vector<double>& norms, double frac_err, std::vector<RooHistPdf*>& RooPDFs, std::vector<RooRealVar>& RooNorms, std::vector<RooGaussian>& RooConstraints);
+double ML_fit(reactorINFO& spectrum, std::vector<RooHistPdf*>& bckgnd_PDFs, std::vector<RooRealVar>& bckgnd_norms, std::vector<RooGaussian>& bckgnd_constraints, RooDataHist& dataHist, const RooRealVar& E);
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
 
 
 int main(int argv, char** argc) {
@@ -46,31 +47,33 @@ int main(int argv, char** argc) {
     double IBD_err = atof(argc[4]);  // fractional error in N_IBD
     double N_alphaN = atof(argc[5]);
     double alphaN_err = atof(argc[6]);  // fractional error in N_alphaN
+    double N_geoNu = atof(argc[7]);
+    double geoNu_err = atof(argc[8]);  // fractional error in N_alphaN
 
     // 2d hist limit args
-    double Dm21_lower = atof(argc[7]);
-    double Dm21_upper = atof(argc[8]);
-    double Theta12_lower = atof(argc[9]);  // degrees
-    double Theta12_upper = atof(argc[10]);  // degrees
-    unsigned int N_bins = atoi(argc[11]);
+    double Dm21_lower = atof(argc[9]);
+    double Dm21_upper = atof(argc[10]);
+    double Theta12_lower = atof(argc[11]);  // degrees
+    double Theta12_upper = atof(argc[12]);  // degrees
+    unsigned int N_bins = atoi(argc[13]);
 
     // variable paramters limit args
-    double Dm21_min = atof(argc[12]);
-    double Dm21_max = atof(argc[13]);
-    double Theta12_min = atof(argc[14]);  // degrees
-    double Theta12_max = atof(argc[15]);  // degrees
+    double Dm21_min = atof(argc[14]);
+    double Dm21_max = atof(argc[15]);
+    double Theta12_min = atof(argc[16]);  // degrees
+    double Theta12_max = atof(argc[17]);  // degrees
 
-    unsigned int start_idx_Dm21 = atoi(argc[16]);
-    unsigned int start_idx_theta = atoi(argc[17]);
+    unsigned int start_idx_Dm21 = atoi(argc[18]);
+    unsigned int start_idx_theta = atoi(argc[19]);
 
-    unsigned int Dm21_nSteps = atoi(argc[18]);
-    unsigned int Theta12_nSteps = atoi(argc[19]);
+    unsigned int Dm21_nSteps = atoi(argc[20]);
+    unsigned int Theta12_nSteps = atoi(argc[21]);
 
-    bool verbose = std::stoi(argc[18]);
+    bool verbose = std::stoi(argc[22]);
 
     if (verbose) {
         // Print input variables
-        std::cout << "N_IBD = " << N_IBD << " ± " << IBD_err*100. << "%, " << "N_alphaN = " << N_alphaN << " ± " << alphaN_err*100. << "%." << std::endl;
+        std::cout << "N_IBD = " << N_IBD << " ± " << IBD_err*100. << "%, " << "N_alphaN = " << N_alphaN << " ± " << alphaN_err*100. << "%, " << "N_geoNu = " << N_geoNu << " ± " << geoNu_err*100. << "%." << std::endl;
         std::cout << "fit params: Dm_21^2 € [" << Dm21_min << ", " << Dm21_max << "] (#" << Dm21_nSteps << "), " << "theta_12^2 € [" << Theta12_min << ", " << Theta12_max << "] (#" << Theta12_nSteps << ")." << std::endl;
         std::cout << "hist params: Dm_21^2 lims € {" << Dm21_lower << ", " << Dm21_upper << "}, " << "theta_12^2 lims € {" << Theta12_lower << ", " << Theta12_upper << "}, Nbins = " << N_bins << "." << std::endl;
     }
@@ -79,8 +82,9 @@ int main(int argv, char** argc) {
     std::cout << "Reading in hists from file..." << std::endl;
     std::vector<TH1D*> reactor_hists;
     std::vector<TH1D*> alphaN_hists;
+    std::vector<TH1D*> geoNu_hists;
     TH2D E_conv;
-    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, E_conv);
+    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, E_conv);
 
     // Get baselines
     RAT::DB::Get()->SetAirplaneModeStatus(true);
@@ -128,7 +132,7 @@ int main(int argv, char** argc) {
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    Fit_spectra(spectrum, alphaN_hists, N_alphaN, alphaN_err, data, var_params, minllHist, start_idx, verbose);
+    Fit_spectra(spectrum, alphaN_hists, N_alphaN, alphaN_err, geoNu_hists, N_geoNu, geoNu_err, data, var_params, minllHist, start_idx, verbose);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -144,55 +148,84 @@ int main(int argv, char** argc) {
 /**
  * @brief Takes reactor and alpha-n data, and fits data to it for a range of Dm_21^2 and theta_12 values
  * 
- * @param spectrum  reactorINFO object that contains all the relevent reactor
- * @param alphaN_hists  alphaN PDFs
- * @param N_alphaN  number of alphaN events
+ * @param spectrum  reactorINFO object that contains all the relevent reactor info
+ * @param alphaN_hists  alphaN PDFs (hists)
+ * @param N_alphaN  number of alphaN expected events
  * @param alphaN_err  fractional error of N_alphaN
+ * @param geoNu_hists  geoNu PDFs (hists)
+ * @param N_geoNu  number of geoNu expected events
+ * @param geoNu_err  fractional error of N_geoNu
  * @param data  data to fit model to 
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
+void Fit_spectra(reactorINFO& spectrum, std::vector<TH1D*>& alphaN_hists, const double N_alphaN, const double alphaN_err, std::vector<TH1D*>& geoNu_hists, const double  N_geoNu, const double  geoNu_err, TH1D* data, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
     std::vector<double> Dm21 = var_params.at(1);
 
-    // Declare observables
+    // Declare observable
     RooRealVar E("E", "energy", 0.9, 8);
-    RooRealVar reactor_frac("reactor_frac", "reactorIBD fraction", 0.4, 0.8);
-    RooRealVar alphaN_frac("alphaN_frac", "alpha-n fraction", 0.2, 0.6);
 
     // Make data hist (data that must be fit)
     RooDataHist dataHist("dataHist", "data hist", E, data);
 
-    // Create alphaN PDF and norm + norm constraint
-    RooDataHist* tempData_alphaN = new RooDataHist("tempData", "temporary data", E, alphaN_hists.at(0));
-    RooHistPdf* alphaN_PDF = new RooHistPdf("alphaN_PDF", "alphaN PDF", E, *tempData_alphaN);
 
-    double lower_bound = (1.0 - 3.0 * alphaN_err) * N_alphaN;
-    if (lower_bound < 0.) lower_bound = 0.;
-    RooRealVar norm_alphaN("alpa-n Norm", "temporary norm", N_alphaN, lower_bound, (1.0 + 3.0 * alphaN_err) * N_alphaN); // Allow variable to vary between ±3 sigmas
-    RooGaussian constraint_alphaN("alpha-n Norm Const", "temp constraint", norm_alphaN, RooConst(N_alphaN), RooConst(alphaN_err * N_alphaN));  // var, mean, sigma
+    /* ~~~~~~~~~~  Create list of background PDFs, norms and constraints (alpha-n and goe-nu)  ~~~~~~~~~~ */
+    std::vector<RooHistPdf*> bckgnd_PDFs;
+    std::vector<RooRealVar> bckgnd_norms;
+    std::vector<RooGaussian> bckgnd_constraints;
 
-    // Compute best fit Log likelihood for each set of paramters (fraction of alpha-n vs reactor IBD events is fit in each loop)
+    // alpha-n
+    double tot_alphaN_int = 0.0;
+    for (unsigned int i = 0; i < alphaN_hists.size(); ++i) {
+        tot_alphaN_int += alphaN_hists.at(i)->Integral();
+    }
+    std::vector<double> alphaN_norms;
+    for (unsigned int i = 0; i < alphaN_hists.size(); ++i) {
+        alphaN_norms.push_back(N_alphaN * alphaN_hists.at(i)->Integral() / tot_alphaN_int);  // get norm of each PDF from total number of alphaNs
+    }
+    RooDataHist* tempData = Make_PDFs_norms_constraints(alphaN_hists, E, alphaN_norms, alphaN_err, bckgnd_PDFs, bckgnd_norms, bckgnd_constraints);
+    
+    // Geo-nu
+    tempData = new RooDataHist("tempData", "temporary data", E, geoNu_hists.at(0));
+    bckgnd_PDFs.push_back(new RooHistPdf("geoNu", "temporary PDF", E, *tempData));
+    // Add placeholder norms and constraints (will update them inside loop, below)
+    unsigned int geoNu_idx = bckgnd_PDFs.size() - 1;
+    bckgnd_norms.push_back(RooRealVar("geoNu", "temporary norm", N_geoNu, 0.99 * N_geoNu, 1.01 * N_geoNu));
+    bckgnd_constraints.push_back(RooGaussian("geoNu", "temp constraint", bckgnd_norms.at(geoNu_idx), RooConst(N_geoNu), RooConst(0.01 * N_geoNu)));
+
+
+    /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
     double MLL;
+    double new_N_geoNu;
+    double lower_bound;
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // std::cout << "i = " << i << std::endl;
         spectrum.s12_2() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << spectrum.s12_2() << std::endl;
+
+        // Compute geo-nu survival prob, and update re-scaled norm and constraint in background lists
+        new_N_geoNu = N_geoNu * spectrum.geoNu_survival_prob();
+        lower_bound = (1.0 - 3.0 * geoNu_err) * new_N_geoNu;
+        if (lower_bound < 0.) lower_bound = 0.;
+        bckgnd_norms.at(geoNu_idx) = RooRealVar("geoNu", "temporary norm", new_N_geoNu, lower_bound, (1.0 + 3.0 * geoNu_err) * new_N_geoNu); // Allow variable to vary between ±3 sigmas
+        bckgnd_constraints.at(geoNu_idx) = RooGaussian("geoNu", "temp constraint", bckgnd_norms.at(geoNu_idx), RooConst(new_N_geoNu), RooConst(geoNu_err * new_N_geoNu));  // var, mean, sigma
+
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // std::cout << "j = " << j << std::endl;
             spectrum.Dm21_2() = Dm21.at(j);
             if (verbose) std::cout << "Dm_21^2 = " << spectrum.Dm21_2() << std::endl;
-            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, ML_fit(spectrum, *alphaN_PDF, norm_alphaN, constraint_alphaN, dataHist, E, reactor_frac, alphaN_frac));
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, ML_fit(spectrum, bckgnd_PDFs, bckgnd_norms, bckgnd_constraints, dataHist, E));
         }
     }
 
     // clean up
-    delete(tempData_alphaN);
-    delete(alphaN_PDF);
+    delete(tempData);
+    for (auto p : bckgnd_PDFs) {delete p;} 
+    bckgnd_PDFs.clear();
 }
 
 /**
@@ -225,46 +258,69 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
     return {sinTheta12, Dm21};
 }
 
-double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_alphaN, RooGaussian& constraint_alphaN, RooDataHist& dataHist, const RooRealVar& E, const RooRealVar& reactor_frac, const RooRealVar& alphaN_frac) {
-
-    // Compute oscillated reactor spectra
-    spectrum.compute_osc_reactor_spec();
-
-    // Declare argument lists for reactor PDFs
-    RooArgList components = RooArgList();
-    RooArgList coeffs = RooArgList();
-    RooArgList constraints = RooArgList();
-
+/**
+ * @brief Package histogram PDFs and total norm predictions (+errs) into the appropriate RooFit objects.
+ * Outputs RooDataHist* object, to be deleted after fitting to avoid memory leaks.
+ * 
+ * @param hists 
+ * @param norms 
+ * @param frac_err 
+ * @param bckgnd_PDFs 
+ * @param bckgnd_norms 
+ * @param bckgnd_constraints 
+ * @return RooDataHist* 
+ */
+RooDataHist* Make_PDFs_norms_constraints(std::vector<TH1D*>& hists, const RooRealVar& E, std::vector<double>& norms, double frac_err, std::vector<RooHistPdf*>& RooPDFs, std::vector<RooRealVar>& RooNorms, std::vector<RooGaussian>& RooConstraints) {
     RooDataHist* tempData;
-    RooHistPdf* tempPDF;
+    double lower_bound;
     std::string name;
     std::string norm_name;
     std::string const_name;
-    double lower_bound;
-    for (unsigned int i = 0; i < spectrum.Get_osc_reactor_specs().size(); ++i) {
+    for (unsigned int i = 0; i < hists.size(); ++i) {
         // Make argument names
-        name = spectrum.Get_osc_reactor_specs().at(i)->GetName();
+        name = hists.at(i)->GetName();
         norm_name = name + "_norm";
         const_name = norm_name + "_const";
 
         // Add PDF with associated norm and norm constraint
-        tempData = new RooDataHist("tempData", "temporary data", E, spectrum.Get_osc_reactor_specs().at(i));
-        tempPDF = new RooHistPdf(name.c_str(), "temporary PDF", E, *tempData);
+        tempData = new RooDataHist("tempData", "temporary data", E, hists.at(i));
+        RooPDFs.push_back(new RooHistPdf(name.c_str(), "temporary PDF", E, *tempData));
 
-        lower_bound = (1.0 - 3.0 * spectrum.IBDs_err()) * spectrum.Get_osc_reactor_norms().at(i);
+        lower_bound = (1.0 - 3.0 * frac_err) * norms.at(i);
         if (lower_bound < 0.) lower_bound = 0.;
-        RooRealVar normTemp(norm_name.c_str(), "temporary norm", spectrum.Get_osc_reactor_norms().at(i), lower_bound, (1.0 + 3.0 * spectrum.IBDs_err()) * spectrum.Get_osc_reactor_norms().at(i)); // Allow variable to vary between ±3 sigmas
-        RooGaussian tempConstraint(const_name.c_str(), "temp constraint", normTemp, RooConst(spectrum.Get_osc_reactor_norms().at(i)), RooConst(spectrum.IBDs_err() * spectrum.Get_osc_reactor_norms().at(i)));  // var, mean, sigma
+        RooNorms.push_back(RooRealVar(norm_name.c_str(), "temporary norm", norms.at(i), lower_bound, (1.0 + 3.0 * frac_err) * norms.at(i))); // Allow variable to vary between ±3 sigmas
+        RooConstraints.push_back(RooGaussian(const_name.c_str(), "temp constraint", RooNorms.at(RooNorms.size()-1), RooConst(norms.at(i)), RooConst(frac_err * norms.at(i))));  // var, mean, sigma
+    }
+    return tempData;
+}
 
-        components.addClone(*tempPDF);
-        coeffs.addClone(normTemp);
-        constraints.addClone(tempConstraint);
+double ML_fit(reactorINFO& spectrum, std::vector<RooHistPdf*>& bckgnd_PDFs, std::vector<RooRealVar>& bckgnd_norms, std::vector<RooGaussian>& bckgnd_constraints, RooDataHist& dataHist, const RooRealVar& E) {
+
+    // Compute oscillated reactor spectra
+    spectrum.compute_osc_reactor_spec();
+
+    // Declare argument lists for reactor and background PDFs norms and constraints
+    RooArgList components = RooArgList();
+    RooArgList coeffs = RooArgList();
+    RooArgList constraints = RooArgList();
+
+    // Add reactor PDFs
+    std::vector<RooHistPdf*> reactor_PDFs;
+    std::vector<RooRealVar> reactor_norms;
+    std::vector<RooGaussian> reactor_constraints;
+    RooDataHist* tempData = Make_PDFs_norms_constraints(spectrum.Get_osc_reactor_specs(), E, spectrum.Get_osc_reactor_norms(), spectrum.IBDs_err(), reactor_PDFs, reactor_norms, reactor_constraints);
+    for (unsigned int i = 0; i < reactor_PDFs.size(); ++i) {
+        components.addClone(*(reactor_PDFs.at(i)));
+        coeffs.addClone(reactor_norms.at(i));
+        constraints.addClone(reactor_constraints.at(i));
     }
 
-    // Do the same for alpha-n
-    components.addClone(alphaN_PDF);
-    coeffs.addClone(norm_alphaN);
-    constraints.addClone(constraint_alphaN);
+    // Do the same for backgrounds
+    for (unsigned int i = 0; i < bckgnd_PDFs.size(); ++i) {
+        components.addClone(*(bckgnd_PDFs.at(i)));
+        coeffs.addClone(bckgnd_norms.at(i));
+        constraints.addClone(bckgnd_constraints.at(i));
+    }
 
     // Add PDFs together
     RooAddPdf model("model", "r+a", components,  coeffs);
@@ -274,7 +330,8 @@ double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_al
 
     // clean up
     delete(tempData);
-    delete(tempPDF);
+    for (auto p : reactor_PDFs) {delete p;} 
+    reactor_PDFs.clear();
 
     //return result
     return result;
@@ -282,13 +339,15 @@ double ML_fit(reactorINFO& spectrum, RooHistPdf& alphaN_PDF, RooRealVar& norm_al
 
 
 /**
- * @brief Lists all TH1D histograms from root file into a vector of reactor hists and an alphaN hist
+ * @brief Lists all histograms from root file into vectors of reactor, alphaN, geoNu and E_conv hists
  * 
  * @param file_address 
  * @param reactor_hists 
  * @param alphaN_hists
+ * @param geoNu_hists
+ * @param E_conv
  */
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, TH2D& E_conv) {
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv) {
 
     TFile *fin = TFile::Open(file_address.c_str());
     if (!fin->IsOpen()) {
@@ -305,20 +364,19 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
     std::string name;
 
     // Go through list of histograms and add them to temp list if they are included in name list
-    bool alphaN_hist_found, reactor_hist_found = false;
     while((key = (TKey*)next())){
         obj = key->ReadObj() ;
         if (obj->InheritsFrom(TH1::Class())) {
             // Check which histogram in file matches name
             name = obj->GetName();
-            if (name == "alphaN") {
+            if (name == "geoNu") {
+                geoNu_hists.push_back((TH1D*)obj);
+            } else if (name == "alphaN_1" || name == "alphaN_2" || name == "alphaN_3") {
                 alphaN_hists.push_back((TH1D*)obj);
-                alphaN_hist_found = true;
             } else if (name == "E_conversion") {
                 continue;
             } else {
                 reactor_hists.push_back((TH1D*)obj);
-                reactor_hist_found = true;
             }
         }
     }
@@ -327,12 +385,16 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
     E_conv = *(TH2D*)fin->Get("E_conversion");
 
     // Error handling
-    if (!reactor_hist_found) {
+    if (reactor_hists.size() == 0) {
         std::cout << "ERROR: No reactor IBD histograms!" << std::endl;
         exit(1);
     }
-    if (!alphaN_hist_found) {
+    if (alphaN_hists.size() == 0) {
         std::cout << "ERROR: No alpha-n histograms!" << std::endl;
+        exit(1);
+    }
+    if (geoNu_hists.size() == 0) {
+        std::cout << "ERROR: No geo-nu histograms!" << std::endl;
         exit(1);
     }
 }

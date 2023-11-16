@@ -38,7 +38,10 @@ class reactorINFO {
         unsigned int hists_Nbins;
         TH2D E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
 
-        // Oscillated reactor hists (order: BRUCE, DARLINGTON, PICKERING, WORLD)
+        // Oscillated reactor hists
+        // Names of reactors whose norms can float independently, last one is always 'WORLD':
+        std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};  
+        std::vector<unsigned int> reactor_idx;  // Maps each reactor_hists to the idx it should be assigned to in reactor_names
         std::vector<TH1D*> osc_hists;
         double tot_hist_int;
         // std::map<std::string, unsigned int> osc_hists_map = {{"BRUCE", 0}, {"DARLINGTON", 1}, {"PICKERING", 2}, {"WORLD", 3}};
@@ -76,6 +79,17 @@ class reactorINFO {
         double survival_prob(const double E, const double L);
 
         void compute_osc_reactor_spec();
+
+        // Geo-nu survival probability: averaged over baseline -> No E-depence, only depends on mixing angles.
+        double geoNu_survival_prob() {return fSSqrTheta13*fSSqrTheta13 + (1. - fSSqrTheta13)*(1. - fSSqrTheta13) * (1. - 2. * fSSqrTheta12 * (1. - fSSqrTheta12));};
+
+        // Destructor
+        ~reactorINFO() {
+            for (auto p : reactor_hists) {delete p;}
+            reactor_hists.clear();
+            for (auto p : osc_hists) {delete p;}
+            osc_hists.clear();
+        };
 };
 
 std::vector<std::string> SplitString(std::string str);

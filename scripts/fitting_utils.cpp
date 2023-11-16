@@ -38,15 +38,33 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs,
         baselines.push_back(0.);
     }
 
-    // Create histogram to sum oscillated reactor events
-    for (unsigned int i = 0; i < 4; ++i) {
+    // Create histogram to sum oscillated reactor events, based off reactor_names
+    for (unsigned int i = 0; i < reactor_names.size(); ++i) {
         osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
         norms.push_back(0.);
+
+        osc_hists.at(i)->SetName(reactor_names.at(i).c_str());
+        osc_hists.at(i)->SetTitle((reactor_names.at(i) + " spectrum").c_str());
     }
-    osc_hists.at(0)->SetName("BRUCE");      osc_hists.at(0)->SetTitle("BRUCE spectrum");
-    osc_hists.at(1)->SetName("DARLINGTON"); osc_hists.at(1)->SetTitle("DARLINGTON spectrum");
-    osc_hists.at(2)->SetName("PICKERING");  osc_hists.at(2)->SetTitle("PICKERING spectrum");
-    osc_hists.at(3)->SetName("WORLD");      osc_hists.at(3)->SetTitle("WORLD spectrum");
+    
+    // Assign each element in reactor_hists to the appropriate element in osc_hists/reactor_names
+    std::string origin_reactor;
+    bool reactor_not_found;
+    for (unsigned int i = 0; i < num_reactors; ++i) {
+        origin_reactor = SplitString(reactor_hists.at(i)->GetName())[0];
+
+        // See if reactor is in reactor_names (except last element 'WORLD')
+        reactor_not_found = true;
+        for (unsigned int j = 0; j < (reactor_names.size()-1); ++j) {
+            if (origin_reactor == reactor_names.at(j)) {
+                reactor_idx.push_back(j);
+                reactor_not_found = false;
+                break;
+            }
+        }
+        // Reactor was not in the list, so assign it to 'WORLD' (last element in reactor_names)
+        if (reactor_not_found) reactor_idx.push_back(reactor_names.size() - 1);
+    }
 }
 
 /**
@@ -165,7 +183,6 @@ void reactorINFO::compute_osc_reactor_spec() {
 
     // Assume all the histograms have the same E binning
     double E;
-    unsigned int hist_idx;
     double weighted_av_P;
     double weight;
     std::string origin_reactor;
@@ -173,13 +190,6 @@ void reactorINFO::compute_osc_reactor_spec() {
         E = reactor_hists.at(0)->GetXaxis()->GetBinCenter(i);
         this->re_compute_consts(E);
         for (unsigned int j = 0; j < num_reactors; ++j) {
-            origin_reactor = SplitString(reactor_hists.at(j)->GetName())[0];
-            // Find which oscillated histogram to add to
-            if (origin_reactor == "BRUCE")           hist_idx = 0;
-            else if (origin_reactor == "DARLINGTON") hist_idx = 1;
-            else if (origin_reactor == "PICKERING")  hist_idx = 2;
-            else                                     hist_idx = 3;
-
             // Integrate survival prob over E_nu, weigther by E_nu(E_e) distribution -> weigthed average survival prob
             weighted_av_P = 0.0;
             for (unsigned int k = 1; k <= E_conv.GetYaxis()->GetNbins(); ++k) {
@@ -188,7 +198,7 @@ void reactorINFO::compute_osc_reactor_spec() {
             }
 
             // Add value of bin from reactor core to appropriate hist, scaled by survival probability
-            osc_hists.at(hist_idx)->AddBinContent(i, weighted_av_P * reactor_hists.at(j)->GetBinContent(i));
+            osc_hists.at(reactor_idx.at(j))->AddBinContent(i, weighted_av_P * reactor_hists.at(j)->GetBinContent(i));
         }
     }
 

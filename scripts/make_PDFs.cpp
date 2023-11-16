@@ -18,10 +18,11 @@ double proton_mass_c2 = 938.272013;  // MeV
 double neutron_mass_c2 = 939.56536;  // MeV
 
 // define max delay, since it gets used twice (for consistency)
-double MAX_DELAY = 1.1E6;
+double MAX_DELAY = 0.8E6;
+double PROTON_RECOIL_E_MAX = 3.5;  // (MeV)
+double CARBON12_SCATTER_E_MAX = 5.4;  // (MeV)
 
-
-bool pass_prompt_cuts(double energy, TVector3 position) {
+bool pass_prompt_cuts(const double energy, const TVector3& position) {
     if (energy < 0.9) return false;  // min energy cut (MeV)
     if (energy > 8.0) return false;  // max energy cut (MeV)
     if (position.Mag() > 5700) return false;  // FV cut (mm)
@@ -29,28 +30,28 @@ bool pass_prompt_cuts(double energy, TVector3 position) {
     return true;
 }
 
-bool pass_delayed_cuts(double energy, TVector3 position) {
-    if (energy < 1.7) return false;  // min energy cut (MeV)
-    if (energy > 2.5) return false;  // max energy cut (MeV)
+bool pass_delayed_cuts(const double energy, const TVector3& position) {
+    if (energy < 1.85) return false;  // min energy cut (MeV)
+    if (energy > 2.4) return false;  // max energy cut (MeV)
     if (position.Mag() > 5700) return false;  // FV cut (mm)
 
     return true;
 }
 
-bool pass_coincidence_cuts(double delay, TVector3 prompt_pos, TVector3 delayed_pos) {
+bool pass_coincidence_cuts(const double delay, const TVector3& prompt_pos, const TVector3& delayed_pos) {
     // double delay = (delayed_time - prompt_time) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
     double distance = (delayed_pos - prompt_pos).Mag();
 
-    if (delay < 200) return false;  // min delay cut (ns)
+    if (delay < 400) return false;  // min delay cut (ns)
     if (delay > MAX_DELAY) return false;  // max delay cut (ns)
     if (distance > 1500) return false;  // max distance cut (mm)
 
     return true;
 }
 
-bool pass_classifier(double energy, double class_result, double class_cut) {
+bool pass_classifier(const double energy, const double class_result, const double class_cut) {
     // Only check classifier result for events in PDF1 (proton recoil, E < 3MeV)
-    if (energy > 3.5) return true;
+    if (energy > PROTON_RECOIL_E_MAX) return true;
     if (class_result > class_cut) return true;
 
     return false;
@@ -72,7 +73,8 @@ bool pass_classifier(double energy, double class_result, double class_cut) {
  * @param is_reactorIBD  true if events are reactor IBDs, so that their provenance can be tracked.
  * @return std::map<std::string, TH1D*> 
  */
-std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double classiferCut, TH2D* E_conv, double lowenergybin, double maxenergybin, unsigned int nbins, bool is_reactorIBD) {
+std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const double classiferCut, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
+                                                    const unsigned int nbins, const std::string data_type) {
 
     // Define a map of histograms {"hist name", hist}. This is to keep track of reactor IBD origin
     std::map<std::string, TH1D*> hists_map;
@@ -89,7 +91,6 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double cla
     Int_t mcIndex;
     Double_t classResult;
 
-    // EventInfo->SetBranchAddress("parentKE1", &parentKE1);
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
     EventInfo->SetBranchAddress("posy", &reconY);
@@ -98,9 +99,25 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double cla
     EventInfo->SetBranchAddress("fitValid", &valid);
     EventInfo->SetBranchAddress("mcIndex", &mcIndex);
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
-    if (is_reactorIBD) {
+    if (data_type == "reactorIBD") {
+        // Want to get incoming antinu's origin core and energy
         EventInfo->SetBranchAddress("parentMeta1", &originReactor);
         EventInfo->SetBranchAddress("parentKE1", &parentKE1);
+    } else if (data_type == "alphaN") {
+        // Instead, can set all the hists for alphaN, since there aren't many
+        TH1D* temp_hist_1 = new TH1D("alphaN_1", "alphaN proton recoil", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_2 = new TH1D("alphaN_2", "alphaN 12C scatter", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_3 = new TH1D("alphaN_3", "alphaN 16O deexcitation", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"alphaN_1", temp_hist_1});
+        hists_map.insert({"alphaN_2", temp_hist_2});
+        hists_map.insert({"alphaN_3", temp_hist_3});
+    } else if (data_type == "geoNu") {
+        // Instead, can set the hist for geo-nus, since there's only one
+        TH1D* temp_hist_geoNu = new TH1D("geoNu", "geo-nu", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"geoNu", temp_hist_geoNu});
+    } else {
+        std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
+        exit(1);
     }
 
     RAT::DBLinkPtr linkdb;
@@ -113,12 +130,11 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double cla
 
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvalid = 0;
-    unsigned int nvalidprompt = 0;
-    TVector3 promptPos;
-    double promptEnergy;
-    double promptTime;
-    unsigned int promptMCIndex;
+    unsigned int nvaliddelayed = 0;
+    double delayedTime;
+    unsigned int delayedMCIndex;
     TVector3 delayedPos;
+    TVector3 promptPos;
     double delay;
     unsigned int a = 0;
 
@@ -129,49 +145,62 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double cla
         if (a % 100 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
         EventInfo->GetEntry(a);
-        const char* core_name;
-        if (is_reactorIBD) {
-            core_name = originReactor->Data();
+        const char* hist_name;
+        if (data_type == "reactorIBD") {
+            hist_name = originReactor->Data();  // core name
+        } else if (data_type == "geoNu") {
+            hist_name = "geoNu";
         } else {
-            core_name = "alphaN";
+            hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
         }
-        promptEnergy = reconEnergy;
-        promptPos = TVector3(reconX, reconY, reconZ);
-        promptTime = eventTime;
-        promptMCIndex = mcIndex;
+        delayedPos = TVector3(reconX, reconY, reconZ);
+        delayedTime = eventTime;
+        delayedMCIndex = mcIndex;
 
-        if (valid and pass_prompt_cuts(promptEnergy, promptPos) and pass_classifier(promptEnergy, classResult, classiferCut)) {
-            nvalidprompt++;
+        if (valid and pass_delayed_cuts(reconEnergy, delayedPos)) {
+            nvaliddelayed++;
 
-            // Prompt event is valid, check through the next 10 events for event that passes delayed + tagging cuts
+            // Delayed event is valid, check through the previous 10 events for event that passes prompt + classifier + tagging cuts
             for (unsigned int b = 1; b <= 10; ++b) {
-                EventInfo->GetEntry(a + b);
-                if (mcIndex != promptMCIndex) continue;  // check just in case
+                EventInfo->GetEntry(a - b);
+                if (mcIndex != delayedMCIndex) continue;  // check just in case
 
-                delay = (eventTime - promptTime) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+                delay = (delayedTime - eventTime) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
-                delayedPos = TVector3(reconX, reconY, reconZ);
-                if (valid and pass_delayed_cuts(reconEnergy, delayedPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
+                promptPos = TVector3(reconX, reconY, reconZ);
+                if (valid and pass_prompt_cuts(reconEnergy, promptPos) and pass_classifier(reconEnergy, classResult, classiferCut) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
                     nvalid++;
 
-                    if (hists_map.find(core_name) == hists_map.end()) {
-                        // reactor not added to list yet -> add it
-                        TH1D* temp_hist = new TH1D(core_name, core_name, nbins, lowenergybin, maxenergybin);
-                        hists_map.insert({core_name, temp_hist});
-                    }
-                    // Add event to relevant histogram
-                    hists_map.at(core_name)->Fill(promptEnergy);
+                    if (data_type == "reactorIBD") {
+                        if (hists_map.find(hist_name) == hists_map.end()) {
+                            // reactor not added to list yet -> add it
+                            TH1D* temp_hist = new TH1D(hist_name, hist_name, nbins, lowenergybin, maxenergybin);
+                            hists_map.insert({hist_name, temp_hist});
+                        }
 
-                    // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
-                    if (is_reactorIBD) E_conv->Fill(promptEnergy, parentKE1);
+                        // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
+                        E_conv->Fill(reconEnergy, parentKE1);
+
+                    } else if (data_type == "alphaN") {
+                        if (reconEnergy < PROTON_RECOIL_E_MAX) {
+                            hist_name = "alphaN_1";  // proton recoil
+                        } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
+                            hist_name = "alphaN_2";  // 12C scatter
+                        } else {
+                            hist_name = "alphaN_3";  // 16O deexcitation
+                        }
+                    }
+
+                    // Add event to relevant histogram
+                    hists_map.at(hist_name)->Fill(reconEnergy);
                 }
             }
         }
         a++;
     }
-    std::cout << "From " << nentries << " entries, number of valid prompt events: "<< nvalidprompt << " number of valid event pairs surviving all cuts: " << nvalid << std::endl;
+    std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed << " number of valid event pairs surviving all cuts: " << nvalid << std::endl;
 
     return hists_map;
 }
@@ -180,16 +209,18 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, double cla
 int main(int argv, char** argc) {
     std::string reactor_events_address = argc[1];
     std::string alphaN_events_address = argc[2];
-    // std::string geoNu_events_address = argc[3];
+    std::string geoNu_events_address = argc[3];
     std::string output_file = argc[3];
     double classifier_cut = std::stod(argc[4]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
     TFile *alphaNFile = TFile::Open(alphaN_events_address.c_str());
+    TFile *geoNuFile = TFile::Open(geoNu_events_address.c_str());
 
     TTree *reactorEventTree = (TTree *) reactorFile->Get("output");
     TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");
+    TTree *geoNuEventTree = (TTree *) geoNuFile->Get("output");
 
     // Create recon E_e vs true E_nu 2-D hist (MeV)
     double Ee_min = 0.9;
@@ -205,9 +236,11 @@ int main(int argv, char** argc) {
 
     // Loop through and apply tagging + cuts
     std::cout << "Looping through reactor IBD events..." << std::endl; 
-    std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, true);
+    std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
     std::cout << "Looping through alpha-n events..." << std::endl; 
-    std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, false);
+    std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
+    std::cout << "Looping through geo-nu IBD events..." << std::endl; 
+    std::map<std::string, TH1D*> geoNu_hist_map = Apply_tagging_and_cuts(geoNuEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu");
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;
@@ -224,7 +257,10 @@ int main(int argv, char** argc) {
         x.second->Write();  // loops through all the map entries (.first = key, .second = element), and writes them to the root file
     }
     for (auto& x : alphaN_hist_map) {  
-        x.second->Write();  // loops through all the map entries (.first = key, .second = element), and writes them to the root file
+        x.second->Write();
+    }
+    for (auto& x : geoNu_hist_map) {  
+        x.second->Write();
     }
     E_conv->Write();
     outroot->Write();
