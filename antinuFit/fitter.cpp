@@ -55,15 +55,33 @@ Fitter::Fitter(const unsigned int MaxNparams) {
 
 Double_t Fitter::fitFunc(Double_t* p) {
     // Reset total model spectrum to zero
-    std::fill(tot_fitModel.begin(), tot_fitModel.end(), 0.0);
+    tot_fitModel->Reset("ICES");
 
     // Compute the total spectrum from all the models, using parameters p
     for (unsigned int iModel = 0; i < numModels; ++iModel) {
-        models.at(iModel)->compute_spec(Double_t* p);
+        models.at(iModel)->compute_spec(p);
         tot_fitModel->Add(models.at(iModel)->Spectrum());
     }
 
     // Compute test statistic
+    return this->ExtendedConstrainedLogLikelihood(p);
+}
+
+double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
+    // Model PDFs have already been scaled by their respective norms, and added together
+    double logL = - tot_fitModel->Integral();
+    for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
+        logL += data->GetBinContent(ibin) * log(tot_fitModel->GetBinContent(ibin));
+    }
+    // Add in constraints
+    for (unsigned int iVar = 0; iVar < variables.size(); ++ iVar) {
+        // If variable is being held constant, assume it's equal to its prior most likely value
+        if (!(variables.at(i)->isConstant())) {
+            // Add gaussian constraint
+            logL += 0.5 * (p[i] - variables.at(i)->prior())*(p[i] - variables.at(i)->prior()) / (variables.at(i)->err()*variables.at(i)->err());
+        }
+    }
+    return logL;
 }
 
 void Fitter::fit_models() {
@@ -71,7 +89,7 @@ void Fitter::fit_models() {
     minuit->ExecuteCommand("MIGRAD", arglist, 2);
 }
 
-double  Fitter::fit_models() {
+double Fitter::fit_models() {
     // minimize
     minuit->ExecuteCommand("MIGRAD", arglist, 2);
 

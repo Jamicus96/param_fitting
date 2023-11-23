@@ -33,8 +33,8 @@ class Fitter {
     public:
         // Constructors
         Fitter(const unsigned int MaxNparams = 15);
-        Fitter(const std::vector<TH1D*>& Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models, const unsigned int MaxNparams = 15);
-        Fitter(const std::vector<TH1D*>& Data, const unsigned int MaxNparams = 15);
+        Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models, const unsigned int MaxNparams = 15);
+        Fitter(TH1D* Data, const unsigned int MaxNparams = 15);
 
         // Member function
         double fit_models();
@@ -45,6 +45,8 @@ class Fitter {
         double GetFitParameter(const unsigned int parIdx) {return minuit->GetParameter(parIdx)};
         double GetFitParError(const unsigned int parIdx) {return minuit->GetParError(parIdx)};
         double GetFitCovarianceMatrixElement(const unsigned int i, const unsigned int j) {return minuit->GetCovarianceMatrixElement(i, j)};
+
+        double ExtendedConstrainedLogLikelihood(Double_t* p);
 
         // Destructor
         ~Fitter() {delete arglist; delete var_bestFits;}

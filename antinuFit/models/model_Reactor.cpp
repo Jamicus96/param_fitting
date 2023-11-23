@@ -1,51 +1,54 @@
-#include "fitting_utils.hpp"
+#include "model_Reactor.hpp"
 
 
+Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
+                std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB) {
 
-/**
- * @brief Construct a new reactorINFO::reactorINFO object. Only builds basic data structure.
- * Needs oscillation parameters to produce useful things.
- * 
- * @param Reactor_frac 
- * @param AlphaN_hist 
- * @param reactor_hists 
- * @param L 
- */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist) {
+    // Save variables
+    Vars.push_back(vDm_21_2); iDm_21_2 = 0;
+    Vars.push_back(vDm_32_2); iDm_32_2 = 1;
+    Vars.push_back(vS_12_2); iS_12_2 = 2;
+    Vars.push_back(vS_13_2); iS_13_2 = 3;
 
-    // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-    alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
+    if (Reactor_names.size() != Norms.size()) {
+        std::cout << "[Reactor] ERROR: Reactor_names and Norms should have the same size!" << std::endl;
+        exit(1);
+    }
+    reactor_names = Reactor_names;
 
-    // Set up empty vectors
-    for (unsigned int i = 0; i < 3; ++i) {
-        eigen.push_back(0.0);
-        X_mat.push_back(0.0);
+    for (unsigned int i = 0; i < Norms.size(); ++i) {
+        Vars.push_back(Norms.at(i));
+        iNorms.push_back(4 + i);
+    }
+    numVars = Vars.size();
+
+    for (unsigned int = 0; i < numVars; ++i) {
+                vars.at(i) = Vars.at(i)->val();
     }
 
-    // Assign values
+    db = DB;
+
+    // Save hist variables
     reactor_hists = Reactor_hists;
     num_reactors = reactor_hists.size();
     hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
-    N_IBD = N_IBDs;
-    IBD_err = IBD_errs;
     E_conv = *(TH2D*)(E_conv_hist.Clone());
-    std::cout << "Set up E conversion histogram:" << std::endl;
-    std::cout << "NbinsX = " << E_conv.GetXaxis()->GetNbins() << ", NbinsY = " << E_conv.GetYaxis()->GetNbins() << std::endl;
 
-    tot_hist_int = 0.0;
-    for (unsigned int i = 0; i < num_reactors; ++i) {
-        tot_hist_int += reactor_hists.at(i)->Integral();
-        baselines.push_back(0.);
-    }
+    baselines.resize(num_reactors);
+
+    // Set up empty vectors
+    eigen.resize(3);
+    X_mat.resize(3);
 
     // Create histogram to sum oscillated reactor events, based off reactor_names
+    model_spec = (TH1D*)(reactor_hists.at(0)->Clone());
     for (unsigned int i = 0; i < reactor_names.size(); ++i) {
         osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
-        norms.push_back(0.);
 
         osc_hists.at(i)->SetName(reactor_names.at(i).c_str());
         osc_hists.at(i)->SetTitle((reactor_names.at(i) + " spectrum").c_str());
     }
+    unosc_hist_ints.resize(reactor_names);
     
     // Assign each element in reactor_hists to the appropriate element in osc_hists/reactor_names
     std::string origin_reactor;
@@ -65,51 +68,47 @@ reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs,
         // Reactor was not in the list, so assign it to 'WORLD' (last element in reactor_names)
         if (reactor_not_found) reactor_idx.push_back(reactor_names.size() - 1);
     }
+
+    // Compute baselines
+    Reactor::compute_baselines();
+
+    // Compute unoscillated histogram integrals for the different sources in Reactor_names
+    this->compute_unosc_integrals();
 }
 
-/**
- * @brief Construct a new reactorINFO::reactorINFO object. Only builds basic data structure.
- * Needs oscillation parameters to produce useful things.
- * 
- * @param Reactor_hists 
- * @param Baselines 
- * @param DmSqr21 
- * @param DmSqr32 
- * @param SSqrTheta12 
- * @param SSqrTheta13 
- */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr21, const double DmSqr32,
-                        const double SSqrTheta12, const double SSqrTheta13) : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs, E_conv_hist) {
+void Reactor::compute_unosc_integrals() {
+    // Borrow total oscillated reactor histograms (i.e. empty them, fill them, re-empty them)
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        osc_hists.at(i)->Reset("ICES");
+    }
 
-    this->Dm21_2() = DmSqr21;
-    this->Dm32_2() = DmSqr32;
-    this->s12_2() = SSqrTheta12;
-    this->s13_2() = SSqrTheta13;
+    // Assume all the histograms have the same E binning
+    for (unsigned int i = 1; i <= hists_Nbins; ++i) {
+        for (unsigned int j = 0; j < num_reactors; ++j) {
+            // Add value of bin from reactor core to appropriate hist
+            osc_hists.at(reactor_idx.at(j))->AddBinContent(i, reactor_hists.at(j)->GetBinContent(i));
+        }
+    }
+
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        unosc_hist_ints.at(i) = osc_hists.at(i)->Integral();
+        osc_hists.at(i)->Reset("ICES");
+    }
 }
-
-/**
- * @brief Construct a new reactorINFO::reactorINFO object. Only builds basic data structure.
- * Needs oscillation parameters to produce useful things.
- * 
- * @param Reactor_hists 
- * @param Baselines 
- * @param DmSqr32 
- * @param SSqrTheta13 
- */
-reactorINFO::reactorINFO(std::vector<TH1D*>& Reactor_hists, const double N_IBDs, const double IBD_errs, TH2D& E_conv_hist, const double DmSqr32, const double SSqrTheta13)
-                        : reactorINFO::reactorINFO(Reactor_hists, N_IBDs, IBD_errs, E_conv_hist) {
-
-    this->Dm32_2() = DmSqr32;
-    this->s13_2() = SSqrTheta13;
-}
-
 
 /**
  * @brief Set oscillation parameters that don't depend on energy or baseline
  * 
  */
-void reactorINFO::compute_oscillation_constants() {
+void Reactor::compute_oscillation_constants() {
 
+    // Upacks variables
+    const double fDmSqr21 = vars.at(iDm_21_2);
+    const double fDmSqr32 = vars.at(iDm_32_2);
+    const double fSSqrTheta12 = vars.at(iS_12_2);
+    const double fSSqrTheta13 = vars.at(iS_13_2);
+
+    // Do calculation
     const double fDmSqr31 = fDmSqr32 + fDmSqr21;
 
     H_ee_vac = fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31 * (fSSqrTheta13 - (1.0/3.0));
@@ -120,12 +119,13 @@ void reactorINFO::compute_oscillation_constants() {
                         + fDmSqr31*fDmSqr31 * fSSqrTheta13 - 2.0 * fDmSqr21 * fDmSqr31 * fSSqrTheta12 * fSSqrTheta13);;
 }
 
+
 /**
  * @brief Compute oscillation parameters depending on Energy [MeV] but not baseline yet
  * 
  * @param E Energy [MeV]
  */
-void reactorINFO::re_compute_consts(const double E) {
+void Reactor::re_compute_consts(const double& E) {
     const double A_CC = alpha * E; // for A_CC in [eV^2] and nuE in [MeV]
     
     // Compute new values for H_ee, Y, a0 and a1
@@ -153,7 +153,7 @@ void reactorINFO::re_compute_consts(const double E) {
  * @param L Baseline (km)
  * @return double 
  */
-double reactorINFO::survival_prob(const double E, const double L) {
+double Reactor::survival_prob(const double& E, const double& L) {
 
     const double scale = 1.267e3 * L / E; // for E in [MeV] and L in [km]
 
@@ -165,20 +165,39 @@ double reactorINFO::survival_prob(const double E, const double L) {
     return 4.0 * (X_mat.at(1)*X_mat.at(0)*s_10*s_10 + X_mat.at(2)*X_mat.at(0)*s_20*s_20 + X_mat.at(2)*X_mat.at(1)*s_21*s_21);
 }
 
-
 /**
- * @brief Use oscillation parameters and reactor information to compute oscillated histograms
+ * @brief Get vector of reactor baslines [km] from vector of reactor histograms
  * 
+ * @param db 
+ * @param reactor_hists 
+ * @param baselines
  */
-void reactorINFO::compute_osc_reactor_spec() {
-    
+void Reactor::compute_baselines() {
+
+    RAT::DBLinkPtr linkdb;
+    std::vector<std::string> originReactorVect;
+    std::vector<Double_t> fLatitude;
+    std::vector<Double_t> fLongitute;
+    std::vector<Double_t> fAltitude;
+    for (unsigned int n = 0; n < num_reactors; ++n) {
+        originReactorVect = SplitString(reactor_hists.at(n)->GetName());
+        linkdb = db->GetLink("REACTOR",originReactorVect[0]);
+        fLatitude  = linkdb->GetDArray("latitude");
+        fLongitute = linkdb->GetDArray("longitude");
+        fAltitude = linkdb->GetDArray("altitude");
+
+        baselines.at(n) = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
+    }
+}
+
+
+void Reactor::compute_osc_specs() {
     // Compute oscillation constants
     this->compute_oscillation_constants();
 
     // Reset total reactor histograms (i.e. empty them)
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
         osc_hists.at(i)->Reset("ICES");
-        norms.at(i) = 0;
     }
 
     // Assume all the histograms have the same E binning
@@ -201,12 +220,45 @@ void reactorINFO::compute_osc_reactor_spec() {
             osc_hists.at(reactor_idx.at(j))->AddBinContent(i, weighted_av_P * reactor_hists.at(j)->GetBinContent(i));
         }
     }
+}
 
-    // Compute hist norms, rescaling using N_IBD
-    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-        norms.at(i) = osc_hists.at(i)->Integral() * N_IBD / tot_hist_int;
+
+void Reactor::hold_osc_params_const(bool isTrue) {
+    if (!isTrue) {
+        computed_osc_specs = false;
+    } else if (isTrue && Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant()) {
+        this->compute_osc_specs();
+        computed_osc_specs = true;
+    } else {
+        std::cout << "[Reactor] WARNING: Oscillation constants not held constant for fitting, since they were not set to constants before hand." << std::endl;
     }
 }
+
+void Reactor::compute_spec() {
+    // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
+    if (!(Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant() && computed_osc_specs)) {
+        this->compute_osc_specs();
+    }
+
+    /* INSERT ENERGY SCALING AND SMEARING HERE */
+
+    for (unsigned int i = 0; i < osc_hists.siez(); ++i) {
+        model_spec->Add(osc_hists.at(i), vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
+    }
+}
+
+
+std::vector<TH1D*>& Reactor::GetOscReactorHists() {
+    std::vector<TH1D*> rescaled_osc_hists;
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        rescaled_osc_hists.push_back((TH1D*)(osc_hists.at(i)->Clone()));
+        rescaled_osc_hists.at(i)->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
+    }
+    return rescaled_osc_hists;
+}
+
+
+/* ~~~~~~~~~~~~~~~~ OTHER (NON-MEMBER) FUNCTIONS ~~~~~~~~~~~~~~~~ */
 
 
 /**
@@ -252,7 +304,7 @@ std::vector<std::string> SplitString(std::string str) {
  * @param altitude 
  * @return TVector3 
  */
-TVector3 LLAtoECEF(double longitude, double latitude, double altitude) {
+TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude) {
   // reference http://www.mathworks.co.uk/help/aeroblks/llatoecefposition.html
   static double toRad = TMath::Pi()/180.;
   static double Earthradius = 6378137.0; //Radius of the Earth (in meters)
@@ -277,33 +329,9 @@ TVector3 LLAtoECEF(double longitude, double latitude, double altitude) {
  * @param altitude 
  * @return double 
  */
-double GetReactorDistanceLLA(const double &longitude, const double&latitude, const double &altitude) {
+double GetReactorDistanceLLA(const double& longitude, const double& latitude, const double &altitude) {
     const TVector3 SNO_ECEF_coord_ = TVector3(672.87,-4347.18,4600.51);
-    double dist = (LLAtoECEF(longitude, latitude,altitude) - SNO_ECEF_coord_).Mag();
+    double dist = (LLAtoECEF(longitude, latitude, altitude) - SNO_ECEF_coord_).Mag();
   return dist;
 }
 
-/**
- * @brief Get vector of reactor baslines [km] from vector of reactor histograms
- * 
- * @param db 
- * @param reactor_hists 
- * @param baselines
- */
-void reactorINFO::compute_baselines(RAT::DB* db) {
-
-    RAT::DBLinkPtr linkdb;
-    std::vector<std::string> originReactorVect;
-    std::vector<Double_t> fLatitude;
-    std::vector<Double_t> fLongitute;
-    std::vector<Double_t> fAltitude;
-    for (unsigned int n = 0; n < num_reactors; ++n) {
-        originReactorVect = SplitString(reactor_hists.at(n)->GetName());
-        linkdb = db->GetLink("REACTOR",originReactorVect[0]);
-        fLatitude  = linkdb->GetDArray("latitude");
-        fLongitute = linkdb->GetDArray("longitude");
-        fAltitude = linkdb->GetDArray("altitude");
-
-        baselines.at(n) = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
-    }
-}

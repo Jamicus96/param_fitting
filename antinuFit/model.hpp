@@ -6,7 +6,7 @@
 #include <TVectorD.h>
 #include <iostream>
 #include <TH1.h>
-// #include "fitVar.hpp"
+#include "fitVar.hpp"
 
 
 class Model {

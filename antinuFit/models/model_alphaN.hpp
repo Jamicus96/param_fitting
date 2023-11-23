@@ -29,6 +29,10 @@ class alphaN: public Model {
             Integral_hist_C12Scatter = hist_C12Scatter->Integral();
             hist_O16Deex = Hist_O16Deex;
             Integral_hist_O16Deex = hist_O16Deex->Integral();
+
+            for (unsigned int = 0; i < Vars.size(); ++i) {
+                vars.at(i) = Vars.at(i)->val();
+            }
         };
 
         // Member function

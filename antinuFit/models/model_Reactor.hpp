@@ -43,7 +43,7 @@ class Reactor: public Model {
         std::vector<std::string> reactor_names; // example: {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"}  
         std::vector<unsigned int> reactor_idx;  // Maps each reactor_hists to the idx it should be assigned to in reactor_names
         std::vector<TH1D*> osc_hists;
-        std::vector<double> unosc_hist_ints;
+        std::vector<double> unosc_hist_ints;  // Integral un un-oscillated histograms (computed once)
         bool computed_osc_specs = false;
 
         RAT::DB* db;
@@ -60,11 +60,12 @@ class Reactor: public Model {
         void re_compute_consts(const double& E);
         double survival_prob(const double& E, const double& L);
         void compute_baselines();
+        void hold_osc_params_const(bool isTrue);
 
         void compute_spec();
 
         std::vector<std::string> GetReactorNames() {return reactor_names;};
-        std::vector<double> GetOscReactorNorms();
+        std::vector<TH1D*>& GetOscReactorHists();
     
         // Destructor
         ~Reactor() {
@@ -74,6 +75,16 @@ class Reactor: public Model {
             osc_hists.clear();
         };
 };
+
+/* ~~~~~~~~~~~~~~~~ OTHER (NON-MEMBER) FUNCTIONS ~~~~~~~~~~~~~~~~ */
+
+
+std::vector<std::string> SplitString(std::string str);
+
+TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude);
+
+double GetReactorDistanceLLA(const double& longitude, const double& latitude, const double &altitude);
+
 
 
 //end header guard
