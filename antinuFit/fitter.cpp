@@ -12,11 +12,12 @@ Fitter::Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>&
     models = Models;
     numModels = models.size();
 
+    char* dummy;
     for (unsigned int i = 0; i < numVars; ++i) {
         // Sets the parameter
-        minuit->SetParameter(i, variables.at(i)->name(), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
+        minuit->SetParameter(i, variables.at(i)->name().c_str(), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
         // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically
-        minuit->GetParameter(i, variables.at(i)->name(), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max())	
+        minuit->GetParameter(i, dummy, variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
         variables.at(i)->ParIdx() = i;
     }
 }
@@ -50,7 +51,7 @@ Fitter::Fitter(const unsigned int MaxNparams) {
     arglist[1] = 0.01; // tolerance
 
     // (void (*fcn)(Int_t&, Double_t*, Double_t& f, Double_t*, Int_t))
-    minuit->SetFCN(fitFunc);
+    SetFunc();
 }
 
 Double_t Fitter::fitFunc(Double_t* p) {
@@ -58,13 +59,13 @@ Double_t Fitter::fitFunc(Double_t* p) {
     tot_fitModel->Reset("ICES");
 
     // Compute the total spectrum from all the models, using parameters p
-    for (unsigned int iModel = 0; i < numModels; ++iModel) {
+    for (unsigned int iModel = 0; iModel < numModels; ++iModel) {
         models.at(iModel)->compute_spec(p);
         tot_fitModel->Add(models.at(iModel)->Spectrum());
     }
 
     // Compute test statistic
-    return this->ExtendedConstrainedLogLikelihood(p);
+    return ExtendedConstrainedLogLikelihood(p);
 }
 
 double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
@@ -76,17 +77,12 @@ double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
     // Add in constraints
     for (unsigned int iVar = 0; iVar < variables.size(); ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
-        if (!(variables.at(i)->isConstant())) {
+        if (!(variables.at(iVar)->isConstant())) {
             // Add gaussian constraint
-            logL += 0.5 * (p[i] - variables.at(i)->prior())*(p[i] - variables.at(i)->prior()) / (variables.at(i)->err()*variables.at(i)->err());
+            logL += 0.5 * (p[iVar] - variables.at(iVar)->prior())*(p[iVar] - variables.at(iVar)->prior()) / (variables.at(iVar)->err()*variables.at(iVar)->err());
         }
     }
     return logL;
-}
-
-void Fitter::fit_models() {
-    // minimize
-    minuit->ExecuteCommand("MIGRAD", arglist, 2);
 }
 
 double Fitter::fit_models() {
@@ -94,5 +90,5 @@ double Fitter::fit_models() {
     minuit->ExecuteCommand("MIGRAD", arglist, 2);
 
     //get result
-    return this->fitFunc(var_bestFits);
+    return fitFunc(var_bestFits);
 }

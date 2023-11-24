@@ -2,7 +2,7 @@
 
 
 
-FitVar::FitVar(char* Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant) {
+FitVar::FitVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant) {
     parname = Parname;
     value = Value;
     verr_copy = verr;  // Stored error info, in case is verr is set to 0 temporarily, to hold it constant

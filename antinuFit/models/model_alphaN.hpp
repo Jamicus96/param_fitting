@@ -12,11 +12,18 @@
 
 class alphaN: public Model {
     private:
-        TH1D* hist_ProtontR, hist_C12Scatter, hist_O16Deex;
+        TH1D* hist_ProtontR;
+        TH1D* hist_C12Scatter;
+        TH1D* hist_O16Deex;
         double Integral_hist_ProtontR, Integral_hist_C12Scatter, Integral_hist_O16Deex;
 
     public:
         // Constructors
+        alphaN(const alphaN& mod) : Model(mod) {
+            hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
+            hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
+            Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
+        };
         alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
             Vars.push_back(NormProtonR);
             Vars.push_back(NormC12Scatter);
@@ -30,7 +37,7 @@ class alphaN: public Model {
             hist_O16Deex = Hist_O16Deex;
             Integral_hist_O16Deex = hist_O16Deex->Integral();
 
-            for (unsigned int = 0; i < Vars.size(); ++i) {
+            for (unsigned int i = 0; i < Vars.size(); ++i) {
                 vars.at(i) = Vars.at(i)->val();
             }
         };
@@ -40,12 +47,12 @@ class alphaN: public Model {
             /* INSERT ENERGY SCALING AND SMEARING HERE */
 
             model_spec->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
-            model_spec->Add(hist_C12Scatter, vars.at(1) / hist_C12Scatter);
+            model_spec->Add(hist_C12Scatter, vars.at(1) / Integral_hist_C12Scatter);
             model_spec->Add(hist_O16Deex, vars.at(2) / Integral_hist_O16Deex);
         };
     
         // Destructor
-        ~alphaN() {delete hist_ProtontR; delete hist_C12Scatter; delete hist_O16Deex;};
+        ~alphaN(){delete hist_ProtontR; delete hist_C12Scatter; delete hist_O16Deex; for (auto p : Vars) {delete p;} Vars.clear();};
 };
 
 

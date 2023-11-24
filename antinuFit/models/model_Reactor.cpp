@@ -2,7 +2,7 @@
 
 
 Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB) {
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB) {
 
     // Save variables
     Vars.push_back(vDm_21_2); iDm_21_2 = 0;
@@ -22,7 +22,7 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
     }
     numVars = Vars.size();
 
-    for (unsigned int = 0; i < numVars; ++i) {
+    for (unsigned int i = 0; i < numVars; ++i) {
                 vars.at(i) = Vars.at(i)->val();
     }
 
@@ -32,7 +32,7 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
     reactor_hists = Reactor_hists;
     num_reactors = reactor_hists.size();
     hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
-    E_conv = *(TH2D*)(E_conv_hist.Clone());
+    E_conv = (TH2D*)(E_conv_hist->Clone());
 
     baselines.resize(num_reactors);
 
@@ -48,7 +48,7 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
         osc_hists.at(i)->SetName(reactor_names.at(i).c_str());
         osc_hists.at(i)->SetTitle((reactor_names.at(i) + " spectrum").c_str());
     }
-    unosc_hist_ints.resize(reactor_names);
+    unosc_hist_ints.resize(reactor_names.size());
     
     // Assign each element in reactor_hists to the appropriate element in osc_hists/reactor_names
     std::string origin_reactor;
@@ -211,8 +211,8 @@ void Reactor::compute_osc_specs() {
         for (unsigned int j = 0; j < num_reactors; ++j) {
             // Integrate survival prob over E_nu, weigther by E_nu(E_e) distribution -> weigthed average survival prob
             weighted_av_P = 0.0;
-            for (unsigned int k = 1; k <= E_conv.GetYaxis()->GetNbins(); ++k) {
-                weight = E_conv.GetBinContent(i, k);
+            for (unsigned int k = 1; k <= E_conv->GetYaxis()->GetNbins(); ++k) {
+                weight = E_conv->GetBinContent(i, k);
                 if (weight > 0.0) weighted_av_P += weight * survival_prob(E, baselines.at(j));
             }
 
@@ -242,7 +242,7 @@ void Reactor::compute_spec() {
 
     /* INSERT ENERGY SCALING AND SMEARING HERE */
 
-    for (unsigned int i = 0; i < osc_hists.siez(); ++i) {
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
         model_spec->Add(osc_hists.at(i), vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
     }
 }

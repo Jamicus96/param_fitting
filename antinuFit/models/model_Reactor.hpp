@@ -10,13 +10,14 @@
 #include <RAT/DB.hh>
 #include "model.hpp"
 #include "fitVar.hpp"
+#include <TMath.h>
 
 
 class Reactor: public Model {
     private:
         // Indices pointing to variables
-        const unsigned int numVars, iDm_21_2, iDm_32_2, iS_12_2, iS_13_2;
-        std::vector<const unsigned int> iNorms;
+        unsigned int numVars, iDm_21_2, iDm_32_2, iS_12_2, iS_13_2;
+        std::vector<unsigned int> iNorms;
 
         // Initial oscillation parameters that only depend on
         // Dm_21^2, Dm_32^2, s_12^2, s_13^2 and electron density
@@ -26,7 +27,7 @@ class Reactor: public Model {
         double Y_ee_vac;
 
         // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-        const double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
+        static constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
 
         // Computed oscillation paramters depending only on E [MeV], but not on L [km]
         std::vector<double> eigen;  // Antinu propagation Hamiltonian eigenvalues
@@ -36,7 +37,7 @@ class Reactor: public Model {
         std::vector<TH1D*> reactor_hists;  // Un-oscillated reactor IBD spectra
         unsigned int num_reactors;
         unsigned int hists_Nbins;
-        TH2D E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
+        TH2D* E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
 
         // Oscillated reactor hists
         // Names of reactors whose norms can float independently, last one is always 'WORLD':
@@ -50,8 +51,15 @@ class Reactor: public Model {
 
     public:
         // Constructors
+        Reactor(const Reactor& mod) : Model(mod) {
+            numVars = mod.numVars; iDm_21_2 = mod.iDm_21_2; iDm_32_2 = mod.iDm_32_2; iS_12_2 = mod.iS_12_2; iS_13_2 = mod.iS_13_2;
+            iNorms = mod.iNorms; H_ee_vac = mod.H_ee_vac; a0_vac = mod.a0_vac; a1_vac = mod.a1_vac; Y_ee_vac = mod.Y_ee_vac;
+            eigen = mod.eigen; X_mat = mod.X_mat; baselines = mod.baselines; reactor_hists = mod.reactor_hists; num_reactors = mod.num_reactors;
+            hists_Nbins = mod.hists_Nbins; E_conv = mod.E_conv; reactor_names = mod.reactor_names; reactor_idx = mod.reactor_idx;
+            osc_hists = mod.osc_hists; unosc_hist_ints = mod.unosc_hist_ints; computed_osc_specs = mod.computed_osc_specs; db = mod.db;
+        };
         Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB);
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB);
 
         // Member function
         void compute_unosc_integrals();
@@ -73,6 +81,8 @@ class Reactor: public Model {
             reactor_hists.clear();
             for (auto p : osc_hists) {delete p;}
             osc_hists.clear();
+            delete db;
+            for (auto p : Vars) {delete p;} Vars.clear();
         };
 };
 

@@ -24,9 +24,9 @@
 #include "model_Reactor.hpp"
 
 
-void Fit_spectra(Fitter& antinuFitter, FitVar* vDm21_2, FitVar* vS_12_2, Model* geoNuMod, Model* ReactorMod, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& geoNuMod, Model& ReactorMod, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+std::vector<double>& compute_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min, const double Theta12_max, const unsigned int Theta12_nSteps);
-double ML_fit(reactorINFO& spectrum, std::vector<RooHistPdf*>& bckgnd_PDFs, std::vector<RooRealVar>& bckgnd_norms, std::vector<RooGaussian>& bckgnd_constraints, RooDataHist& dataHist, const RooRealVar& E);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
 
 
@@ -93,22 +93,22 @@ int main(int argv, char** argc) {
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
 
     // Create oscillation variables
-    FitVar* vDm21_2 = new FitVar("deltamsqr21", fDmSqr21, 0, fDmSqr21, fDmSqr21);
-    FitVar* vDm32_2 = new FitVar("deltamsqr32", fDmSqr32, 0, fDmSqr32, fDmSqr32);
-    FitVar* vS_12_2 = new FitVar("sinsqrtheta12", fSSqrTheta12, 0, fSSqrTheta12, fSSqrTheta12);
-    FitVar* vS_13_2 = new FitVar("sinsqrtheta13", fSSqrTheta13, 0, fSSqrTheta13, fSSqrTheta13);
+    FitVar vDm21_2("deltamsqr21", fDmSqr21, 0, fDmSqr21, fDmSqr21);
+    FitVar vDm32_2("deltamsqr32", fDmSqr32, 0, fDmSqr32, fDmSqr32);
+    FitVar vS_12_2("sinsqrtheta12", fSSqrTheta12, 0, fSSqrTheta12, fSSqrTheta12);
+    FitVar vS_13_2("sinsqrtheta13", fSSqrTheta13, 0, fSSqrTheta13, fSSqrTheta13);
 
-    vDm21_2->HoldConstant(true);
-    vDm32_2->HoldConstant(true);
-    vS_12_2->HoldConstant(true);
-    vS_13_2->HoldConstant(true);
+    vDm21_2.HoldConstant(true);
+    vDm32_2.HoldConstant(true);
+    vS_12_2.HoldConstant(true);
+    vS_13_2.HoldConstant(true);
 
     // Create geo-nu norm variable (allow to vary by ±3 sigma), and model
     double geoNuNorm_min = (1.0 - 3.0 * geoNu_err) * N_geoNu;
     if (geoNuNorm_min < 0.0) geoNuNorm_min = 0.0;
-    FitVar* geoNuNorm = new FitVar("geoNuNorm", N_geoNu, geoNu_err * N_geoNu, geoNuNorm_min, (1.0 + 3.0 * geoNu_err) * N_geoNu);
+    FitVar geoNuNorm("geoNuNorm", N_geoNu, geoNu_err * N_geoNu, geoNuNorm_min, (1.0 + 3.0 * geoNu_err) * N_geoNu);
 
-    geoNu geoNuMod(geoNuNorm, vS_12_2, vS_13_2, geoNu_hists.at(0));
+    geoNu geoNuMod(&geoNuNorm, &vS_12_2, &vS_13_2, geoNu_hists.at(0));
     geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
 
     // Create alpha-n norm variables (allow to vary by ±3 sigma), and model
@@ -116,27 +116,28 @@ int main(int argv, char** argc) {
     double N_alphaN_third = N_alphaN/3.0;
     double alphaNNorm_min = (1.0 - 3.0 * alphaN_err) * N_alphaN_third;
     if (alphaNNorm_min < 0.0) alphaNNorm_min = 0.0;
-    FitVar* alphaNNorm_1 = new FitVar("alphaNNorm_1", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
-    FitVar* alphaNNorm_2 = new FitVar("alphaNNorm_2", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
-    FitVar* alphaNNorm_3 = new FitVar("alphaNNorm_3", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
+    FitVar alphaNNorm_1("alphaNNorm_1", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
+    FitVar alphaNNorm_2("alphaNNorm_2", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
+    FitVar alphaNNorm_3("alphaNNorm_3", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
 
-    alphaN* alphaNMod = new alphaN(alphaNNorm_1, alphaNNorm_2, alphaNNorm_3, alphaN_hists.at(0), alphaN_hists.at(1), alphaN_hists.at(2));
+    alphaN alphaNMod(&alphaNNorm_1, &alphaNNorm_2, &alphaNNorm_3, alphaN_hists.at(0), alphaN_hists.at(1), alphaN_hists.at(2));
 
     // Create reactor norm variables (allow to vary by ±3 sigma), and model
     std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};
 
-    std::vector<double> hist_fracs = compute_unosc_fracs(reactor_hists, reactor_names);
+    std::vector<double> hist_fracs;
+    compute_unosc_fracs(reactor_hists, reactor_names, hist_fracs);
     std::vector<FitVar*> ReactorNorms;
     double reacNorm;
     double reacLowLim;
-    for (unsigned int i = 0; i < hist_ints.size(); ++i) {
+    for (unsigned int i = 0; i < hist_fracs.size(); ++i) {
         reacNorm = hist_fracs.at(i) * N_IBD;
         reacLowLim = (1.0 - 3.0 * IBD_err) * reacNorm;
         if (reacLowLim < 0.0) reacLowLim = 0.0;
         ReactorNorms.push_back(new FitVar(reactor_names.at(i).c_str(), reacNorm, IBD_err * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err) * reacNorm));
     }
 
-    Reactor ReactorMod = new Reactor(vDm21_2, vDm32_2, vS_12_2, vS_13_2, reactor_hists, reactor_names, ReactorNorms, db);
+    Reactor ReactorMod(&vDm21_2, &vDm32_2, &vS_12_2, &vS_13_2, reactor_hists, &E_conv, reactor_names, ReactorNorms, db);
     ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
@@ -150,9 +151,9 @@ int main(int argv, char** argc) {
     }
 
     // Add alpha-n spectra
-    data->Add(alphaN_hists.at(0), alphaNNorm_1->val() / alphaN_hists.at(0)->Integral());
-    data->Add(alphaN_hists.at(1), alphaNNorm_2->val() / alphaN_hists.at(1)->Integral());
-    data->Add(alphaN_hists.at(2), alphaNNorm_3->val() / alphaN_hists.at(2)->Integral());
+    data->Add(alphaN_hists.at(0), alphaNNorm_1.val() / alphaN_hists.at(0)->Integral());
+    data->Add(alphaN_hists.at(1), alphaNNorm_2.val() / alphaN_hists.at(1)->Integral());
+    data->Add(alphaN_hists.at(2), alphaNNorm_3.val() / alphaN_hists.at(2)->Integral());
 
     // Add geo-nu spectrum
     data->Add(geoNuMod.GetOscHist());
@@ -160,12 +161,12 @@ int main(int argv, char** argc) {
     std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Package variables and models together, and pass to fitter (just use ReactorNorms vector)
-    ReactorNorms.push_back(alphaNNorm_1); ReactorNorms.push_back(alphaNNorm_2); ReactorNorms.push_back(alphaNNorm_3);
-    ReactorNorms.push_back(geoNuNorm);
-    ReactorNorms.push_back(vDm21_2); ReactorNorms.push_back(vDm32_2);
-    ReactorNorms.push_back(vS_12_2); ReactorNorms.push_back(vS_13_2);
+    ReactorNorms.push_back(&alphaNNorm_1); ReactorNorms.push_back(&alphaNNorm_2); ReactorNorms.push_back(&alphaNNorm_3);
+    ReactorNorms.push_back(&geoNuNorm);
+    ReactorNorms.push_back(&vDm21_2); ReactorNorms.push_back(&vDm32_2);
+    ReactorNorms.push_back(&vS_12_2); ReactorNorms.push_back(&vS_13_2);
 
-    std::vector<Model*> models = {geoNuMod, alphaNMod, ReactorMod};
+    std::vector<Model*> models = {&geoNuMod, &alphaNMod, &ReactorMod};
 
     Fitter antinuFitter(data, ReactorNorms, models);
 
@@ -209,34 +210,32 @@ int main(int argv, char** argc) {
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(Fitter& antinuFitter, FitVar* vDm21_2, FitVar* vS_12_2, Model* geoNuMod, Model* ReactorMod, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
+void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& geoNuMod, Model& ReactorMod, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
     std::vector<double> Dm21 = var_params.at(1);
 
     /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
-    double MLL;
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // std::cout << "i = " << i << std::endl;
-        vS_12_2->val() = sinTheta12.at(i);
-        if (verbose) std::cout << "s_12^2 = " << vS_12_2->val() << std::endl;
+        vS_12_2.val() = sinTheta12.at(i);
+        if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;
         geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // std::cout << "j = " << j << std::endl;
-            vDm21_2->val() = Dm21.at(i);
+            vDm21_2.val() = Dm21.at(i);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
-            if (verbose) std::cout << "Dm_21^2 = " << vDm21_2->val() << std::endl;
+            if (verbose) std::cout << "Dm_21^2 = " << vDm21_2.val() << std::endl;
             minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
         }
     }
 }
 
-std::vector<double>& compute_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names) {
+std::vector<double>& compute_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs) {
 
     double tot_int;
-    std::vector<double> hist_fracs;
     for (unsigned int i = 0; i < Reactor_names.size(); ++i) {
         hist_fracs.push_back(0.0);
     }
@@ -247,16 +246,16 @@ std::vector<double>& compute_unosc_fracs(const std::vector<TH1D*>& Reactor_hists
     for (unsigned int i = 0; i < Reactor_hists.size(); ++i) {
         origin_reactor = SplitString(Reactor_hists.at(i)->GetName())[0];
         integral = Reactor_hists.at(i)->Integral();
-        // See if reactor is in reactor_names (except last element 'WORLD')
+        // See if reactor is in Reactor_names (except last element 'WORLD')
         reactor_not_found = true;
-        for (unsigned int j = 0; j < (reactor_names.size()-1); ++j) {
-            if (origin_reactor == reactor_names.at(j)) {
+        for (unsigned int j = 0; j < (Reactor_names.size()-1); ++j) {
+            if (origin_reactor == Reactor_names.at(j)) {
                 hist_fracs.at(j) += integral;
                 reactor_not_found = false;
                 break;
             }
         }
-        // Reactor was not in the list, so assign it to 'WORLD' (last element in reactor_names)
+        // Reactor was not in the list, so assign it to 'WORLD' (last element in Reactor_names)
         if (reactor_not_found) hist_fracs.at(hist_fracs.size()-1) += integral;
 
         tot_int += integral;
@@ -298,42 +297,6 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
 
     // Package them together
     return {sinTheta12, Dm21};
-}
-
-/**
- * @brief Package histogram PDFs and total norm predictions (+errs) into the appropriate RooFit objects.
- * Outputs RooDataHist* object, to be deleted after fitting to avoid memory leaks.
- * 
- * @param hists 
- * @param norms 
- * @param frac_err 
- * @param bckgnd_PDFs 
- * @param bckgnd_norms 
- * @param bckgnd_constraints 
- * @return RooDataHist* 
- */
-RooDataHist* Make_PDFs_norms_constraints(std::vector<TH1D*>& hists, const RooRealVar& E, std::vector<double>& norms, double frac_err, std::vector<RooHistPdf*>& RooPDFs, std::vector<RooRealVar>& RooNorms, std::vector<RooGaussian>& RooConstraints) {
-    RooDataHist* tempData;
-    double lower_bound;
-    std::string name;
-    std::string norm_name;
-    std::string const_name;
-    for (unsigned int i = 0; i < hists.size(); ++i) {
-        // Make argument names
-        name = hists.at(i)->GetName();
-        norm_name = name + "_norm";
-        const_name = norm_name + "_const";
-
-        // Add PDF with associated norm and norm constraint
-        tempData = new RooDataHist("tempData", "temporary data", E, hists.at(i));
-        RooPDFs.push_back(new RooHistPdf(name.c_str(), "temporary PDF", E, *tempData));
-
-        lower_bound = (1.0 - 3.0 * frac_err) * norms.at(i);
-        if (lower_bound < 0.) lower_bound = 0.;
-        RooNorms.push_back(RooRealVar(norm_name.c_str(), "temporary norm", norms.at(i), lower_bound, (1.0 + 3.0 * frac_err) * norms.at(i))); // Allow variable to vary between ±3 sigmas
-        RooConstraints.push_back(RooGaussian(const_name.c_str(), "temp constraint", RooNorms.at(RooNorms.size()-1), RooConst(norms.at(i)), RooConst(frac_err * norms.at(i))));  // var, mean, sigma
-    }
-    return tempData;
 }
 
 /**
