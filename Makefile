@@ -4,7 +4,7 @@ INCLUDE = ${RAT_CONFIG} -I./antinuFit -I./antinuFit/models -I./scripts
 COMPILE = g++ -g -std=c++1y -shared -fPIC
 
 
-all: make_PDFs re_combine_fits fit_params
+all: make_PDFs re_combine_fits fit_params clean
 
 
 
