@@ -2,27 +2,29 @@
 
 
 
-Fitter::Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models,
-               const unsigned int MaxNparams) : Fitter::Fitter(Data, MaxNparams) {
+Fitter::Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models) : Fitter::Fitter(Data) {
 
-    variables = Variables;
-    numVars = variables.size();
-    var_bestFit_errs.resize(numVars);
+    numVars = Variables.size();
+    variables.resize(numVars);
+    var_bestFit_errs = new double[numVars];
 
-    models = Models;
-    numModels = models.size();
-
-    char* dummy;
     for (unsigned int i = 0; i < numVars; ++i) {
+        variables.at(i) = Variables.at(i);
         // Sets the parameter
         minuit->SetParameter(i, variables.at(i)->name().c_str(), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
         // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically
-        minuit->GetParameter(i, dummy, variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
+        minuit->GetParameter(i, const_cast<char*>(variables.at(i)->name().c_str()), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
         variables.at(i)->ParIdx() = i;
+    }
+
+    numModels = Models.size();
+    models.resize(numModels);
+    for (unsigned int i = 0; i < numModels; ++i) {
+        models.at(i) = Models.at(i);
     }
 }
 
-Fitter::Fitter(TH1D* Data, const unsigned int MaxNparams) : Fitter::Fitter(MaxNparams) {
+Fitter::Fitter(TH1D* Data) : Fitter::Fitter() {
 
     data = Data;
     numBins = data->GetXaxis()->GetNbins();
@@ -31,16 +33,14 @@ Fitter::Fitter(TH1D* Data, const unsigned int MaxNparams) : Fitter::Fitter(MaxNp
     tot_fitModel->SetTitle("Total Fit Spectrum");
 }
 
-Fitter::Fitter(const unsigned int MaxNparams) {
+Fitter::Fitter() {
 
-    maxNparams = MaxNparams;
-    if (numVars > maxNparams) maxNparams = numVars;
-    var_bestFits = new Double_t[maxNparams];
+    var_bestFits = new Double_t[numVars];
 
     //The default minimizer is Minuit, you can also try Minuit2
     TVirtualFitter::SetDefaultFitter("Minuit2");
     // TVirtualFitter::SetDefaultFitter("Minuit");
-    minuit = TVirtualFitter::Fitter(0, maxNparams);
+    minuit = TVirtualFitter::Fitter(0, numVars);
     
     arglist[0] = 0;
     // set print level
@@ -75,7 +75,7 @@ double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
         logL += data->GetBinContent(ibin) * log(tot_fitModel->GetBinContent(ibin));
     }
     // Add in constraints
-    for (unsigned int iVar = 0; iVar < variables.size(); ++ iVar) {
+    for (unsigned int iVar = 0; iVar < numVars; ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
         if (!(variables.at(iVar)->isConstant())) {
             // Add gaussian constraint

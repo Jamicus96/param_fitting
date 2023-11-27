@@ -20,7 +20,7 @@ double neutron_mass_c2 = 939.56536;  // MeV
 // define max delay, since it gets used twice (for consistency)
 double MAX_DELAY = 0.8E6;
 double PROTON_RECOIL_E_MAX = 3.5;  // (MeV)
-double CARBON12_SCATTER_E_MAX = 5.4;  // (MeV)
+double CARBON12_SCATTER_E_MAX = 5.4;  // (MeV)  Could just simulate different process separately?
 
 bool pass_prompt_cuts(const double energy, const TVector3& position) {
     if (energy < 0.9) return false;  // min energy cut (MeV)

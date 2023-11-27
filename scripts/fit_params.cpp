@@ -31,37 +31,44 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
 
 
 int main(int argv, char** argc) {
+    std::cout << "1" << std::endl;
     // file args
     std::string PDFs_address = argc[1];
     std::string out_address = argc[2];
 
+    std::cout << "2" << std::endl;
     // Number of IBD (un-oscillated) and alpha-n events estimate (maily ratio matters)
-    double N_IBD = atof(argc[3]);
-    double IBD_err = atof(argc[4]);  // fractional error in N_IBD
-    double N_alphaN = atof(argc[5]);
-    double alphaN_err = atof(argc[6]);  // fractional error in N_alphaN
-    double N_geoNu = atof(argc[7]);
-    double geoNu_err = atof(argc[8]);  // fractional error in N_alphaN
+    double N_IBD = std::atof(argc[3]);
+    double IBD_err = std::atof(argc[4]);  // fractional error in N_IBD
+    double N_alphaN = std::atof(argc[5]);
+    double alphaN_err = std::atof(argc[6]);  // fractional error in N_alphaN
+    double N_geoNu = std::atof(argc[7]);
+    double geoNu_err = std::atof(argc[8]);  // fractional error in N_alphaN
 
+    std::cout << "3" << std::endl;
     // 2d hist limit args
-    double Dm21_lower = atof(argc[9]);
-    double Dm21_upper = atof(argc[10]);
-    double Theta12_lower = atof(argc[11]);  // degrees
-    double Theta12_upper = atof(argc[12]);  // degrees
-    unsigned int N_bins = atoi(argc[13]);
+    double Dm21_lower = std::atof(argc[9]);
+    double Dm21_upper = std::atof(argc[10]);
+    double Theta12_lower = std::atof(argc[11]);  // degrees
+    double Theta12_upper = std::atof(argc[12]);  // degrees
+    unsigned int N_bins = std::atoi(argc[13]);
 
+    std::cout << "4" << std::endl;
     // variable paramters limit args
-    double Dm21_min = atof(argc[14]);
-    double Dm21_max = atof(argc[15]);
-    double Theta12_min = atof(argc[16]);  // degrees
-    double Theta12_max = atof(argc[17]);  // degrees
+    double Dm21_min = std::atof(argc[14]);
+    double Dm21_max = std::atof(argc[15]);
+    double Theta12_min = std::atof(argc[16]);  // degrees
+    double Theta12_max = std::atof(argc[17]);  // degrees
 
-    unsigned int start_idx_Dm21 = atoi(argc[18]);
-    unsigned int start_idx_theta = atoi(argc[19]);
+    std::cout << "5" << std::endl;
+    unsigned int start_idx_Dm21 = std::atoi(argc[18]);
+    unsigned int start_idx_theta = std::atoi(argc[19]);
 
-    unsigned int Dm21_nSteps = atoi(argc[20]);
-    unsigned int Theta12_nSteps = atoi(argc[21]);
+    std::cout << "6" << std::endl;
+    unsigned int Dm21_nSteps = std::atoi(argc[20]);
+    unsigned int Theta12_nSteps = std::atoi(argc[21]);
 
+    std::cout << "7" << std::endl;
     bool verbose = std::stoi(argc[22]);
 
     if (verbose) {
@@ -162,11 +169,11 @@ int main(int argv, char** argc) {
 
     // Package variables and models together, and pass to fitter (just use ReactorNorms vector)
     ReactorNorms.push_back(&alphaNNorm_1); ReactorNorms.push_back(&alphaNNorm_2); ReactorNorms.push_back(&alphaNNorm_3);
-    ReactorNorms.push_back(&geoNuNorm);
+    // ReactorNorms.push_back(&geoNuNorm);
     ReactorNorms.push_back(&vDm21_2); ReactorNorms.push_back(&vDm32_2);
     ReactorNorms.push_back(&vS_12_2); ReactorNorms.push_back(&vS_13_2);
 
-    std::vector<Model*> models = {&geoNuMod, &alphaNMod, &ReactorMod};
+    std::vector<Model*> models = {&alphaNMod, &ReactorMod}; //, &geoNuMod};
 
     Fitter antinuFitter(data, ReactorNorms, models);
 
@@ -222,7 +229,7 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
         // std::cout << "i = " << i << std::endl;
         vS_12_2.val() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;
-        geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
+        // geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // std::cout << "j = " << j << std::endl;
             vDm21_2.val() = Dm21.at(i);
@@ -354,8 +361,8 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
         std::cout << "ERROR: No alpha-n histograms!" << std::endl;
         exit(1);
     }
-    if (geoNu_hists.size() == 0) {
-        std::cout << "ERROR: No geo-nu histograms!" << std::endl;
-        exit(1);
-    }
+    // if (geoNu_hists.size() == 0) {
+    //     std::cout << "ERROR: No geo-nu histograms!" << std::endl;
+    //     exit(1);
+    // }
 }
