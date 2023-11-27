@@ -18,28 +18,28 @@ re_combine_fits: re_combine_fits.cpp
 
 
 fit_params: fitVar.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o 
-	${COMPILE} -nostartfiles fitVar.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o -o scripts/fit_params.exe ${INCLUDE}
+	${COMPILE} fitVar.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o -o scripts/fit_params.exe ${INCLUDE}
 
 fit_params.o: fit_params.cpp fitter.hpp fitVar.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp
-	${COMPILE} scripts/fit_params.cpp -o fit_params.o ${INCLUDE}
+	${COMPILE} scripts/fit_params.cpp -c ${INCLUDE}
 
-fitter.o: fitter.hpp fitVar.hpp model.hpp
-	${COMPILE} -nostartfiles antinuFit/fitter.hpp -o fitter.o ${INCLUDE}
+fitter.o: fitter.cpp fitter.hpp fitVar.hpp model.hpp
+	${COMPILE} antinuFit/fitter.cpp -c ${INCLUDE}
 
-fitVar.o: fitVar.hpp
-	${COMPILE} -nostartfiles antinuFit/fitVar.hpp -o fitVar.o ${INCLUDE}
+fitVar.o: fitVar.cpp fitVar.hpp
+	${COMPILE} antinuFit/fitVar.cpp -c ${INCLUDE}
 
-model.o: model.hpp fitVar.hpp
-	${COMPILE} -nostartfiles antinuFit/model.hpp -o model.o ${INCLUDE}
+model.o: model.cpp model.hpp fitVar.hpp
+	${COMPILE} antinuFit/model.cpp -c ${INCLUDE}
 
-model_alphaN.o: model_alphaN.hpp model.hpp fitVar.hpp
-	${COMPILE} -nostartfiles antinuFit/models/model_alphaN.hpp -o model_alphaN.o ${INCLUDE}
+model_alphaN.o: model_alphaN.cpp model_alphaN.hpp model.hpp fitVar.hpp
+	${COMPILE} antinuFit/models/model_alphaN.cpp -c ${INCLUDE}
 
-model_geoNu.o: model_geoNu.hpp model.hpp fitVar.hpp
-	${COMPILE} -nostartfiles antinuFit/models/model_geoNu.hpp -o model_geoNu.o ${INCLUDE}
+model_geoNu.o: model_geoNu.cpp model_geoNu.hpp model.hpp fitVar.hpp
+	${COMPILE} antinuFit/models/model_geoNu.cpp -c ${INCLUDE}
 
-model_Reactor.o: model_Reactor.hpp model.hpp fitVar.hpp
-	${COMPILE} -nostartfiles antinuFit/models/model_Reactor.hpp -o model_Reactor.o ${INCLUDE}
+model_Reactor.o: model_Reactor.cpp model_Reactor.hpp model.hpp fitVar.hpp
+	${COMPILE} antinuFit/models/model_Reactor.cpp -c ${INCLUDE}
 
 
 

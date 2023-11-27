@@ -7,7 +7,7 @@ Model::Model(const Model& mod) {
     model_spec = mod.model_spec;
 }
 
-// Model::Model() {}
+Model::Model() {}
 
 void Model::compute_spec(Double_t* p) {
     GetVarValues(p);

@@ -2,6 +2,21 @@
 
 
 
+TVirtualFitter* Fitter::minuit;
+double Fitter::arglist[2];
+
+std::vector<FitVar*> Fitter::variables;
+Double_t* Fitter::var_bestFits;
+double* Fitter::var_bestFit_errs;
+unsigned int Fitter::numVars;
+
+std::vector<Model*> Fitter::models;
+unsigned int Fitter::numModels;
+
+TH1D* Fitter::data, *Fitter::tot_fitModel;
+unsigned int Fitter::numBins;
+
+
 Fitter::Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models) : Fitter::Fitter(Data) {
 
     numVars = Variables.size();
