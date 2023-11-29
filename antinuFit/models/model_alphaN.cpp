@@ -19,7 +19,6 @@ alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex,
     Vars.push_back(NormProtonR);
     Vars.push_back(NormC12Scatter);
     Vars.push_back(NormO16Deex);
-    vars.resize(3);
 
     hist_ProtontR = Hist_ProtontR;
     Integral_hist_ProtontR = hist_ProtontR->Integral();
@@ -28,13 +27,20 @@ alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex,
     hist_O16Deex = Hist_O16Deex;
     Integral_hist_O16Deex = hist_O16Deex->Integral();
 
+    numVars = Vars.size();
+    vars.resize(numVars);
     for (unsigned int i = 0; i < Vars.size(); ++i) {
         vars.at(i) = Vars.at(i)->val();
     }
+
+    model_spec = (TH1D*)(Hist_ProtontR->Clone());
 }
 
 // Member function
-void alphaN::compute_spec() {
+void alphaN::compute_spec(Double_t* p) {
+    this->GetVarValues(p);
+    model_spec->Reset("ICES");  // empty it before re-computing it
+
     /* INSERT ENERGY SCALING AND SMEARING HERE */
 
     model_spec->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
@@ -44,9 +50,9 @@ void alphaN::compute_spec() {
 
 // Destructor
 alphaN::~alphaN() {
-    delete hist_ProtontR;
-    delete hist_C12Scatter;
-    delete hist_O16Deex;
-    for (auto p : Vars) {delete p;}
+    // delete hist_ProtontR;
+    // delete hist_C12Scatter;
+    // delete hist_O16Deex;
+    // for (auto p : Vars) {delete p;}
     Vars.clear();
 }

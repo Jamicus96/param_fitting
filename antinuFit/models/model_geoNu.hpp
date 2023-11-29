@@ -27,7 +27,7 @@ class geoNu: public Model {
         // Geo-nu survival probability: averaged over baseline -> No E-depence, only depends on mixing angles.
         void geoNu_survival_prob();
         void hold_osc_params_const(bool isTrue);
-        void compute_spec();
+        void compute_spec(Double_t* p);
         TH1D* GetOscHist();
 
         // Destructor

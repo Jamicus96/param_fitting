@@ -25,9 +25,9 @@ def argparser():
     parser.add_argument('--N_IBD', type=float, dest='N_IBD', default=122, help='Number of un-oscillated IBD events')
     parser.add_argument('--IBD_err', type=float, dest='IBD_err', default=0.05, help='Fractional error in N_IBD.')
     parser.add_argument('--N_alphaN', type=float, dest='N_alphaN', default=50, help='Number of alpha-n events')
-    parser.add_argument('--alphaN_err', type=float, dest='alphaN_err', default=0.5, help='Fractional error in N_alphaN.')
+    parser.add_argument('--alphaN_err', type=float, dest='alphaN_err', default=0.2, help='Fractional error in N_alphaN.')
     parser.add_argument('--N_geoNu', type=float, dest='N_geoNu', default=5, help='Number of alpha-n events')
-    parser.add_argument('--geoNu_err', type=float, dest='geoNu_err', default=1.0, help='Fractional error in N_alphaN.')
+    parser.add_argument('--geoNu_err', type=float, dest='geoNu_err', default=0.8, help='Fractional error in N_alphaN.')
 
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
@@ -35,7 +35,7 @@ def argparser():
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
-    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=2, help='Number of bins in x and y directions.')
+    parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=3, help='Number of bins in x and y directions.')
     parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=60, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',

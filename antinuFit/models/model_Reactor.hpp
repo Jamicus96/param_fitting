@@ -16,7 +16,7 @@
 class Reactor: public Model {
     private:
         // Indices pointing to variables
-        unsigned int numVars, iDm_21_2, iDm_32_2, iS_12_2, iS_13_2;
+        unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2;
         std::vector<unsigned int> iNorms;
 
         // Initial oscillation parameters that only depend on
@@ -65,10 +65,10 @@ class Reactor: public Model {
         void compute_baselines();
         void hold_osc_params_const(bool isTrue);
 
-        void compute_spec();
+        void compute_spec(Double_t* p);
 
         std::vector<std::string>& GetReactorNames();
-        std::vector<TH1D*>& GetOscReactorHists();
+        void GetOscReactorHists(std::vector<TH1D*>& rescaled_osc_hists);
     
         // Destructor
         ~Reactor();

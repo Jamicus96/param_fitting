@@ -29,14 +29,12 @@ class Fitter {
         static TH1D* data, *tot_fitModel;
         static unsigned int numBins;
 
+        // For minuit
+        static double minfuncOut, edm, errdef;
+        static int nvpar, nparx;
+
     public:
         // Constructors
-        // Fitter(const Fitter& fit) {
-        //     minuit = fit.minuit; maxNparams = fit.maxNparams; arglist[0] = fit.arglist[0]; arglist[1] = fit.arglist[1];
-        //     variables = fit.variables; var_bestFits = fit.var_bestFits; var_bestFit_errs = fit.var_bestFit_errs;
-        //     numVars = fit.numVars; models = fit.models; numModels = fit.numModels; data = fit.data;
-        //     tot_fitModel = fit.tot_fitModel; numBins = fit.numBins;
-        // };
         Fitter();
         Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models);
         Fitter(TH1D* Data);

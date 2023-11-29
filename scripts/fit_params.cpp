@@ -31,12 +31,10 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
 
 
 int main(int argv, char** argc) {
-    std::cout << "1" << std::endl;
     // file args
     std::string PDFs_address = argc[1];
     std::string out_address = argc[2];
 
-    std::cout << "2" << std::endl;
     // Number of IBD (un-oscillated) and alpha-n events estimate (maily ratio matters)
     double N_IBD = std::atof(argc[3]);
     double IBD_err = std::atof(argc[4]);  // fractional error in N_IBD
@@ -45,7 +43,6 @@ int main(int argv, char** argc) {
     double N_geoNu = std::atof(argc[7]);
     double geoNu_err = std::atof(argc[8]);  // fractional error in N_alphaN
 
-    std::cout << "3" << std::endl;
     // 2d hist limit args
     double Dm21_lower = std::atof(argc[9]);
     double Dm21_upper = std::atof(argc[10]);
@@ -53,22 +50,18 @@ int main(int argv, char** argc) {
     double Theta12_upper = std::atof(argc[12]);  // degrees
     unsigned int N_bins = std::atoi(argc[13]);
 
-    std::cout << "4" << std::endl;
     // variable paramters limit args
     double Dm21_min = std::atof(argc[14]);
     double Dm21_max = std::atof(argc[15]);
     double Theta12_min = std::atof(argc[16]);  // degrees
     double Theta12_max = std::atof(argc[17]);  // degrees
 
-    std::cout << "5" << std::endl;
     unsigned int start_idx_Dm21 = std::atoi(argc[18]);
     unsigned int start_idx_theta = std::atoi(argc[19]);
 
-    std::cout << "6" << std::endl;
     unsigned int Dm21_nSteps = std::atoi(argc[20]);
     unsigned int Theta12_nSteps = std::atoi(argc[21]);
 
-    std::cout << "7" << std::endl;
     bool verbose = std::stoi(argc[22]);
 
     if (verbose) {
@@ -115,7 +108,8 @@ int main(int argv, char** argc) {
     if (geoNuNorm_min < 0.0) geoNuNorm_min = 0.0;
     FitVar geoNuNorm("geoNuNorm", N_geoNu, geoNu_err * N_geoNu, geoNuNorm_min, (1.0 + 3.0 * geoNu_err) * N_geoNu);
 
-    geoNu geoNuMod(&geoNuNorm, &vS_12_2, &vS_13_2, geoNu_hists.at(0));
+    // geoNu geoNuMod(&geoNuNorm, &vS_12_2, &vS_13_2, geoNu_hists.at(0));
+    geoNu geoNuMod(&geoNuNorm, &vS_12_2, &vS_13_2, alphaN_hists.at(0));
     geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
 
     // Create alpha-n norm variables (allow to vary by ±3 sigma), and model
@@ -127,7 +121,8 @@ int main(int argv, char** argc) {
     FitVar alphaNNorm_2("alphaNNorm_2", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
     FitVar alphaNNorm_3("alphaNNorm_3", N_alphaN_third, alphaN_err * N_alphaN_third, alphaNNorm_min, (1.0 + 3.0 * alphaN_err) * N_alphaN_third);
 
-    alphaN alphaNMod(&alphaNNorm_1, &alphaNNorm_2, &alphaNNorm_3, alphaN_hists.at(0), alphaN_hists.at(1), alphaN_hists.at(2));
+    // alphaN alphaNMod(&alphaNNorm_1, &alphaNNorm_2, &alphaNNorm_3, alphaN_hists.at(0), alphaN_hists.at(1), alphaN_hists.at(2));
+    alphaN alphaNMod(&alphaNNorm_1, &alphaNNorm_2, &alphaNNorm_3, alphaN_hists.at(0), alphaN_hists.at(0), alphaN_hists.at(0));
 
     // Create reactor norm variables (allow to vary by ±3 sigma), and model
     std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};
@@ -149,21 +144,28 @@ int main(int argv, char** argc) {
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
     std::cout << "Creating fake dataset..." << std::endl;
-    std::vector<TH1D*> osc_hists = ReactorMod.GetOscReactorHists();
+    std::vector<TH1D*> osc_hists;
+    ReactorMod.GetOscReactorHists(osc_hists);
     TH1D* data = (TH1D*)osc_hists.at(0)->Clone();
+    data->Reset("ICES");
+    std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Add reactor spectra (already re-sclaed)
-    for (unsigned int i; i < osc_hists.size(); ++i) {
+    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        std::cout << osc_hists.at(i)->GetName() << " integral = " << osc_hists.at(i)->Integral() << std::endl;
         data->Add(osc_hists.at(i));  // Add reactor events
     }
+    std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Add alpha-n spectra
     data->Add(alphaN_hists.at(0), alphaNNorm_1.val() / alphaN_hists.at(0)->Integral());
-    data->Add(alphaN_hists.at(1), alphaNNorm_2.val() / alphaN_hists.at(1)->Integral());
-    data->Add(alphaN_hists.at(2), alphaNNorm_3.val() / alphaN_hists.at(2)->Integral());
+    // data->Add(alphaN_hists.at(1), alphaNNorm_2.val() / alphaN_hists.at(1)->Integral());
+    // data->Add(alphaN_hists.at(2), alphaNNorm_3.val() / alphaN_hists.at(2)->Integral());
+    data->Add(alphaN_hists.at(0), alphaNNorm_2.val() / alphaN_hists.at(0)->Integral());
+    data->Add(alphaN_hists.at(0), alphaNNorm_3.val() / alphaN_hists.at(0)->Integral());
 
     // Add geo-nu spectrum
-    data->Add(geoNuMod.GetOscHist());
+    // data->Add(geoNuMod.GetOscHist());
 
     std::cout << "data integral = " << data->Integral() << std::endl;
 
@@ -232,7 +234,7 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
         // geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // std::cout << "j = " << j << std::endl;
-            vDm21_2.val() = Dm21.at(i);
+            vDm21_2.val() = Dm21.at(j);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
             if (verbose) std::cout << "Dm_21^2 = " << vDm21_2.val() << std::endl;
             minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
@@ -339,7 +341,8 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
             name = obj->GetName();
             if (name == "geoNu") {
                 geoNu_hists.push_back((TH1D*)obj);
-            } else if (name == "alphaN_1" || name == "alphaN_2" || name == "alphaN_3") {
+            // } else if (name == "alphaN_1" || name == "alphaN_2" || name == "alphaN_3") {
+            } else if (name == "alphaN") {
                 alphaN_hists.push_back((TH1D*)obj);
             } else if (name == "E_conversion") {
                 continue;

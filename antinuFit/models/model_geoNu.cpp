@@ -15,14 +15,17 @@ void geoNu::operator = (const geoNu& mod) {
 geoNu::geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, TH1D* Hist) {
     Vars.push_back(vS_12_2); Vars.push_back(vS_13_2);
     Vars.push_back(vNorm);
-    vars.resize(3);
     hist = Hist;
     hist_integral = hist->Integral();
 
+    numVars = Vars.size();
+    vars.resize(numVars);
     for (unsigned int i = 0; i < Vars.size(); ++i) {
         vars.at(i) = Vars.at(i)->val();
     }
     computed_survival_prob = false;
+
+    model_spec = (TH1D*)(Hist->Clone());
 }
 
 void geoNu::geoNu_survival_prob() {
@@ -42,7 +45,10 @@ void geoNu::hold_osc_params_const(bool isTrue) {
     }
 }
 
-void geoNu::compute_spec() {
+void geoNu::compute_spec(Double_t* p) {
+    this->GetVarValues(p);
+    model_spec->Reset("ICES");  // empty it before re-computing it
+
     // If the oscillation parameters are constant and the survival prob was already computed, can skip this step!
     if (!(Vars.at(0)->isConstant() && Vars.at(1)->isConstant() && computed_survival_prob)) {
         this->geoNu_survival_prob();
@@ -61,7 +67,7 @@ TH1D* geoNu::GetOscHist() {
 
 // Destructor
 geoNu::~geoNu() {
-    delete hist;
-    for (auto p : Vars) {delete p;}
+    // delete hist;
+    // for (auto p : Vars) {delete p;}
     Vars.clear();
 }

@@ -9,13 +9,8 @@ Model::Model(const Model& mod) {
 
 Model::Model() {}
 
-void Model::compute_spec(Double_t* p) {
-    GetVarValues(p);
-    model_spec->Reset("ICES");  // empty it before re-computing it
-    compute_spec();
-}
+void Model::compute_spec(Double_t* p) {}
 
-void Model::compute_spec() {}
 void Model::hold_osc_params_const(bool isTrue) {}
 
 TH1D* Model::Spectrum() {

@@ -39,8 +39,9 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
     }
     numVars = Vars.size();
 
+    vars.resize(numVars);
     for (unsigned int i = 0; i < numVars; ++i) {
-                vars.at(i) = Vars.at(i)->val();
+        vars.at(i) = Vars.at(i)->val();
     }
 
     db = DB;
@@ -94,22 +95,11 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
 }
 
 void Reactor::compute_unosc_integrals() {
-    // Borrow total oscillated reactor histograms (i.e. empty them, fill them, re-empty them)
-    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-        osc_hists.at(i)->Reset("ICES");
+    for (unsigned int i = 0; i < unosc_hist_ints.size(); ++i) {
+        unosc_hist_ints.at(i) = 0;
     }
-
-    // Assume all the histograms have the same E binning
-    for (unsigned int i = 1; i <= hists_Nbins; ++i) {
-        for (unsigned int j = 0; j < num_reactors; ++j) {
-            // Add value of bin from reactor core to appropriate hist
-            osc_hists.at(reactor_idx.at(j))->AddBinContent(i, reactor_hists.at(j)->GetBinContent(i));
-        }
-    }
-
-    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-        unosc_hist_ints.at(i) = osc_hists.at(i)->Integral();
-        osc_hists.at(i)->Reset("ICES");
+    for (unsigned int i = 0; i < num_reactors; ++i) {
+        unosc_hist_ints.at(reactor_idx.at(i)) += reactor_hists.at(i)->Integral();
     }
 }
 
@@ -214,6 +204,9 @@ void Reactor::compute_osc_specs() {
 
     // Reset total reactor histograms (i.e. empty them)
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Reactor::compute_osc_specs]: resetting osc_hists.at(" << i << ")" << std::endl;
+        #endif
         osc_hists.at(i)->Reset("ICES");
     }
 
@@ -243,7 +236,7 @@ void Reactor::compute_osc_specs() {
 void Reactor::hold_osc_params_const(bool isTrue) {
     if (!isTrue) {
         computed_osc_specs = false;
-    } else if (isTrue && Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant()) {
+    } else if (Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant()) {
         this->compute_osc_specs();
         computed_osc_specs = true;
     } else {
@@ -251,38 +244,49 @@ void Reactor::hold_osc_params_const(bool isTrue) {
     }
 }
 
-void Reactor::compute_spec() {
+void Reactor::compute_spec(Double_t* p) {
+    this->GetVarValues(p);
+    model_spec->Reset("ICES");  // empty it before re-computing it
+
     // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
     if (!(Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant() && computed_osc_specs)) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Reactor::compute_spec]: computing oscillation specs" << std::endl;
+        #endif
         this->compute_osc_specs();
     }
 
     /* INSERT ENERGY SCALING AND SMEARING HERE */
 
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
+        #endif
         model_spec->Add(osc_hists.at(i), vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
     }
 }
 
 
-std::vector<TH1D*>& Reactor::GetOscReactorHists() {
-    std::vector<TH1D*> rescaled_osc_hists;
+void Reactor::GetOscReactorHists(std::vector<TH1D*>& rescaled_osc_hists) {
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Reactor::GetOscReactorHists]: filling rescaled_osc_hists.at(" << i << ")" << std::endl;
+        #endif
         rescaled_osc_hists.push_back((TH1D*)(osc_hists.at(i)->Clone()));
-        rescaled_osc_hists.at(i)->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
+        rescaled_osc_hists.at(rescaled_osc_hists.size() - 1)->Reset("ICES");
+        rescaled_osc_hists.at(rescaled_osc_hists.size() - 1)->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
     }
-    return rescaled_osc_hists;
 }
 
 std::vector<std::string>& Reactor::GetReactorNames() {return reactor_names;}
 
 Reactor::~Reactor() {
-    for (auto p : reactor_hists) {delete p;}
+    // for (auto p : reactor_hists) {delete p;}
     reactor_hists.clear();
     for (auto p : osc_hists) {delete p;}
     osc_hists.clear();
-    delete db;
-    for (auto p : Vars) {delete p;}
+    // delete db;
+    // for (auto p : Vars) {delete p;}
     Vars.clear();
 }
 

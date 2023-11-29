@@ -5,6 +5,7 @@
 FitVar::FitVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant) {
     parname = Parname;
     value = Value;
+    vprior = value;
     verr_copy = verr;  // Stored error info, in case is verr is set to 0 temporarily, to hold it constant
     vlow = Vlow;
     vhigh = Vhigh;

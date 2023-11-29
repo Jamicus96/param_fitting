@@ -24,7 +24,7 @@ class alphaN: public Model {
         alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex);
 
         // Member function
-        void compute_spec();
+        void compute_spec(Double_t* p);
     
         // Destructor
         ~alphaN();
