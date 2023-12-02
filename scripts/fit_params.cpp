@@ -231,14 +231,10 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
     std::cout << "Looping over oscillation parameters..." << std::endl;
     double ll;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
-        std::cout << "i = " << i << std::endl;
-        std::cout << "sinTheta12.at(" << i << ") = " << sinTheta12.at(i) << std::endl;
         vS_12_2.val() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;
         // geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
-            std::cout << "j = " << j << std::endl;
-            std::cout << "Dm21.at(" << j << ") = " << Dm21.at(j) << std::endl;
             vDm21_2.val() = Dm21.at(j);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
             if (verbose) std::cout << "Dm_21^2 = " << vDm21_2.val() << std::endl;
