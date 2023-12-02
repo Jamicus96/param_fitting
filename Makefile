@@ -6,7 +6,7 @@ COMPILE = g++ -g -std=c++1y
 # "If I’m not mistaken, it is related to a combination of complex C++ object destruction of static objects and the nostdlib compiler option.
 # In an embedded system, you likely don’t need the destruction of static objects. So try this compiler option: -fno-use-cxa-atexit"
 
-all: fit_params clean
+all: make_PDFs re_combine_fits fit_params clean
 
 
 

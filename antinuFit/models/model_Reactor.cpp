@@ -108,12 +108,19 @@ void Reactor::compute_unosc_integrals() {
  * 
  */
 void Reactor::compute_oscillation_constants() {
+    #ifdef DEBUG
+        std::cout << "[Reactor::compute_oscillation_constants]: Computing oscillation constants" << std::endl;
+    #endif
 
     // Upacks variables
     const double fDmSqr21 = vars.at(iDm_21_2);
     const double fDmSqr32 = vars.at(iDm_32_2);
     const double fSSqrTheta12 = vars.at(iS_12_2);
     const double fSSqrTheta13 = vars.at(iS_13_2);
+    #ifdef DEBUG
+        std::cout << "[Reactor::compute_oscillation_constants]: fDmSqr21 = " << fDmSqr21 << ", fDmSqr32 = " << fDmSqr32
+                  << ", fSSqrTheta12 = " << fSSqrTheta12 << ", fSSqrTheta13 = " << fSSqrTheta13 << std::endl;
+    #endif
 
     // Do calculation
     const double fDmSqr31 = fDmSqr32 + fDmSqr21;
@@ -204,7 +211,7 @@ void Reactor::compute_osc_specs() {
 
     // Reset total reactor histograms (i.e. empty them)
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-        #ifdef SUPER_DEBUG
+        #ifdef DEBUG
             std::cout << "[Reactor::compute_osc_specs]: resetting osc_hists.at(" << i << ")" << std::endl;
         #endif
         osc_hists.at(i)->Reset("ICES");
@@ -235,8 +242,18 @@ void Reactor::compute_osc_specs() {
 
 void Reactor::hold_osc_params_const(bool isTrue) {
     if (!isTrue) {
+        #ifdef DEBUG
+            std::cout << "[Reactor::hold_osc_params_const]: NOT holding oscillation parameters constant" << std::endl;
+        #endif
         computed_osc_specs = false;
     } else if (Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant()) {
+        #ifdef DEBUG
+            std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
+        #endif
+        vars.at(iDm_21_2) = Vars.at(iDm_21_2)->val();
+        vars.at(iDm_32_2) = Vars.at(iDm_32_2)->val();
+        vars.at(iS_12_2) = Vars.at(iS_12_2)->val();
+        vars.at(iS_13_2) = Vars.at(iS_13_2)->val();
         this->compute_osc_specs();
         computed_osc_specs = true;
     } else {

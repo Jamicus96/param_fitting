@@ -140,12 +140,16 @@ double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
 
 double Fitter::fit_models() {
     // minimize
-    #ifdef SUPER_DEBUG
+    #ifdef DEBUG
         std::cout << "[Fitter::fit_models]: Running MIGRAD!" << std::endl;
+        std::cout << "[Fitter::fit_models]: s_12^2 = " << variables.at(variables.size() - 2)->val() << std::endl;
+        std::cout << "[Fitter::fit_models]: Dm21^2 = " << variables.at(variables.size() - 4)->val() << std::endl;
     #endif
+
     minuit->ExecuteCommand("MIGRAD", arglist, 2);
 
     //get result
     minuit->GetStats(minfuncOut, edm, errdef, nvpar, nparx);
+    std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << std::endl;
     return minfuncOut;
 }

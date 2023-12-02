@@ -224,20 +224,27 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
     std::vector<double> Dm21 = var_params.at(1);
+    std::cout << "sinTheta12.size() = " << sinTheta12.size() << std::endl;
+    std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
     std::cout << "Looping over oscillation parameters..." << std::endl;
+    double ll;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
-        // std::cout << "i = " << i << std::endl;
+        std::cout << "i = " << i << std::endl;
+        std::cout << "sinTheta12.at(" << i << ") = " << sinTheta12.at(i) << std::endl;
         vS_12_2.val() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;
         // geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
-            // std::cout << "j = " << j << std::endl;
+            std::cout << "j = " << j << std::endl;
+            std::cout << "Dm21.at(" << j << ") = " << Dm21.at(j) << std::endl;
             vDm21_2.val() = Dm21.at(j);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
             if (verbose) std::cout << "Dm_21^2 = " << vDm21_2.val() << std::endl;
-            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
+            ll = antinuFitter.fit_models();
+            std::cout << "binx = " << start_idx.at(0) + i + 1 << ", biny = " << start_idx.at(1) + j + 1 << ", ll = " << ll << std::endl;
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, ll);
         }
     }
 }
@@ -292,17 +299,21 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
 
     // Dm21^2
     std::vector<double> Dm21;
-    double Dm21_step = (Dm21_max - Dm21_min) / (double)Dm21_nSteps;
+    double Dm21_step = (Dm21_max - Dm21_min) / (double)(Dm21_nSteps - 1);
     for (unsigned int n = 0; n < Dm21_nSteps; ++n) {
         Dm21.push_back(Dm21_min + (double)n * Dm21_step);
+        std::cout << "Dm21.at(" << n << ") = " << Dm21.at(n) << std::endl;
     }
+    std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     // s_12^2
     std::vector<double> sinTheta12;
     double Theta12_step = (Theta12_max - Theta12_min) / (double)(Theta12_nSteps - 1);
     for (unsigned int n = 0; n < Theta12_nSteps; ++n) {
         sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
+        std::cout << "sinTheta12.at(" << n << ") = " << sinTheta12.at(n) << std::endl;
     }
+    std::cout << "sinTheta12.size() = " << sinTheta12.size() << std::endl;
 
     // Package them together
     return {sinTheta12, Dm21};

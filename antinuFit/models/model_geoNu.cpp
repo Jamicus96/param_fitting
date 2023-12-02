@@ -38,6 +38,8 @@ void geoNu::hold_osc_params_const(bool isTrue) {
     if (!isTrue) {
         computed_survival_prob = false;
     } else if (isTrue && Vars.at(0)->isConstant() && Vars.at(1)->isConstant()) {
+        vars.at(0) = Vars.at(0)->val();
+        vars.at(1) = Vars.at(1)->val();
         this->geoNu_survival_prob();
         computed_survival_prob = true;
     } else {
