@@ -238,9 +238,7 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
             vDm21_2.val() = Dm21.at(j);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
             if (verbose) std::cout << "Dm_21^2 = " << vDm21_2.val() << std::endl;
-            ll = antinuFitter.fit_models();
-            std::cout << "binx = " << start_idx.at(0) + i + 1 << ", biny = " << start_idx.at(1) + j + 1 << ", ll = " << ll << std::endl;
-            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, ll);
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
         }
     }
 }
