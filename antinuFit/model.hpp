@@ -18,6 +18,7 @@ class Model {
         std::vector<double> vars;  // but sub-classes use values from these
         unsigned int numVars;
         TH1D* model_spec;
+        TH1D* model_spec_sys;
 
         void GetVarValues(Double_t* p) {
             #ifdef SUPER_DEBUG
