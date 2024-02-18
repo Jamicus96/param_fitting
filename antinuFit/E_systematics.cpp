@@ -61,21 +61,15 @@ void Esys::initialise(TH1D* example_hist) {
 }
 
 void Esys::GetVarValues(Double_t* p) {
-        #ifdef SUPER_DEBUG
-            std::cout << "[Model::GetVarValues]: numVars = " << numVars << std::endl;
-        #endif
-        for (unsigned int i = 0; i < numVars; ++i) {
-            if (Vars.at(i)->isConstant()) vars.at(i) = Vars.at(i)->val();  // provided by user
-            else vars.at(i) = p[Vars.at(i)->ParIdx()];  // provided by Minuit
+    if (vDc->isConstant()) fDc = vDc->val();  // provided by user
+    else fDc = p[vDc->ParIdx()];  // provided by Minuit
 
-            #ifdef SUPER_DEBUG
-                std::cout << "[Model::GetVarValues]: Vars.at(" << i << "): name = " << Vars.at(i)->name()
-                            << ", val = " << Vars.at(i)->val() << ", prior = " << Vars.at(i)->prior() << ", err = " << Vars.at(i)->err()
-                            << ", min = " << Vars.at(i)->min() << ", max = " << Vars.at(i)->max() << ", parIdx = " << Vars.at(i)->ParIdx() << std::endl;
-                std::cout << "[Model::GetVarValues]: vars.at(" << i << ") = " << vars.at(i) << std::endl;
-            #endif
-        }
-    };
+    if (vDkB->isConstant()) fDkB = vDkB->val();  // provided by user
+    else fDkB = p[vDkB->ParIdx()];  // provided by Minuit
+
+    if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
+    else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
+}
 
 /**
  * @brief Applies all three systematic corrections in a row: linear scaling -> non-linear scaling -> smearing
