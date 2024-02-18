@@ -6,6 +6,7 @@ alphaN::alphaN(const alphaN& mod) {
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
     hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
     Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
+    E_systs = mod.E_systs;
 }
 
 void alphaN::operator = (const alphaN& mod) {
@@ -13,12 +14,15 @@ void alphaN::operator = (const alphaN& mod) {
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
     hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
     Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
+    E_systs = mod.E_systs;
 }
 
-alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
+alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, Esys* E_syst, Esys* E_syst_proton, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
     Vars.push_back(NormProtonR);
     Vars.push_back(NormC12Scatter);
     Vars.push_back(NormO16Deex);
+    E_systs.push_back(E_syst); iEsys = 0;
+    E_systs.push_back(E_syst_proton); iEsysP = 1;
 
     hist_ProtontR = Hist_ProtontR;
     Integral_hist_ProtontR = hist_ProtontR->Integral();
@@ -40,12 +44,20 @@ alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex,
 void alphaN::compute_spec(Double_t* p) {
     this->GetVarValues(p);
     model_spec->Reset("ICES");  // empty it before re-computing it
+    model_spec_sys->Reset("ICES");  // empty it before re-computing it
 
-    /* INSERT ENERGY SCALING AND SMEARING HERE */
-
+    // Add proton recoild to spectrum
     model_spec->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+
+    // Apply Proton energy systematics
+    E_systs.at(iEsysP)->apply_systematics(p, model_spec, model_spec_sys);
+
+    // Add the rest to spectrum
     model_spec->Add(hist_C12Scatter, vars.at(1) / Integral_hist_C12Scatter);
     model_spec->Add(hist_O16Deex, vars.at(2) / Integral_hist_O16Deex);
+
+    // Apply Normal energy systematics (adds stuff to model_spec_sys, doesn't reset it)
+    E_systs.at(iEsys)->apply_systematics(p, model_spec, model_spec_sys);
 }
 
 // Destructor

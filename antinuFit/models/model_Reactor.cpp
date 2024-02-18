@@ -19,13 +19,14 @@ void Reactor::operator = (const Reactor& mod) {
 }
 
 Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB) {
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, Esys* E_syst, RAT::DB* DB) {
 
     // Save variables
     Vars.push_back(vDm_21_2); iDm_21_2 = 0;
     Vars.push_back(vDm_32_2); iDm_32_2 = 1;
     Vars.push_back(vS_12_2); iS_12_2 = 2;
     Vars.push_back(vS_13_2); iS_13_2 = 3;
+    E_systs.push_back(E_syst);
 
     if (Reactor_names.size() != Norms.size()) {
         std::cout << "[Reactor] ERROR: Reactor_names and Norms should have the same size!" << std::endl;
@@ -264,6 +265,7 @@ void Reactor::hold_osc_params_const(bool isTrue) {
 void Reactor::compute_spec(Double_t* p) {
     this->GetVarValues(p);
     model_spec->Reset("ICES");  // empty it before re-computing it
+    model_spec_sys->Reset("ICES");  // empty it before re-computing it
 
     // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
     if (!(Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant() && computed_osc_specs)) {
@@ -272,15 +274,16 @@ void Reactor::compute_spec(Double_t* p) {
         #endif
         this->compute_osc_specs();
     }
-
-    /* INSERT ENERGY SCALING AND SMEARING HERE */
-
+    
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
         #ifdef SUPER_DEBUG
             std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
         #endif
         model_spec->Add(osc_hists.at(i), vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
     }
+
+    // Apply energy systematics
+    E_systs.at(0)->apply_systematics(p, model_spec, model_spec_sys);
 }
 
 

@@ -32,13 +32,16 @@ fitVar.o: fitVar.cpp fitVar.hpp
 model.o: model.cpp model.hpp fitVar.hpp
 	${COMPILE} antinuFit/model.cpp -c ${INCLUDE}
 
-model_alphaN.o: model_alphaN.cpp model_alphaN.hpp model.hpp fitVar.hpp
+E_systematics.o: E_systematics.cpp E_systematics.hpp fitVar.hpp
+	${COMPILE} antinuFit/E_systematics.cpp -c ${INCLUDE}
+
+model_alphaN.o: model_alphaN.cpp model_alphaN.hpp model.hpp E_systematics.hpp fitVar.hpp
 	${COMPILE} antinuFit/models/model_alphaN.cpp -c ${INCLUDE}
 
-model_geoNu.o: model_geoNu.cpp model_geoNu.hpp model.hpp fitVar.hpp
+model_geoNu.o: model_geoNu.cpp model_geoNu.hpp model.hpp E_systematics.hpp fitVar.hpp
 	${COMPILE} antinuFit/models/model_geoNu.cpp -c ${INCLUDE}
 
-model_Reactor.o: model_Reactor.cpp model_Reactor.hpp model.hpp fitVar.hpp
+model_Reactor.o: model_Reactor.cpp model_Reactor.hpp model.hpp E_systematics.hpp fitVar.hpp
 	${COMPILE} antinuFit/models/model_Reactor.cpp -c ${INCLUDE}
 
 

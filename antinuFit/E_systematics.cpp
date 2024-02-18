@@ -11,19 +11,34 @@
  * @param dkB  Gaussian std = fSigPerRootE * sqrt(E)
  * @param sigPerRootE 
  */
-Esys::Esys(double dc, double kB, double dkB, double sigPerRootE) {
-    // Assign variables
-    fDc = dc;
-    fkB = kB;
-    fDkB = dkB;
-    fSigPerRootE = sigPerRootE;
+Esys::Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE) {
+    // Save variables
+    vDc = dc;
+    vDkB = dkB;
+    vSigPerRootE = sigPerRootE;
+
+    fDc = vDc->val();
+    fDkB = vDkB->val();
+    fSigPerRootE = vSigPerRootE->val();
+
+    bIsInit = false;
 }
 
 void Esys::operator = (const Esys& systematic) {
-    fDc = systematic.fDc;
     fkB = systematic.fkB;
+    vDc = systematic.vDc;
+    vDkB = systematic.vDkB;
+    vSigPerRootE = systematic.vSigPerRootE;
+    fDc = systematic.fDc;
     fDkB = systematic.fDkB;
     fSigPerRootE = systematic.fSigPerRootE;
+
+    fEmin = systematic.fEmin;
+    fDE = systematic.fDE;
+    fEratio = systematic.fEratio;
+    iNumBins = systematic.iNumBins;
+    model_spec_scaled = systematic.model_spec_scaled;
+    bIsInit = systematic.bIsInit;
 }
 
 /**
@@ -32,83 +47,87 @@ void Esys::operator = (const Esys& systematic) {
  * Assumes histograms have constant bin sizes.
  * 
  */
-void Esys::initialise() {
+void Esys::initialise(TH1D* example_hist) {
     // Record binning information
-    fEmin = model_spec->GetBinCenter(1);
-    fDE = model_spec->GetBinCenter(2) - model_spec->GetBinCenter(1);
+    fEmin = example_hist->GetBinCenter(1);
+    fDE = example_hist->GetBinCenter(2) - example_hist->GetBinCenter(1);
     fEratio = fEmin / fDE;
-    iNumBins = model_spec->GetXaxis()->GetNbins();
+    iNumBins = example_hist->GetXaxis()->GetNbins();
 
-    // Set up empty histograms
-    model_spec_scaled =  (TH1D*)(model_spec->Clone());  // temporary hist for internal use
-    model_spec_sys = (TH1D*)(model_spec->Clone());  // output histogram, used by Model
+    // Set up empty histogram
+    model_spec_scaled =  (TH1D*)(example_hist->Clone());  // temporary hist for internal use
+
+    bIsInit = true;
 }
+
+void Esys::GetVarValues(Double_t* p) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Model::GetVarValues]: numVars = " << numVars << std::endl;
+        #endif
+        for (unsigned int i = 0; i < numVars; ++i) {
+            if (Vars.at(i)->isConstant()) vars.at(i) = Vars.at(i)->val();  // provided by user
+            else vars.at(i) = p[Vars.at(i)->ParIdx()];  // provided by Minuit
+
+            #ifdef SUPER_DEBUG
+                std::cout << "[Model::GetVarValues]: Vars.at(" << i << "): name = " << Vars.at(i)->name()
+                            << ", val = " << Vars.at(i)->val() << ", prior = " << Vars.at(i)->prior() << ", err = " << Vars.at(i)->err()
+                            << ", min = " << Vars.at(i)->min() << ", max = " << Vars.at(i)->max() << ", parIdx = " << Vars.at(i)->ParIdx() << std::endl;
+                std::cout << "[Model::GetVarValues]: vars.at(" << i << ") = " << vars.at(i) << std::endl;
+            #endif
+        }
+    };
 
 /**
  * @brief Applies all three systematic corrections in a row: linear scaling -> non-linear scaling -> smearing
  * 
  */
-void Esys::apply_systematics() {
-    Esys::apply_scaling();
-    Esys::apply_smearing();
-}
+void Esys::apply_systematics(Double_t* p, TH1D* INhist, TH1D* OUThist) {
+    this->GetVarValues(p);
+    model_spec_scaled->Reset("ICES");
 
-double scaling(double E) {
-    double lin_scaled = (1.0 + fDc) * E;
-    return ((1.0 + fkB * lin_scaled) / (1.0 + (fkB + fDkB) * lin_scaled)) * lin_scaled;
-}
-
-double inv_scaling(double E) {
-    double kBp = fkB + fDkB;
-    return (kBp * E - 1.0 + std::sqrt((1.0 - kBp * E) * (1.0 - kBp * E) + 4.0 * fkB * E)) / (2.0 * fkB * (1.0 + fDc))
+    this->Esys::apply_scaling(INhist);
+    this->Esys::apply_smearing(OUThist);
 }
 
 /**
  * @brief Applied the linear and non linear scaling (in that order)
  * 
  */
-void Esys::apply_scaling() {
-    model_spec_scaled->Reset("ICES");
+void Esys::apply_scaling(TH1D* INhist) {
     unsigned int j_min;
     unsigned int j_max;
     double weight;
     for (unsigned int i = 1; i < iNumBins+1; ++i) {
-        j_min = (unsigned int)(inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
-        j_max = (unsigned int)(inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
+        j_min = (unsigned int)(this->inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
+        j_max = (unsigned int)(this->inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
 
         if (j_min == j_max) {
             // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
             // If scaling is a trivial transformation, it produces weight = 1
-            weight = (inv_scaling(fEmin + fDE * (j_min + 0.5)) - inv_scaling(fEmin + fDE * (j_min - 0.5))) / fDE;
-            model_spec_scaled->AddBinContent(model_spec->GetBinContent(j_min), weight);
+            weight = (this->inv_scaling(fEmin + fDE * (j_min + 0.5)) - this->inv_scaling(fEmin + fDE * (j_min - 0.5))) / fDE;
+            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
         } else {
-            weight = inv_scaling(fEmin + fDE * (j_min + 0.5)) / fDE - fEratio + (i - 0.5);
-            model_spec_scaled->AddBinContent(model_spec->GetBinContent(j_min), weight);
+            weight = this->inv_scaling(fEmin + fDE * (j_min + 0.5)) / fDE - fEratio + (i - 0.5);
+            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
             for (unsigned int j = j_min+1; j < j_max; ++j) {
-                model_spec_scaled->AddBinContent(model_spec->GetBinContent(j), 1.0);
+                model_spec_scaled->AddBinContent(INhist->GetBinContent(j), 1.0);
             }
-            weight = fEratio + (i + 0.5) - inv_scaling(fEmin + fDE * (j_min - 0.5)) / fDE;
-            model_spec_scaled->AddBinContent(model_spec->GetBinContent(j_max), weight);
+            weight = fEratio + (i + 0.5) - this->inv_scaling(fEmin + fDE * (j_min - 0.5)) / fDE;
+            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_max), weight);
         }
     }
-}
-
-double integ_normal(double x1, double x2) {
-    return 0.5 * (std::erfc(x1 / std::sqrt(2.0)) - std::erfc(x2 / std::sqrt(2.0)));
 }
 
 /**
  * @brief Applies smearing
  * 
  */
-void Esys::apply_smearing() {
-    model_spec_sys->Reset("ICES");
-
+void Esys::apply_smearing(TH1D* OUThist) {
     double sigma, weight;
     unsigned int num_bins_5sigmas;
     int j_min, j_max;
     for (unsigned int i = 1; i < iNumBins+1; ++i) {
-        sigma = fSigPerRootE * std::sqrt(model_spec_scaled->GetBinContent(i));
+        sigma = vars.at(iSigPerRootE) * std::sqrt(model_spec_scaled->GetBinContent(i));
         num_bins_5sigmas = (unsigned int)(sigma / fDE);
 
         j_min = i - num_bins_5sigmas;
@@ -116,8 +135,23 @@ void Esys::apply_smearing() {
         if (j_min < 1) j_min = 1;
         if (j_max > iNumBins) j_max = iNumBins;
         for (unsigned int j = j_min; j < j_max+1; ++j) {
-            weight = integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
-            model_spec_sys->AddBinContent(model_spec_scaled->GetBinContent(j), weight);
+            weight = this->integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
+            OUThist->AddBinContent(model_spec_scaled->GetBinContent(j), weight);
         }
     }
+}
+
+
+// double scaling(double E) {
+//     double lin_scaled = (1.0 + vars.at(iDc)) * E;
+//     return ((1.0 + fkB * lin_scaled) / (1.0 + (fkB + vars.at(vDkB)) * lin_scaled)) * lin_scaled;
+// }
+
+double Esys::inv_scaling(double E) {
+    double kBp = fkB + vars.at(iDkB);
+    return (kBp * E - 1.0 + std::sqrt((1.0 - kBp * E) * (1.0 - kBp * E) + 4.0 * fkB * E)) / (2.0 * fkB * (1.0 + vars.at(iDc)))
+}
+
+double Esys::integ_normal(double x1, double x2) {
+    return 0.5 * (std::erfc(x1 / std::sqrt(2.0)) - std::erfc(x2 / std::sqrt(2.0)));
 }

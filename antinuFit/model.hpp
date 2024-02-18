@@ -7,6 +7,7 @@
 #include <iostream>
 #include <TH1.h>
 #include "fitVar.hpp"
+#include "E_systematics.hpp"
 
 // #define SUPER_DEBUG
 
@@ -15,6 +16,7 @@ class Model {
 
     protected:
         std::vector<FitVar*> Vars;  // sub-classes provide these
+        std::vector<Esys*> E_systs;  // sub-classes provide these
         std::vector<double> vars;  // but sub-classes use values from these
         unsigned int numVars;
         TH1D* model_spec;

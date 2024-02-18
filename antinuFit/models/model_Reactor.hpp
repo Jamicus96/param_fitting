@@ -7,11 +7,11 @@
 #include <sstream>
 #include <TH1.h>
 #include <TH2.h>
+#include <TMath.h>
 #include <RAT/DB.hh>
 #include "model.hpp"
 #include "fitVar.hpp"
-#include <TMath.h>
-
+#include "E_systematics.hpp"
 
 class Reactor: public Model {
     private:
@@ -54,7 +54,7 @@ class Reactor: public Model {
         Reactor(const Reactor& mod);
         void operator = (const Reactor& mod);
         Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, RAT::DB* DB);
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, Esys* E_syst, RAT::DB* DB);
 
         // Member function
         void compute_unosc_integrals();

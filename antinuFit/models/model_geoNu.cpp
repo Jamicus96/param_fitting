@@ -3,18 +3,19 @@
 geoNu::geoNu(const geoNu& mod) {
     Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
     hist = mod.hist; hist_integral = mod.hist_integral; survival_prob = mod.survival_prob;
-    computed_survival_prob = mod.computed_survival_prob;
+    computed_survival_prob = mod.computed_survival_prob; E_systs = mod.E_systs;
 }
 
 void geoNu::operator = (const geoNu& mod) {
     Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
     hist = mod.hist; hist_integral = mod.hist_integral; survival_prob = mod.survival_prob;
-    computed_survival_prob = mod.computed_survival_prob;
+    computed_survival_prob = mod.computed_survival_prob; E_systs = mod.E_systs;
 }
 
-geoNu::geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, TH1D* Hist) {
+geoNu::geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, Esys* E_syst, TH1D* Hist) {
     Vars.push_back(vS_12_2); Vars.push_back(vS_13_2);
     Vars.push_back(vNorm);
+    E_systs.push_back(E_syst);
     hist = Hist;
     hist_integral = hist->Integral();
 
@@ -50,15 +51,17 @@ void geoNu::hold_osc_params_const(bool isTrue) {
 void geoNu::compute_spec(Double_t* p) {
     this->GetVarValues(p);
     model_spec->Reset("ICES");  // empty it before re-computing it
+    model_spec_sys->Reset("ICES");  // empty it before re-computing it
 
     // If the oscillation parameters are constant and the survival prob was already computed, can skip this step!
     if (!(Vars.at(0)->isConstant() && Vars.at(1)->isConstant() && computed_survival_prob)) {
         this->geoNu_survival_prob();
     }
 
-    /* INSERT ENERGY SCALING AND SMEARING HERE */
-
     model_spec->Add(hist, survival_prob * vars.at(3) / hist_integral);
+
+    // Apply energy systematics
+    E_systs.at(0)->apply_systematics(p, model_spec, model_spec_sys);
 }
 
 TH1D* geoNu::GetOscHist() {

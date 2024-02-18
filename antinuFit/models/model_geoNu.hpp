@@ -8,6 +8,7 @@
 #include <TH1.h>
 #include "model.hpp"
 #include "fitVar.hpp"
+#include "E_systematics.hpp"
 
 
 class geoNu: public Model {
@@ -21,7 +22,7 @@ class geoNu: public Model {
         // Constructors
         geoNu(const geoNu& mod);
         void operator = (const geoNu& mod);
-        geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, TH1D* Hist);
+        geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, Esys* E_syst, TH1D* Hist);
 
         // Member functions
         // Geo-nu survival probability: averaged over baseline -> No E-depence, only depends on mixing angles.

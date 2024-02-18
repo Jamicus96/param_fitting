@@ -6,33 +6,41 @@
 #include <iostream>
 #include <sstream>
 #include <TH1.h>
-#include "model.hpp"
 #include "fitVar.hpp"
 
 
-class Esys: public Model {
+class Esys {
     private:
         // Scaling: E' = (1 + fDc) * E
         // Non-linearity: E' = E * (1 + fkB * E) / (1 + (fkB + fDkB) * E)
         // Smearing: Gaussian std = fSigPerRootE * sqrt(E)
-        double fDc, fkB, fDkB, fSigPerRootE;
+        FitVar* vDc, vDkB, vSigPerRootE;
+        double fDc, fDkB, fSigPerRootE;
+        double fkB;
 
         // Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
         double fEmin, fDE, fEratio;
         unsigned int iNumBins;
 
         TH1D* model_spec_scaled;
+        bool bIsInit;
 
     public:
         // Constructors
-        Esys(double dc, double kB, double dkB, double sigPerRootE);
+        Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE);
         void operator = (const Esys& systematic);
 
         // Member functions
-        void initialise();
-        void apply_systematics();
-        void apply_scaling();
-        void apply_smearing();
+        void initialise(TH1D* example_hist);
+
+        void GetVarValues(Double_t* p);
+
+        void apply_systematics(Double_t* p, TH1D* INhist, TH1D* OUThist);
+        void apply_scaling(TH1D* INhist);
+        void apply_smearing(TH1D* OUThist);
+
+        double inv_scaling(double E);
+        double integ_normal(double x1, double x2);
 
         // Destructor
         ~Esys() {};
