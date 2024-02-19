@@ -1,23 +1,29 @@
 #include "model_geoNu.hpp"
 
 geoNu::geoNu(const geoNu& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
-    hist = mod.hist; hist_integral = mod.hist_integral; survival_prob = mod.survival_prob;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
+    histTh = mod.histTh; histU = mod.histU;
+    Th_integral = mod.Th_integral; U_integral = mod.U_integral;
+    survival_prob = mod.survival_prob;
     computed_survival_prob = mod.computed_survival_prob; E_systs = mod.E_systs;
 }
 
 void geoNu::operator = (const geoNu& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
-    hist = mod.hist; hist_integral = mod.hist_integral; survival_prob = mod.survival_prob;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
+    histTh = mod.histTh; histU = mod.histU;
+    Th_integral = mod.Th_integral; U_integral = mod.U_integral;
+    survival_prob = mod.survival_prob;
     computed_survival_prob = mod.computed_survival_prob; E_systs = mod.E_systs;
 }
 
-geoNu::geoNu(FitVar* vNorm, FitVar* vS_12_2, FitVar* vS_13_2, Esys* E_syst, TH1D* Hist) {
+geoNu::geoNu(FitVar* NormTh, FitVar* NormU, FitVar* vS_12_2, FitVar* vS_13_2, Esys* E_syst, TH1D* Hist_Th, TH1D* Hist_U) {
     Vars.push_back(vS_12_2); Vars.push_back(vS_13_2);
-    Vars.push_back(vNorm);
+    Vars.push_back(NormTh); Vars.push_back(NormU);
     E_systs.push_back(E_syst);
-    hist = Hist;
-    hist_integral = hist->Integral();
+    histTh = Hist_Th;
+    histU = Hist_U;
+    Th_integral = histTh->Integral();
+    U_integral = histU->Integral();
 
     numVars = Vars.size();
     vars.resize(numVars);
@@ -58,16 +64,21 @@ void geoNu::compute_spec(Double_t* p) {
         this->geoNu_survival_prob();
     }
 
-    model_spec->Add(hist, survival_prob * vars.at(3) / hist_integral);
+    model_spec->Add(histTh, survival_prob * vars.at(3) / Th_integral);
+    model_spec->Add(histU, survival_prob * vars.at(4) / U_integral);
 
     // Apply energy systematics
     E_systs.at(0)->apply_systematics(p, model_spec, model_spec_sys);
 }
 
-TH1D* geoNu::GetOscHist() {
-    TH1D* rescaled_osc_hist = (TH1D*)(hist->Clone());
-    rescaled_osc_hist->Add(hist, survival_prob * vars.at(3) / hist_integral);
-    return rescaled_osc_hist;
+void geoNu::GetOscHists(TH1D* rescaled_osc_hist_Th, TH1D* rescaled_osc_hist_U) {
+    rescaled_osc_hist_Th = (TH1D*)(histTh->Clone());
+    rescaled_osc_hist_Th->Reset("ICES");
+    rescaled_osc_hist_Th->Add(histTh, survival_prob * vars.at(3) / Th_integral);
+
+    rescaled_osc_hist_U = (TH1D*)(histU->Clone());
+    rescaled_osc_hist_U->Reset("ICES");
+    rescaled_osc_hist_U->Add(histU, survival_prob * vars.at(4) / U_integral);
 }
 
 // Destructor

@@ -18,11 +18,13 @@ class alphaN: public Model {
         double Integral_hist_ProtontR, Integral_hist_C12Scatter, Integral_hist_O16Deex;
         unsigned int iEsys, iEsysP;
 
+        TH1D* model_Proton;
+
     public:
         // Constructors
         alphaN(const alphaN& mod);
         void operator = (const alphaN& mod);
-        alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, Esys* E_syst, Esys* E_syst_proton, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex);
+        alphaN(FitVar* NormGS, FitVar* NormES, Esys* E_syst, Esys* E_syst_proton, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex);
 
         // Member function
         void compute_spec(Double_t* p);

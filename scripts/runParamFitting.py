@@ -22,13 +22,6 @@ def argparser():
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/likelihoods/', help='Folder to save recombined root files with tracking information in.')
     
-    parser.add_argument('--N_IBD', type=float, dest='N_IBD', default=122, help='Number of un-oscillated IBD events')
-    parser.add_argument('--IBD_err', type=float, dest='IBD_err', default=0.05, help='Fractional error in N_IBD.')
-    parser.add_argument('--N_alphaN', type=float, dest='N_alphaN', default=50, help='Number of alpha-n events')
-    parser.add_argument('--alphaN_err', type=float, dest='alphaN_err', default=0.2, help='Fractional error in N_alphaN.')
-    parser.add_argument('--N_geoNu', type=float, dest='N_geoNu', default=5, help='Number of alpha-n events')
-    parser.add_argument('--geoNu_err', type=float, dest='geoNu_err', default=0.8, help='Fractional error in N_alphaN.')
-
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
     parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
@@ -253,8 +246,7 @@ def doFitting(args):
     commandList_file = open(commandList_address, 'w')
     for i, job_lim in enumerate(job_lims):
         # Create all the histogram making commands
-        command = command_base + str(i) + '.root ' + str(args.N_IBD) + ' ' + str(args.IBD_err) + ' ' + str(args.N_alphaN) + ' ' + str(args.alphaN_err) + ' '\
-                               + str(args.N_geoNu) + ' ' + str(args.geoNu_err) + ' ' + hist_lims + ' ' + str(args.Nbins) + ' ' + job_lim  + ' '\
+        command = command_base + str(i) + '.root ' + hist_lims + ' ' + str(args.Nbins) + ' ' + job_lim  + ' '\
                                + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1]) + ' ' + str(int(args.verbose))
         commandList_file.write(command + '\n')
     commandList_file.close()

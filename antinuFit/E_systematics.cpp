@@ -11,14 +11,14 @@
  * @param dkB  Gaussian std = fSigPerRootE * sqrt(E)
  * @param sigPerRootE 
  */
-Esys::Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE) {
+Esys::Esys(double kB, FitVar* linScale, FitVar* kBp, FitVar* sigPerRootE) {
     // Save variables
-    vDc = dc;
-    vDkB = dkB;
+    vC = linScale;
+    vKBp = kBp;
     vSigPerRootE = sigPerRootE;
 
-    fDc = vDc->val();
-    fDkB = vDkB->val();
+    fC = vC->val();
+    fKBp = vKBp->val();
     fSigPerRootE = vSigPerRootE->val();
 
     bIsInit = false;
@@ -26,11 +26,11 @@ Esys::Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE) {
 
 void Esys::operator = (const Esys& systematic) {
     fkB = systematic.fkB;
-    vDc = systematic.vDc;
-    vDkB = systematic.vDkB;
+    vC = systematic.vC;
+    vKBp = systematic.vKBp;
     vSigPerRootE = systematic.vSigPerRootE;
-    fDc = systematic.fDc;
-    fDkB = systematic.fDkB;
+    fC = systematic.fC;
+    fKBp = systematic.fKBp;
     fSigPerRootE = systematic.fSigPerRootE;
 
     fEmin = systematic.fEmin;
@@ -77,26 +77,31 @@ void Esys::apply_systematics(Double_t* p, TH1D* INhist, TH1D* OUThist) {
  * 
  */
 void Esys::apply_scaling(TH1D* INhist) {
-    unsigned int j_min;
-    unsigned int j_max;
-    double weight;
-    for (unsigned int i = 1; i < iNumBins+1; ++i) {
-        j_min = (unsigned int)(this->inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
-        j_max = (unsigned int)(this->inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
+    if (fKB == fKBp && fC == 1.0) {
+        // No scaling
+        model_spec_scaled->Add(INhist);
+    } else {
+        unsigned int j_min;
+        unsigned int j_max;
+        double weight;
+        for (unsigned int i = 1; i < iNumBins+1; ++i) {
+            j_min = (unsigned int)(this->inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
+            j_max = (unsigned int)(this->inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
 
-        if (j_min == j_max) {
-            // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
-            // If scaling is a trivial transformation, it produces weight = 1
-            weight = (this->inv_scaling(fEmin + fDE * (j_min + 0.5)) - this->inv_scaling(fEmin + fDE * (j_min - 0.5))) / fDE;
-            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
-        } else {
-            weight = this->inv_scaling(fEmin + fDE * (j_min + 0.5)) / fDE - fEratio + (i - 0.5);
-            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
-            for (unsigned int j = j_min+1; j < j_max; ++j) {
-                model_spec_scaled->AddBinContent(INhist->GetBinContent(j), 1.0);
+            if (j_min == j_max) {
+                // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
+                // If scaling is a trivial transformation, it produces weight = 1
+                weight = (this->inv_scaling(fEmin + fDE * (j_min + 0.5)) - this->inv_scaling(fEmin + fDE * (j_min - 0.5))) / fDE;
+                model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
+            } else {
+                weight = this->inv_scaling(fEmin + fDE * (j_min + 0.5)) / fDE - fEratio + (i - 0.5);
+                model_spec_scaled->AddBinContent(INhist->GetBinContent(j_min), weight);
+                for (unsigned int j = j_min+1; j < j_max; ++j) {
+                    model_spec_scaled->AddBinContent(INhist->GetBinContent(j), 1.0);
+                }
+                weight = fEratio + (i + 0.5) - this->inv_scaling(fEmin + fDE * (j_min - 0.5)) / fDE;
+                model_spec_scaled->AddBinContent(INhist->GetBinContent(j_max), weight);
             }
-            weight = fEratio + (i + 0.5) - this->inv_scaling(fEmin + fDE * (j_min - 0.5)) / fDE;
-            model_spec_scaled->AddBinContent(INhist->GetBinContent(j_max), weight);
         }
     }
 }
@@ -106,20 +111,25 @@ void Esys::apply_scaling(TH1D* INhist) {
  * 
  */
 void Esys::apply_smearing(TH1D* OUThist) {
-    double sigma, weight;
-    unsigned int num_bins_5sigmas;
-    int j_min, j_max;
-    for (unsigned int i = 1; i < iNumBins+1; ++i) {
-        sigma = vars.at(iSigPerRootE) * std::sqrt(model_spec_scaled->GetBinContent(i));
-        num_bins_5sigmas = (unsigned int)(sigma / fDE);
+    if (5.0 * fSigPerRootE * std::sqrt(model_spec_scaled->GetBinContent(iNumBins)) <= fDE) {
+        // 5 sigmas in bin with highest energy is still smaller than bin width -> no smearing (includes sigma=0 case)
+        OUThist->Add(model_spec_scaled);
+    } else {
+        double sigma, weight;
+        unsigned int num_bins_5sigmas;
+        int j_min, j_max;
+        for (unsigned int i = 1; i < iNumBins+1; ++i) {
+            sigma = fSigPerRootE * std::sqrt(model_spec_scaled->GetBinContent(i));
+            num_bins_5sigmas = (unsigned int)(5.0 * sigma / fDE);
 
-        j_min = i - num_bins_5sigmas;
-        j_max = i + num_bins_5sigmas;
-        if (j_min < 1) j_min = 1;
-        if (j_max > iNumBins) j_max = iNumBins;
-        for (unsigned int j = j_min; j < j_max+1; ++j) {
-            weight = this->integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
-            OUThist->AddBinContent(model_spec_scaled->GetBinContent(j), weight);
+            j_min = i - num_bins_5sigmas;
+            j_max = i + num_bins_5sigmas;
+            if (j_min < 1) j_min = 1;
+            if (j_max > iNumBins) j_max = iNumBins;
+            for (unsigned int j = j_min; j < j_max+1; ++j) {
+                weight = this->integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
+                OUThist->AddBinContent(model_spec_scaled->GetBinContent(j), weight);
+            }
         }
     }
 }
@@ -131,8 +141,12 @@ void Esys::apply_smearing(TH1D* OUThist) {
 // }
 
 double Esys::inv_scaling(double E) {
-    double kBp = fkB + vars.at(iDkB);
-    return (kBp * E - 1.0 + std::sqrt((1.0 - kBp * E) * (1.0 - kBp * E) + 4.0 * fkB * E)) / (2.0 * fkB * (1.0 + vars.at(iDc)))
+    if (fKB == fKBp) {
+        // Only linear scaling
+        return E / fC;
+    } else {
+    return (fKBp * E - 1.0 + std::sqrt((1.0 - fKBp * E) * (1.0 - fKBp * E) + 4.0 * fKB * E)) / (2.0 * fKB * fC);
+    }
 }
 
 double Esys::integ_normal(double x1, double x2) {

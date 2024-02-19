@@ -14,9 +14,9 @@ class Esys {
         // Scaling: E' = (1 + fDc) * E
         // Non-linearity: E' = E * (1 + fkB * E) / (1 + (fkB + fDkB) * E)
         // Smearing: Gaussian std = fSigPerRootE * sqrt(E)
-        FitVar* vDc, vDkB, vSigPerRootE;
-        double fDc, fDkB, fSigPerRootE;
-        double fkB;
+        FitVar* vC, vKBp, vSigPerRootE;
+        double fC, fKBp, fSigPerRootE;
+        double fKB;
 
         // Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
         double fEmin, fDE, fEratio;
@@ -26,11 +26,11 @@ class Esys {
         bool bIsInit;
 
         void Esys::GetVarValues(Double_t* p) {
-            if (vDc->isConstant()) fDc = vDc->val();  // provided by user
-            else fDc = p[vDc->ParIdx()];  // provided by Minuit
+            if (vDc->isConstant()) fC = vC->val();  // provided by user
+            else fC = p[vDc->ParIdx()];  // provided by Minuit
 
-            if (vDkB->isConstant()) fDkB = vDkB->val();  // provided by user
-            else fDkB = p[vDkB->ParIdx()];  // provided by Minuit
+            if (vKBp->isConstant()) fKBp = vKBp->val();  // provided by user
+            else fKBp = p[vDkB->ParIdx()];  // provided by Minuit
 
             if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
             else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
@@ -38,7 +38,7 @@ class Esys {
 
     public:
         // Constructors
-        Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE);
+        Esys(double kB, FitVar* linScale, FitVar* kBp, FitVar* sigPerRootE);
         void operator = (const Esys& systematic);
 
         // Member functions

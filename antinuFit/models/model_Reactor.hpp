@@ -16,7 +16,7 @@
 class Reactor: public Model {
     private:
         // Indices pointing to variables
-        unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2;
+        unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2, iTotNorm;
         std::vector<unsigned int> iNorms;
 
         // Initial oscillation parameters that only depend on
@@ -54,7 +54,7 @@ class Reactor: public Model {
         Reactor(const Reactor& mod);
         void operator = (const Reactor& mod);
         Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, Esys* E_syst, RAT::DB* DB);
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, FitVar* totNorm, Esys* E_syst, RAT::DB* DB);
 
         // Member function
         void compute_unosc_integrals();

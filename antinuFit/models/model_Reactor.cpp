@@ -2,7 +2,7 @@
 
 
 Reactor::Reactor(const Reactor& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     numVars = mod.numVars; iDm_21_2 = mod.iDm_21_2; iDm_32_2 = mod.iDm_32_2; iS_12_2 = mod.iS_12_2; iS_13_2 = mod.iS_13_2;
     iNorms = mod.iNorms; H_ee_vac = mod.H_ee_vac; a0_vac = mod.a0_vac; a1_vac = mod.a1_vac; Y_ee_vac = mod.Y_ee_vac;
     eigen = mod.eigen; X_mat = mod.X_mat; baselines = mod.baselines; reactor_hists = mod.reactor_hists; num_reactors = mod.num_reactors;
@@ -10,7 +10,7 @@ Reactor::Reactor(const Reactor& mod) {
     osc_hists = mod.osc_hists; unosc_hist_ints = mod.unosc_hist_ints; computed_osc_specs = mod.computed_osc_specs; db = mod.db;
 }
 void Reactor::operator = (const Reactor& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     numVars = mod.numVars; iDm_21_2 = mod.iDm_21_2; iDm_32_2 = mod.iDm_32_2; iS_12_2 = mod.iS_12_2; iS_13_2 = mod.iS_13_2;
     iNorms = mod.iNorms; H_ee_vac = mod.H_ee_vac; a0_vac = mod.a0_vac; a1_vac = mod.a1_vac; Y_ee_vac = mod.Y_ee_vac;
     eigen = mod.eigen; X_mat = mod.X_mat; baselines = mod.baselines; reactor_hists = mod.reactor_hists; num_reactors = mod.num_reactors;
@@ -19,7 +19,8 @@ void Reactor::operator = (const Reactor& mod) {
 }
 
 Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, Esys* E_syst, RAT::DB* DB) {
+                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, FitVar* totNorm,
+                Esys* E_syst, RAT::DB* DB) {
 
     // Save variables
     Vars.push_back(vDm_21_2); iDm_21_2 = 0;
@@ -38,6 +39,7 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
         Vars.push_back(Norms.at(i));
         iNorms.push_back(4 + i);
     }
+    Vars.push_back(totNorm); iTotNorm = Vars.size() - 1;
     numVars = Vars.size();
 
     vars.resize(numVars);
@@ -279,7 +281,7 @@ void Reactor::compute_spec(Double_t* p) {
         #ifdef SUPER_DEBUG
             std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
         #endif
-        model_spec->Add(osc_hists.at(i), vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
+        model_spec->Add(osc_hists.at(i), vars.at(iTotNorm) * vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
     }
 
     // Apply energy systematics

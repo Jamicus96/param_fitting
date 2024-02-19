@@ -2,25 +2,37 @@
 
 
 alphaN::alphaN(const alphaN& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
     hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
     Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
-    E_systs = mod.E_systs;
+    E_systs = mod.E_systs; model_Proton = mod.model_Proton;
+    iEsys = mod.iEsys; iEsysP = mod.iEsysP;
 }
 
 void alphaN::operator = (const alphaN& mod) {
-    Vars = mod.Vars; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec;
+    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
     hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
     Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
-    E_systs = mod.E_systs;
+    E_systs = mod.E_systs; model_Proton = mod.model_Proton;
+    iEsys = mod.iEsys; iEsysP = mod.iEsysP;
 }
 
-alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex, Esys* E_syst, Esys* E_syst_proton, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
-    Vars.push_back(NormProtonR);
-    Vars.push_back(NormC12Scatter);
-    Vars.push_back(NormO16Deex);
+/**
+ * @brief Construct a new alpha N::alpha N object
+ * 
+ * @param NormGS  Normalisation for events from ground state neutrons (proton recoil + C12 scatter)
+ * @param NormES  Normalisation for events from excited state neutrons (O16 de-excitation)
+ * @param E_syst  Energy systematics applied to all events
+ * @param E_syst_proton  Addition energy systematics applied to proton recoil events
+ * @param Hist_ProtontR 
+ * @param Hist_C12Scatter 
+ * @param Hist_O16Deex 
+ */
+alphaN::alphaN(FitVar* NormGS, FitVar* NormES, Esys* E_syst, Esys* E_syst_proton, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
+    Vars.push_back(NormGS);
+    Vars.push_back(NormES);
     E_systs.push_back(E_syst); iEsys = 0;
     E_systs.push_back(E_syst_proton); iEsysP = 1;
 
@@ -38,26 +50,29 @@ alphaN::alphaN(FitVar* NormProtonR, FitVar* NormC12Scatter, FitVar* NormO16Deex,
     }
 
     model_spec = (TH1D*)(Hist_ProtontR->Clone());
+    model_Proton = (TH1D*)(Hist_ProtontR->Clone());
 }
 
 // Member function
 void alphaN::compute_spec(Double_t* p) {
     this->GetVarValues(p);
     model_spec->Reset("ICES");  // empty it before re-computing it
+    model_Proton->Reset("ICES");  // empty it before re-computing it
     model_spec_sys->Reset("ICES");  // empty it before re-computing it
 
-    // Add proton recoild to spectrum
-    model_spec->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+    // Add the ES spectra to spectrum
+    model_spec->Add(hist_C12Scatter, vars.at(0) / Integral_hist_C12Scatter);
+    model_spec->Add(hist_O16Deex, vars.at(1) / Integral_hist_O16Deex);
+
+    // Apply Normal (beta) energy systematics (adds stuff to model_spec_sys, doesn't reset it)
+    E_systs.at(iEsys)->apply_systematics(p, model_spec, model_spec_sys);
+
+    // Add proton recoil to spectrum, and its own spectrum, to apply proton systematics separately
+    model_Proton->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+    // model_spec->Add(model_Proton);
 
     // Apply Proton energy systematics
-    E_systs.at(iEsysP)->apply_systematics(p, model_spec, model_spec_sys);
-
-    // Add the rest to spectrum
-    model_spec->Add(hist_C12Scatter, vars.at(1) / Integral_hist_C12Scatter);
-    model_spec->Add(hist_O16Deex, vars.at(2) / Integral_hist_O16Deex);
-
-    // Apply Normal energy systematics (adds stuff to model_spec_sys, doesn't reset it)
-    E_systs.at(iEsys)->apply_systematics(p, model_spec, model_spec_sys);
+    E_systs.at(iEsysP)->apply_systematics(p, model_Proton, model_spec_sys);
 }
 
 // Destructor
