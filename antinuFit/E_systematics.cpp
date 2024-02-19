@@ -60,17 +60,6 @@ void Esys::initialise(TH1D* example_hist) {
     bIsInit = true;
 }
 
-void Esys::GetVarValues(Double_t* p) {
-    if (vDc->isConstant()) fDc = vDc->val();  // provided by user
-    else fDc = p[vDc->ParIdx()];  // provided by Minuit
-
-    if (vDkB->isConstant()) fDkB = vDkB->val();  // provided by user
-    else fDkB = p[vDkB->ParIdx()];  // provided by Minuit
-
-    if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
-    else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
-}
-
 /**
  * @brief Applies all three systematic corrections in a row: linear scaling -> non-linear scaling -> smearing
  * 

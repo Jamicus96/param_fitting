@@ -25,6 +25,17 @@ class Esys {
         TH1D* model_spec_scaled;
         bool bIsInit;
 
+        void Esys::GetVarValues(Double_t* p) {
+            if (vDc->isConstant()) fDc = vDc->val();  // provided by user
+            else fDc = p[vDc->ParIdx()];  // provided by Minuit
+
+            if (vDkB->isConstant()) fDkB = vDkB->val();  // provided by user
+            else fDkB = p[vDkB->ParIdx()];  // provided by Minuit
+
+            if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
+            else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
+        };
+
     public:
         // Constructors
         Esys(double kB, FitVar* dc, FitVar* dkB, FitVar* sigPerRootE);
