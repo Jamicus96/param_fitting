@@ -65,14 +65,14 @@ void alphaN::compute_spec(Double_t* p) {
     model_spec->Add(hist_O16Deex, vars.at(1) / Integral_hist_O16Deex);
 
     // Apply Normal (beta) energy systematics (adds stuff to model_spec_sys, doesn't reset it)
-    E_systs.at(iEsys)->apply_systematics(p, model_spec, model_spec_sys);
+    E_systs.at(iEsys)->apply_systematics(model_spec, model_spec_sys);
 
     // Add proton recoil to spectrum, and its own spectrum, to apply proton systematics separately
     model_Proton->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
     // model_spec->Add(model_Proton);
 
     // Apply Proton energy systematics
-    E_systs.at(iEsysP)->apply_systematics(p, model_Proton, model_spec_sys);
+    E_systs.at(iEsysP)->apply_systematics(model_Proton, model_spec_sys);
 }
 
 // Destructor

@@ -37,6 +37,13 @@ class Model {
                     std::cout << "[Model::GetVarValues]: vars.at(" << i << ") = " << vars.at(i) << std::endl;
                 #endif
             }
+
+            for (unsigned int i = 0; i < E_systs.size(); ++i) {
+                #ifdef SUPER_DEBUG
+                    std::cout << "[Model::GetVarValues]: E_systs.at(" << i << "):" std::endl;
+                #endif
+                E_systs.at(i)->GetVarValues(p);
+            }
         };
 
     public:

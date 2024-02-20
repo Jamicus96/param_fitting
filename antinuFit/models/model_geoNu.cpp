@@ -68,7 +68,7 @@ void geoNu::compute_spec(Double_t* p) {
     model_spec->Add(histU, survival_prob * vars.at(4) / U_integral);
 
     // Apply energy systematics
-    E_systs.at(0)->apply_systematics(p, model_spec, model_spec_sys);
+    E_systs.at(0)->apply_systematics(model_spec, model_spec_sys);
 }
 
 void geoNu::GetOscHists(TH1D* rescaled_osc_hist_Th, TH1D* rescaled_osc_hist_U) {

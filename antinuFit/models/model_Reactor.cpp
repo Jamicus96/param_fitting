@@ -285,7 +285,7 @@ void Reactor::compute_spec(Double_t* p) {
     }
 
     // Apply energy systematics
-    E_systs.at(0)->apply_systematics(p, model_spec, model_spec_sys);
+    E_systs.at(0)->apply_systematics(model_spec, model_spec_sys);
 }
 
 

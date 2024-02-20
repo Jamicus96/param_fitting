@@ -25,7 +25,7 @@ Esys::Esys(double kB, FitVar* linScale, FitVar* kBp, FitVar* sigPerRootE) {
 }
 
 void Esys::operator = (const Esys& systematic) {
-    fkB = systematic.fkB;
+    fKB = systematic.fKB;
     vC = systematic.vC;
     vKBp = systematic.vKBp;
     vSigPerRootE = systematic.vSigPerRootE;
@@ -60,12 +60,39 @@ void Esys::initialise(TH1D* example_hist) {
     bIsInit = true;
 }
 
+void Esys::GetVarValues(Double_t* p) {
+    if (vC->isConstant()) fC = vC->val();  // provided by user
+    else fC = p[vC->ParIdx()];  // provided by Minuit
+
+    if (vKBp->isConstant()) fKBp = vKBp->val();  // provided by user
+    else fKBp = p[vDkB->ParIdx()];  // provided by Minuit
+
+    if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
+    else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
+
+    #ifdef SUPER_DEBUG
+        std::cout << "[Model::GetVarValues]: vC: name = " << vC->name()
+                    << ", val = " << vC->val() << ", prior = " << vC->prior() << ", err = " << vC->err()
+                    << ", min = " << vC->min() << ", max = " << vC->max() << ", parIdx = " << vC->ParIdx() << std::endl;
+        std::cout << "[Model::GetVarValues]: fC = " << fC << std::endl;
+
+        std::cout << "[Model::GetVarValues]: vKBp: name = " << vKBp->name()
+                    << ", val = " << vKBp->val() << ", prior = " << vKBp->prior() << ", err = " << vKBp->err()
+                    << ", min = " << vKBp->min() << ", max = " << vKBp->max() << ", parIdx = " << vKBp->ParIdx() << std::endl;
+        std::cout << "[Model::GetVarValues]: fKBp = " << fKBp << std::endl;
+
+        std::cout << "[Model::GetVarValues]: vSigPerRootE: name = " << vSigPerRootE->name()
+                    << ", val = " << vSigPerRootE->val() << ", prior = " << vSigPerRootE->prior() << ", err = " << vSigPerRootE->err()
+                    << ", min = " << vSigPerRootE->min() << ", max = " << vSigPerRootE->max() << ", parIdx = " << vSigPerRootE->ParIdx() << std::endl;
+        std::cout << "[Model::GetVarValues]: fSigPerRootE = " << fSigPerRootE << std::endl;
+    #endif
+}
+
 /**
  * @brief Applies all three systematic corrections in a row: linear scaling -> non-linear scaling -> smearing
  * 
  */
-void Esys::apply_systematics(Double_t* p, TH1D* INhist, TH1D* OUThist) {
-    this->GetVarValues(p);
+void Esys::apply_systematics(TH1D* INhist, TH1D* OUThist) {
     model_spec_scaled->Reset("ICES");
 
     this->Esys::apply_scaling(INhist);
