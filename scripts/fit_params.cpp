@@ -27,7 +27,7 @@
 
 void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& geoNuMod, Model& ReactorMod, const std::vector<std::vector<double>>& var_params,
                  TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
-void compute_hist_fracs(const std::vector<TH1D*>& hists, std::vector<double>& hist_fracs);
+void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min,
                                                      const double Theta12_max, const unsigned int Theta12_nSteps);
@@ -328,7 +328,7 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         vS_12_2.val() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;
-        // geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
+        geoNuMod.hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             vDm21_2.val() = Dm21.at(j);
             ReactorMod.hold_osc_params_const(true); // This will also compute oscillated reactor specs
