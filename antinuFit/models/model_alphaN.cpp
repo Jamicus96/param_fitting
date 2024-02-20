@@ -75,6 +75,28 @@ void alphaN::compute_spec(Double_t* p) {
     E_systs.at(iEsysP)->apply_systematics(model_Proton, model_spec_sys);
 }
 
+void alphaN::Spectra(std::vector<TH1D*>& hists) {
+    TH1D* temp_hist = (TH1D*)(hist_ProtontR->Clone("temp_hist"));
+    
+    temp_hist->Reset("ICES");
+    temp_hist->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+    hists.push_back((TH1D*)(hist_ProtontR->Clone("model_alphaN_PR")));
+    hists.at(hists.size()-1)->Reset("ICES");
+    E_systs.at(iEsysP)->apply_systematics(temp_hist, hists.at(0));
+
+    temp_hist->Reset("ICES");
+    temp_hist->Add(hist_C12Scatter, vars.at(0) / Integral_hist_C12Scatter);
+    hists.push_back((TH1D*)(hist_C12Scatter->Clone("model_alphaN_C12")));
+    hists.at(hists.size()-1)->Reset("ICES");
+    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(1));
+
+    temp_hist->Reset("ICES");
+    temp_hist->Add(hist_O16Deex, vars.at(1) / Integral_hist_O16Deex);
+    hists.push_back((TH1D*)(hist_O16Deex->Clone("model_alphaN_O16")));
+    hists.at(hists.size()-1)->Reset("ICES");
+    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(2));
+}
+
 // Destructor
 alphaN::~alphaN() {
     // delete hist_ProtontR;

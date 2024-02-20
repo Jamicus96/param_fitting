@@ -68,7 +68,7 @@ class Reactor: public Model {
         void compute_spec(Double_t* p);
 
         std::vector<std::string>& GetReactorNames();
-        void GetOscReactorHists(std::vector<TH1D*>& rescaled_osc_hists);
+        void Spectra(std::vector<TH1D*>& hists);
     
         // Destructor
         ~Reactor();

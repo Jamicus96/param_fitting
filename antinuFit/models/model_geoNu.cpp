@@ -71,14 +71,20 @@ void geoNu::compute_spec(Double_t* p) {
     E_systs.at(0)->apply_systematics(model_spec, model_spec_sys);
 }
 
-void geoNu::GetOscHists(TH1D* rescaled_osc_hist_Th, TH1D* rescaled_osc_hist_U) {
-    rescaled_osc_hist_Th = (TH1D*)(histTh->Clone());
-    rescaled_osc_hist_Th->Reset("ICES");
-    rescaled_osc_hist_Th->Add(histTh, survival_prob * vars.at(3) / Th_integral);
+void geoNu::Spectra(std::vector<TH1D*>& hists) {
+    TH1D* temp_hist = (TH1D*)(histTh->Clone("temp_hist"));
+    
+    temp_hist->Reset("ICES");
+    temp_hist->Add(histTh, survival_prob * vars.at(3) / Th_integral);
+    hists.push_back((TH1D*)(histTh->Clone("model_geoNu_Th")));
+    hists.at(hists.size()-1)->Reset("ICES");
+    E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 
-    rescaled_osc_hist_U = (TH1D*)(histU->Clone());
-    rescaled_osc_hist_U->Reset("ICES");
-    rescaled_osc_hist_U->Add(histU, survival_prob * vars.at(4) / U_integral);
+    temp_hist->Reset("ICES");
+    temp_hist->Add(histU, survival_prob * vars.at(4) / U_integral);
+    hists.push_back((TH1D*)(histU->Clone("model_geoNu_U")));
+    hists.at(hists.size()-1)->Reset("ICES");
+    E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 }
 
 // Destructor

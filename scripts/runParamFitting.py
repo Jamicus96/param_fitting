@@ -300,6 +300,7 @@ def makeCombiJobScript(example_jobScript, overall_folder, commands, verbose):
 def combi_fits(args):
 
     # Check fitting repo
+    pdf_repo = checkRepo(args.pdf_repo, args.verbose)
     fit_repo = checkRepo(args.fit_repo, args.verbose)
 
     # Get full path to this repo
@@ -315,7 +316,7 @@ def combi_fits(args):
     theta12_end_indices = Dm21_end_indices
 
     # make job command
-    command = path + 'scripts/re_combine_fits.exe ' + fit_repo + 'param_fits_all.root'
+    command = path + 'scripts/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ' ' + fit_repo + 'param_fits_all.root'
     k = 0
     for i in range(Dm21_start_indices.size):
         for j in range(theta12_start_indices.size):

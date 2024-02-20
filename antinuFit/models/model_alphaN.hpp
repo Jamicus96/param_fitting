@@ -28,6 +28,7 @@ class alphaN: public Model {
 
         // Member function
         void compute_spec(Double_t* p);
+        void Spectra(std::vector<TH1D*>& hists);
     
         // Destructor
         ~alphaN();

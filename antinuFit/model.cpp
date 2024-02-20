@@ -15,10 +15,6 @@ void Model::compute_spec(Double_t* p) {}
 
 void Model::hold_osc_params_const(bool isTrue) {}
 
-TH1D* Model::Spectrum() {
-    return model_spec_sys;
-}
-
 void Model::operator = (const Model& mod) {
     Vars = mod.Vars;
     vars = mod.vars;

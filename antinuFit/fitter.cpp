@@ -153,3 +153,20 @@ double Fitter::fit_models() {
     std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << std::endl;
     return minfuncOut;
 }
+
+void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
+    TH1D* total_hist = (TH1D*)(models.at(0)->Spectrum()->Clone("Total_Model_Spectrum"));
+    total_hist->SetTitle("Total Model Spectrum");
+    for (unsigned int iModel = 0; iModel < numModels; ++iModel) {
+        // Add total spectra
+        hists.push_back((TH1D*)(models.at(iModel)->Spectrum()->Clone()));
+        hists.at(hists.size()-1)->Add(models.at(iModel)->Spectrum());
+
+        // Add to total overall specrtrum
+        total_hist->Add( hists.at(hists.size()-1));
+
+        // Add constituent spectra
+        models.at(iModel)->Spectra(hists);
+    }
+    hists.push_back(total_hist);
+}

@@ -226,31 +226,20 @@ int main(int argv, char** argc) {
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
     std::cout << "Creating fake dataset..." << std::endl;
-    std::vector<TH1D*> osc_hists;
-    ReactorMod.GetOscReactorHists(osc_hists);
-    TH1D* data = (TH1D*)osc_hists.at(0)->Clone();
+    std::vector<TH1D*> hists;
+    ReactorMod.Spectra(hists);
+    alphaNMod.Spectra(hists);
+    geoNuMod.Spectra(hists);
+    
+    TH1D* data = (TH1D*)hists.at(0)->Clone();
     data->Reset("ICES");
     std::cout << "data integral = " << data->Integral() << std::endl;
 
-    // Add reactor spectra (already re-sclaed)
-    for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-        std::cout << osc_hists.at(i)->GetName() << " integral = " << osc_hists.at(i)->Integral() << std::endl;
-        data->Add(osc_hists.at(i));  // Add reactor events
+    // Add spectra (already re-sclaed)
+    for (unsigned int i = 0; i < hists.size(); ++i) {
+        std::cout << hists.at(i)->GetName() << " integral = " << hists.at(i)->Integral() << std::endl;
+        data->Add(hists.at(i));  // Add reactor events
     }
-    std::cout << "data integral = " << data->Integral() << std::endl;
-
-    // Add alpha-n spectra
-    double GS_integral = alphaN_hists.at(0)->Integral() + alphaN_hists.at(1)->Integral();
-    data->Add(alphaN_hists.at(0), alphaNNorm_GS.val() / GS_integral);
-    data->Add(alphaN_hists.at(1), alphaNNorm_GS.val() / GS_integral);
-    data->Add(alphaN_hists.at(2), alphaNNorm_ES.val() / alphaN_hists.at(2)->Integral());
-
-    // Add geo-nu spectrum
-    TH1D *rescaled_osc_hist_Th, *rescaled_osc_hist_U;
-    geoNuMod.GetOscHists(rescaled_osc_hist_Th, rescaled_osc_hist_U);
-    data->Add(rescaled_osc_hist_Th);
-    data->Add(rescaled_osc_hist_U);
-
     std::cout << "data integral = " << data->Integral() << std::endl;
 
 
@@ -324,7 +313,6 @@ void Fit_spectra(Fitter& antinuFitter, FitVar& vDm21_2, FitVar& vS_12_2, Model& 
 
     /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
     std::cout << "Looping over oscillation parameters..." << std::endl;
-    double ll;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         vS_12_2.val() = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << vS_12_2.val() << std::endl;

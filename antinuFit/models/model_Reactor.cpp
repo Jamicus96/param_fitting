@@ -289,14 +289,18 @@ void Reactor::compute_spec(Double_t* p) {
 }
 
 
-void Reactor::GetOscReactorHists(std::vector<TH1D*>& rescaled_osc_hists) {
+void Reactor::Spectra(std::vector<TH1D*>& hists) {
+    TH1D* temp_hist = (TH1D*)(histTh->Clone("temp_hist"));
+
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
         #ifdef SUPER_DEBUG
-            std::cout << "[Reactor::GetOscReactorHists]: filling rescaled_osc_hists.at(" << i << ")" << std::endl;
+            std::cout << "[Reactor::GetOscReactorHists]: filling hists.at(" << i << ")" << std::endl;
         #endif
-        rescaled_osc_hists.push_back((TH1D*)(osc_hists.at(i)->Clone()));
-        rescaled_osc_hists.at(rescaled_osc_hists.size() - 1)->Reset("ICES");
-        rescaled_osc_hists.at(rescaled_osc_hists.size() - 1)->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
+        temp_hist->Reset("ICES");
+        temp_hist->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
+        hists.push_back((TH1D*)(osc_hists.at(i)->Clone(("model_" + reactor_names.at(i)).c_str())));
+        hists.at(hists.size()-1)->Reset("ICES");
+        E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));
     }
 }
 

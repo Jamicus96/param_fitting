@@ -29,7 +29,7 @@ class geoNu: public Model {
         void geoNu_survival_prob();
         void hold_osc_params_const(bool isTrue);
         void compute_spec(Double_t* p);
-        void GetOscHists(TH1D* rescaled_osc_hist_Th, TH1D* rescaled_osc_hist_U);
+        void Spectra(std::vector<TH1D*>& hists);
 
         // Destructor
         ~geoNu();

@@ -54,7 +54,8 @@ class Model {
         // Member function
         virtual void compute_spec(Double_t* p);
         virtual void hold_osc_params_const(bool isTrue);
-        TH1D* Spectrum();
+        TH1D* Spectrum() {return model_spec_sys;};
+        void Spectra(std::vector<TH1D*>& hists) {};
 
         virtual void operator = (const Model& mod);
 
