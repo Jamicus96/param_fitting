@@ -23,8 +23,8 @@ double PROTON_RECOIL_E_MAX = 3.5;  // (MeV)
 double CARBON12_SCATTER_E_MAX = 5.4;  // (MeV)  Could just simulate different process separately?
 
 bool pass_prompt_cuts(const double energy, const TVector3& position) {
-    if (energy < 0.9) return false;  // min energy cut (MeV)
-    if (energy > 8.0) return false;  // max energy cut (MeV)
+    if (energy < 0.5) return false;  // min energy cut (MeV)
+    if (energy > 9.0) return false;  // max energy cut (MeV)
     if (position.Mag() > 5700) return false;  // FV cut (mm)
 
     return true;
@@ -105,16 +105,19 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
         EventInfo->SetBranchAddress("parentKE1", &parentKE1);
     } else if (data_type == "alphaN") {
         // Instead, can set all the hists for alphaN, since there aren't many
-        TH1D* temp_hist_1 = new TH1D("alphaN_1", "alphaN proton recoil", nbins, lowenergybin, maxenergybin);
-        TH1D* temp_hist_2 = new TH1D("alphaN_2", "alphaN 12C scatter", nbins, lowenergybin, maxenergybin);
-        TH1D* temp_hist_3 = new TH1D("alphaN_3", "alphaN 16O deexcitation", nbins, lowenergybin, maxenergybin);
-        hists_map.insert({"alphaN_1", temp_hist_1});
-        hists_map.insert({"alphaN_2", temp_hist_2});
-        hists_map.insert({"alphaN_3", temp_hist_3});
-    } else if (data_type == "geoNu") {
+        TH1D* temp_hist_1 = new TH1D("alphaN_PR", "alphaN proton recoil", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_2 = new TH1D("alphaN_C12", "alphaN 12C scatter", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_3 = new TH1D("alphaN_O16", "alphaN 16O deexcitation", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"alphaN_PR", temp_hist_1});
+        hists_map.insert({"alphaN_C12", temp_hist_2});
+        hists_map.insert({"alphaN_O16", temp_hist_3});
+    } else if (data_type == "geoNu_Th") {
         // Instead, can set the hist for geo-nus, since there's only one
-        TH1D* temp_hist_geoNu = new TH1D("geoNu", "geo-nu", nbins, lowenergybin, maxenergybin);
-        hists_map.insert({"geoNu", temp_hist_geoNu});
+        TH1D* temp_hist_geoNu_1 = new TH1D("geoNu_Th", "geo-nu Thorium", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"geoNu_Th", temp_hist_geoNu_1});
+    } else if (data_type == "geoNu_U") {
+        TH1D* temp_hist_geoNu_2 = new TH1D("geoNu_U", "geo-nu Uranium", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"geoNu_U", temp_hist_geoNu_2});
     } else {
         std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
         exit(1);
@@ -148,8 +151,8 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
         const char* hist_name;
         if (data_type == "reactorIBD") {
             hist_name = originReactor->Data();  // core name
-        } else if (data_type == "geoNu") {
-            hist_name = "geoNu";
+        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U") {
+            hist_name = data_type;
         } else {
             hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
         }
@@ -185,11 +188,11 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
 
                     } else if (data_type == "alphaN") {
                         if (reconEnergy < PROTON_RECOIL_E_MAX) {
-                            hist_name = "alphaN_1";  // proton recoil
+                            hist_name = "alphaN_PR";  // proton recoil
                         } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
-                            hist_name = "alphaN_2";  // 12C scatter
+                            hist_name = "alphaN_C12";  // 12C scatter
                         } else {
-                            hist_name = "alphaN_3";  // 16O deexcitation
+                            hist_name = "alphaN_O16";  // 16O deexcitation
                         }
                     }
 
@@ -209,22 +212,25 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
 int main(int argv, char** argc) {
     std::string reactor_events_address = argc[1];
     std::string alphaN_events_address = argc[2];
-    std::string geoNu_events_address = argc[3];
-    std::string output_file = argc[3];
-    double classifier_cut = std::stod(argc[4]);
+    std::string geoNuTh_events_address = argc[3];
+    std::string geoNuU_events_address = argc[4];
+    std::string output_file = argc[5];
+    double classifier_cut = std::stod(argc[6]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
     TFile *alphaNFile = TFile::Open(alphaN_events_address.c_str());
-    TFile *geoNuFile = TFile::Open(geoNu_events_address.c_str());
+    TFile *geoNuThFile = TFile::Open(geoNuTh_events_address.c_str());
+    TFile *geoNuUFile = TFile::Open(geoNuU_events_address.c_str());
 
     TTree *reactorEventTree = (TTree *) reactorFile->Get("output");
     TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");
-    TTree *geoNuEventTree = (TTree *) geoNuFile->Get("output");
+    TTree *geoNuThEventTree = (TTree *) geoNuThFile->Get("output");
+    TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("output");
 
     // Create recon E_e vs true E_nu 2-D hist (MeV)
-    double Ee_min = 0.9;
-    double Ee_max = 8.0;
+    double Ee_min = 0.5;
+    double Ee_max = 9.0;
     unsigned int N_bins_Ee = 100;
 
     double Enu_min = ((neutron_mass_c2 + electron_mass_c2) * (neutron_mass_c2 + electron_mass_c2) - proton_mass_c2 * proton_mass_c2) / (2.0 * proton_mass_c2);  // minimum antinu energy for IBD
@@ -239,8 +245,10 @@ int main(int argv, char** argc) {
     std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
     std::cout << "Looping through alpha-n events..." << std::endl; 
     std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
-    std::cout << "Looping through geo-nu IBD events..." << std::endl; 
-    std::map<std::string, TH1D*> geoNu_hist_map = Apply_tagging_and_cuts(geoNuEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu");
+    std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl; 
+    std::map<std::string, TH1D*> geoNuTh_hist_map = Apply_tagging_and_cuts(geoNuThEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th");
+    std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl; 
+    std::map<std::string, TH1D*> geoNuU_hist_map = Apply_tagging_and_cuts(geoNuUEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U");
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;
@@ -259,7 +267,10 @@ int main(int argv, char** argc) {
     for (auto& x : alphaN_hist_map) {  
         x.second->Write();
     }
-    for (auto& x : geoNu_hist_map) {  
+    for (auto& x : geoNuTh_hist_map) {  
+        x.second->Write();
+    }
+    for (auto& x : geoNuU_hist_map) {  
         x.second->Write();
     }
     E_conv->Write();

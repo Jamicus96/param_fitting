@@ -121,6 +121,8 @@ def makePDFs(args):
     command = path + 'scripts/make_PDFs.exe '
     command += ntuple_repo + 'reactorIBD_1000years.ntuple.root '
     command += ntuple_repo + 'alphaN_1000years.ntuple.root '
+    command += ntuple_repo + 'geoNuTh_1000years.ntuple.root '
+    command += ntuple_repo + 'geoNuU_1000years.ntuple.root '
     command += pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root '
     command += str(args.classCut)
 
