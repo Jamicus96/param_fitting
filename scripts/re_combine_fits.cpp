@@ -33,8 +33,8 @@
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist);
-void print_to_txt(std::string txt_fileName, TH2D* minllHist);
-void GetFitSpectra(std::vector<TH1D*> hists, std::string PDFs_address, double Dm21_2, double S_12_2);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars);
+void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, std::string PDFs_address, double Dm21_2, double S_12_2);
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
@@ -102,7 +102,8 @@ int main(int argv, char** argc) {
     std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist);
 
     std::vector<TH1D*> spectra;
-    GetFitSpectra(spectra, PDFs_address, min_vals.at(1), min_vals.at(2));
+    std::map<std::string, TH1D*> vars;
+    GetFitSpectra(spectra, vars, PDFs_address, min_vals.at(1), min_vals.at(2));
 
     // Print hist to text file too
     std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
@@ -224,9 +225,11 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
  * @param txt_fileName 
  * @param minllHist 
  */
-void print_to_txt(std::string txt_fileName, TH2D* minllHist) {
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars) {
     std::ofstream datafile;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
+
+    datafile << "# Delta log-likelihood:" << std::endl;
 
     double Dm21;
     double theta12;
@@ -242,15 +245,35 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist) {
         theta12 = minllHist->GetXaxis()->GetBinCenter(i);
         datafile << theta12;
         for (unsigned int j = 1; j < minllHist->GetNbinsY() + 1; ++j) {
-            minLL = minllHist->GetBinContent(i + 1, j + 1);
+            minLL = minllHist->GetBinContent(i, j);  // was: GetBinContent(i + 1, j + 1)
             datafile << " " << minLL;
         }
         datafile << std::endl;
     }
+
+    datafile << "# Spectra:" << std::endl;
+
+    datafile << "NA";
+    for (unsigned int j = 1; j < hists.at(0)->GetNbinsX() + 1; ++j) {
+        datafile << " " << hists.at(0)->GetBinCenter(j);
+    }
+    datafile << std::endl;
+    for (unsigned int i = 0; i < hists.size(); ++i) {
+        datafile << hists.at(i)->GetName();
+        for (unsigned int j = 1; j < hists.at(i)->GetNbinsX() + 1; ++j) {
+            datafile << " " << hists.at(i)->GetBinContent(j);
+        }
+        datafile << std::endl;
+    }
+
+    datafile << "# Variables:" << std::endl;
+    for (auto& x : vars) {
+        datafile << x.first << " " << x.second << std::endl;
+    }
 }
 
 
-void GetFitSpectra(std::vector<TH1D*> hists, std::string PDFs_address, double Dm21_2, double S_12_2) {
+void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
 
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
@@ -421,6 +444,11 @@ void GetFitSpectra(std::vector<TH1D*> hists, std::string PDFs_address, double Dm
     std::cout << "ll = " << ll <<std::endl;
     // print variable values!
     antinuFitter.GetAllSpectra(hists);
+
+    std::vector<FitVar*> Vars = antinuFitter.GetVars();
+    for (unsigned int i = 0; i < Vars.size(); ++i) {
+        vars.insert({Vars.at(i)->name(), Vars.at(i)->val()});
+    }
 }
 
 

@@ -15,6 +15,7 @@
 #include <TList.h>
 #include <TVectorD.h>
 #include "Math/DistFunc.h"
+#include <map>
 
 #include "fitter.hpp"
 #include "fitVar.hpp"

@@ -53,6 +53,7 @@ class Fitter {
         static double ExtendedConstrainedLogLikelihood(Double_t* p);
 
         void GetAllSpectra(std::vector<TH1D*>& hists);
+        std::vector<FitVar*>& GetVars() {return variables;};
 
         // Destructor
         ~Fitter() {};
