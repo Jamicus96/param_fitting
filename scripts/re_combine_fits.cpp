@@ -273,7 +273,7 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> 
 }
 
 
-void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
+void GetFitSpectra(std::vector<TH1D*> spectra, std::map<std::string, TH1D*> vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
 
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
@@ -408,7 +408,8 @@ void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, 
     alphaNMod.Spectra(hists);
     geoNuMod.Spectra(hists);
     
-    TH1D* data = (TH1D*)hists.at(0)->Clone();
+    TH1D* data = (TH1D*)hists.at(0)->Clone("data");
+    data->SetTitle("Azimov Dataset")
     data->Reset("ICES");
     std::cout << "data integral = " << data->Integral() << std::endl;
 
@@ -419,6 +420,26 @@ void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, 
     }
     std::cout << "data integral = " << data->Integral() << std::endl;
 
+    // Set bins outside "real data" cuts to zero
+    double dE = data->GetBinCenter(2) - data->GetBinCenter(1);
+    double bin_centre, bin_top, bin_bottom;
+    for (unsigned int i = 1; i < data->GetXaxis()->GetNbins() + 1; ++i) {
+        bin_centre = data->GetBinCenter(i);
+        bin_top = bin_centre + 0.5 * dE;
+        bin_bottom = bin_centre - 0.5 * dE;
+
+        if (bin_bottom => 0.7 && bin_top <= 8.0) {
+            continue;
+        } else if (bin_top <= 0.7 || bin_bottom => 0.8) {
+            data->SetBinContent(i, 0.0);
+        } else if (bin_bottom < 0.7) {
+            data->SetBinContent(i, data->GetBinContent(i) * (0.7 - bin_bottom) / dE);
+        } else {
+            data->SetBinContent(i, data->GetBinContent(i) * (bin_top - 8.0) / dE);
+        }
+    }
+
+    std::cout << "data integral = " << data->Integral() << std::endl;
 
     /* ~~~~~~~~ SUBMIT FITTING ~~~~~~~~ */
 
@@ -442,9 +463,14 @@ void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, TH1D*> vars, 
 
     double ll = antinuFitter.fit_models();
     std::cout << "ll = " << ll <<std::endl;
-    // print variable values!
-    antinuFitter.GetAllSpectra(hists);
 
+    // Add spectra to list
+    antinuFitter.GetAllSpectra(spectra);
+
+    // Add data hist to list
+    spectra.push_back(data);
+
+    // Record best fit variables
     std::vector<FitVar*> Vars = antinuFitter.GetVars();
     for (unsigned int i = 0; i < Vars.size(); ++i) {
         vars.insert({Vars.at(i)->name(), Vars.at(i)->val()});

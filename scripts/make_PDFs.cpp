@@ -229,8 +229,9 @@ int main(int argv, char** argc) {
     TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("output");
 
     // Create recon E_e vs true E_nu 2-D hist (MeV)
-    double Ee_min = 0.5;
-    double Ee_max = 9.0;
+    // Keep binning the same, for consistency, even though cuts may change
+    double Ee_min = 0.0;
+    double Ee_max = 10.0;
     unsigned int N_bins_Ee = 100;
 
     double Enu_min = ((neutron_mass_c2 + electron_mass_c2) * (neutron_mass_c2 + electron_mass_c2) - proton_mass_c2 * proton_mass_c2) / (2.0 * proton_mass_c2);  // minimum antinu energy for IBD

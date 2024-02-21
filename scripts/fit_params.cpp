@@ -232,7 +232,8 @@ int main(int argv, char** argc) {
     alphaNMod.Spectra(hists);
     geoNuMod.Spectra(hists);
     
-    TH1D* data = (TH1D*)hists.at(0)->Clone();
+    TH1D* data = (TH1D*)hists.at(0)->Clone("data");
+    data->SetTitle("Azimov Dataset")
     data->Reset("ICES");
     std::cout << "data integral = " << data->Integral() << std::endl;
 
@@ -241,6 +242,27 @@ int main(int argv, char** argc) {
         std::cout << hists.at(i)->GetName() << " integral = " << hists.at(i)->Integral() << std::endl;
         data->Add(hists.at(i));  // Add reactor events
     }
+    std::cout << "data integral = " << data->Integral() << std::endl;
+
+    // Set bins outside "real data" cuts to zero
+    double dE = data->GetBinCenter(2) - data->GetBinCenter(1);
+    double bin_centre, bin_top, bin_bottom;
+    for (unsigned int i = 1; i < data->GetXaxis()->GetNbins() + 1; ++i) {
+        bin_centre = data->GetBinCenter(i);
+        bin_top = bin_centre + 0.5 * dE;
+        bin_bottom = bin_centre - 0.5 * dE;
+
+        if (bin_bottom => 0.7 && bin_top <= 8.0) {
+            continue;
+        } else if (bin_top <= 0.7 || bin_bottom => 0.8) {
+            data->SetBinContent(i, 0.0);
+        } else if (bin_bottom < 0.7) {
+            data->SetBinContent(i, data->GetBinContent(i) * (0.7 - bin_bottom) / dE);
+        } else {
+            data->SetBinContent(i, data->GetBinContent(i) * (bin_top - 8.0) / dE);
+        }
+    }
+
     std::cout << "data integral = " << data->Integral() << std::endl;
 
 

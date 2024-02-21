@@ -115,6 +115,7 @@ Double_t Fitter::fitFunc(Double_t* p) {
 
 double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
     // Model PDFs have already been scaled by their respective norms, and added together
+    // Assume data and models have the same binning (could generalise at some point)
     double logL = - tot_fitModel->Integral();
     for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
         if (tot_fitModel->GetBinContent(ibin) > 0) logL += data->GetBinContent(ibin) * log(tot_fitModel->GetBinContent(ibin));
