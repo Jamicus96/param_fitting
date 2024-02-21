@@ -132,8 +132,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nvalid = 0;
-    unsigned int nvaliddelayed = 0;
+    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0;
     double delayedTime;
     unsigned int delayedMCIndex;
     TVector3 delayedPos;
@@ -163,8 +162,8 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
         if (valid and pass_delayed_cuts(reconEnergy, delayedPos)) {
             nvaliddelayed++;
 
-            // Delayed event is valid, check through the previous 10 events for event that passes prompt + classifier + tagging cuts
-            for (unsigned int b = 1; b <= 10; ++b) {
+            // Delayed event is valid, check through the previous 100 events for event that passes prompt + classifier + tagging cuts
+            for (unsigned int b = 1; b <= 100; ++b) {
                 EventInfo->GetEntry(a - b);
                 if (mcIndex != delayedMCIndex) continue;  // check just in case
 
@@ -172,38 +171,43 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
-                if (valid and pass_prompt_cuts(reconEnergy, promptPos) and pass_classifier(reconEnergy, classResult, classiferCut) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
+                if (valid and pass_prompt_cuts(reconEnergy, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
-                    nvalid++;
+                    nvalidprompt++;
+                    if (pass_classifier(reconEnergy, classResult, classiferCut)) {
+                        // Event pair survived classifier cut
+                        nvalid++;
+                        if (data_type == "reactorIBD") {
+                            if (hists_map.find(hist_name) == hists_map.end()) {
+                                // reactor not added to list yet -> add it
+                                TH1D* temp_hist = new TH1D(hist_name, hist_name, nbins, lowenergybin, maxenergybin);
+                                hists_map.insert({hist_name, temp_hist});
+                            }
 
-                    if (data_type == "reactorIBD") {
-                        if (hists_map.find(hist_name) == hists_map.end()) {
-                            // reactor not added to list yet -> add it
-                            TH1D* temp_hist = new TH1D(hist_name, hist_name, nbins, lowenergybin, maxenergybin);
-                            hists_map.insert({hist_name, temp_hist});
+                            // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
+                            E_conv->Fill(reconEnergy, parentKE1);
+
+                        } else if (data_type == "alphaN") {
+                            if (reconEnergy < PROTON_RECOIL_E_MAX) {
+                                hist_name = "alphaN_PR";  // proton recoil
+                            } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
+                                hist_name = "alphaN_C12";  // 12C scatter
+                            } else {
+                                hist_name = "alphaN_O16";  // 16O deexcitation
+                            }
                         }
 
-                        // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
-                        E_conv->Fill(reconEnergy, parentKE1);
-
-                    } else if (data_type == "alphaN") {
-                        if (reconEnergy < PROTON_RECOIL_E_MAX) {
-                            hist_name = "alphaN_PR";  // proton recoil
-                        } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
-                            hist_name = "alphaN_C12";  // 12C scatter
-                        } else {
-                            hist_name = "alphaN_O16";  // 16O deexcitation
-                        }
+                        // Add event to relevant histogram
+                        hists_map.at(hist_name)->Fill(reconEnergy);
                     }
-
-                    // Add event to relevant histogram
-                    hists_map.at(hist_name)->Fill(reconEnergy);
                 }
             }
         }
         a++;
     }
-    std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed << " number of valid event pairs surviving all cuts: " << nvalid << std::endl;
+    std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
+              << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair
+              << ", number of these event pairs surviving classifier cut: " << nvalid << std::endl;
 
     return hists_map;
 }
