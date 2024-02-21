@@ -14,7 +14,7 @@ class Esys {
         // Scaling: E' = (1 + fDc) * E
         // Non-linearity: E' = E * (1 + fkB * E) / (1 + (fkB + fDkB) * E)
         // Smearing: Gaussian std = fSigPerRootE * sqrt(E)
-        FitVar* vC, vKBp, vSigPerRootE;
+        FitVar *vC, *vKBp, *vSigPerRootE;
         double fC, fKBp, fSigPerRootE;
         double fKB;
 
@@ -35,7 +35,7 @@ class Esys {
 
         void GetVarValues(Double_t* p);
 
-        void apply_systematics(Double_t* p, TH1D* INhist, TH1D* OUThist);
+        void apply_systematics(TH1D* INhist, TH1D* OUThist);
         void apply_scaling(TH1D* INhist);
         void apply_smearing(TH1D* OUThist);
 

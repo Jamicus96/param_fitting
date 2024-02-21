@@ -54,6 +54,8 @@ class Fitter {
 
         void GetAllSpectra(std::vector<TH1D*>& hists);
         std::vector<FitVar*>& GetVars() {return variables;};
+        std::vector<Model*>& GetModels() {return models;};
+        TH1D* GetData() {return data;};
 
         // Destructor
         ~Fitter() {};

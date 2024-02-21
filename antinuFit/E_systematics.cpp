@@ -65,7 +65,7 @@ void Esys::GetVarValues(Double_t* p) {
     else fC = p[vC->ParIdx()];  // provided by Minuit
 
     if (vKBp->isConstant()) fKBp = vKBp->val();  // provided by user
-    else fKBp = p[vDkB->ParIdx()];  // provided by Minuit
+    else fKBp = p[vKBp->ParIdx()];  // provided by Minuit
 
     if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
     else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit

@@ -164,7 +164,7 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
         hists.at(hists.size()-1)->Add(models.at(iModel)->Spectrum());
 
         // Add to total overall specrtrum
-        total_hist->Add( hists.at(hists.size()-1));
+        total_hist->Add(hists.at(hists.size()-1));
 
         // Add constituent spectra
         models.at(iModel)->Spectra(hists);

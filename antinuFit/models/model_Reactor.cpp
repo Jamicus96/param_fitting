@@ -290,7 +290,7 @@ void Reactor::compute_spec(Double_t* p) {
 
 
 void Reactor::Spectra(std::vector<TH1D*>& hists) {
-    TH1D* temp_hist = (TH1D*)(histTh->Clone("temp_hist"));
+    TH1D* temp_hist = (TH1D*)(osc_hists.at(0)->Clone("temp_hist"));
 
     for (unsigned int i = 0; i < osc_hists.size(); ++i) {
         #ifdef SUPER_DEBUG

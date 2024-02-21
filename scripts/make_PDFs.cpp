@@ -151,7 +151,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
         if (data_type == "reactorIBD") {
             hist_name = originReactor->Data();  // core name
         } else if (data_type == "geoNu_Th" || data_type == "geoNu_U") {
-            hist_name = data_type;
+            hist_name = data_type.c_str();
         } else {
             hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
         }
@@ -173,7 +173,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
                 promptPos = TVector3(reconX, reconY, reconZ);
                 if (valid and pass_prompt_cuts(reconEnergy, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
-                    nvalidprompt++;
+                    nvalidpair++;
                     if (pass_classifier(reconEnergy, classResult, classiferCut)) {
                         // Event pair survived classifier cut
                         nvalid++;

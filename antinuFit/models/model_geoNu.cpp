@@ -32,7 +32,7 @@ geoNu::geoNu(FitVar* NormTh, FitVar* NormU, FitVar* vS_12_2, FitVar* vS_13_2, Es
     }
     computed_survival_prob = false;
 
-    model_spec = (TH1D*)(Hist->Clone());
+    model_spec = (TH1D*)(Hist_Th->Clone());
 }
 
 void geoNu::geoNu_survival_prob() {
