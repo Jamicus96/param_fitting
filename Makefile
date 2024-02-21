@@ -13,8 +13,11 @@ all: make_PDFs re_combine_fits fit_params clean
 make_PDFs: make_PDFs.cpp
 	${COMPILE} scripts/make_PDFs.cpp -o scripts/make_PDFs.exe ${INCLUDE}
 
-re_combine_fits: re_combine_fits.cpp
-	${COMPILE} scripts/re_combine_fits.cpp -o scripts/re_combine_fits.exe ${INCLUDE}
+re_combine_fits: re_combine_fits.o E_systematics.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o 
+	${COMPILE} re_combine_fits.o E_systematics.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o -o scripts/fit_params.exe ${INCLUDE}
+
+re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVar.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp
+	${COMPILE} scripts/fit_params.cpp -c ${INCLUDE}
 
 
 fit_params: fitVar.o E_systematics.o model.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o 
