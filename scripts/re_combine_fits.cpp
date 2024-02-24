@@ -34,8 +34,8 @@
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist);
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> hists, std::map<std::string, double> vars);
-void GetFitSpectra(std::vector<TH1D*> hists, std::map<std::string, double> vars, std::string PDFs_address, double Dm21_2, double S_12_2);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::map<std::string, double>& vars);
+void GetFitSpectra(std::vector<TH1D*>& hists, std::map<std::string, double>& vars, std::string PDFs_address, double Dm21_2, double S_12_2);
 
 
 int main(int argv, char** argc) {
@@ -201,7 +201,7 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
  * @param txt_fileName 
  * @param minllHist 
  */
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> hists, std::map<std::string, double> vars) {
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::map<std::string, double>& vars) {
     std::ofstream datafile;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
 
@@ -249,7 +249,7 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, std::vector<TH1D*> 
 }
 
 
-void GetFitSpectra(std::vector<TH1D*> spectra, std::map<std::string, double> vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
+void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
 
     // Get DB
     RAT::DB::Get()->SetAirplaneModeStatus(true);
