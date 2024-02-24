@@ -63,6 +63,7 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
 
     // Create histogram to sum oscillated reactor events, based off reactor_names
     model_spec = (TH1D*)(reactor_hists.at(0)->Clone());
+    model_spec_sys = (TH1D*)(reactor_hists.at(0)->Clone());
     for (unsigned int i = 0; i < reactor_names.size(); ++i) {
         osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
 

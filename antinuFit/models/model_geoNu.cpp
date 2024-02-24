@@ -33,6 +33,7 @@ geoNu::geoNu(FitVar* NormTh, FitVar* NormU, FitVar* vS_12_2, FitVar* vS_13_2, Es
     computed_survival_prob = false;
 
     model_spec = (TH1D*)(Hist_Th->Clone());
+    model_spec_sys = (TH1D*)(Hist_Th->Clone());
 }
 
 void geoNu::geoNu_survival_prob() {
@@ -64,8 +65,8 @@ void geoNu::compute_spec(Double_t* p) {
         this->geoNu_survival_prob();
     }
 
-    model_spec->Add(histTh, survival_prob * vars.at(3) / Th_integral);
-    model_spec->Add(histU, survival_prob * vars.at(4) / U_integral);
+    model_spec->Add(histTh, survival_prob * vars.at(2) / Th_integral);
+    model_spec->Add(histU, survival_prob * vars.at(3) / U_integral);
 
     // Apply energy systematics
     E_systs.at(0)->apply_systematics(model_spec, model_spec_sys);
@@ -75,13 +76,13 @@ void geoNu::Spectra(std::vector<TH1D*>& hists) {
     TH1D* temp_hist = (TH1D*)(histTh->Clone("temp_hist"));
     
     temp_hist->Reset("ICES");
-    temp_hist->Add(histTh, survival_prob * vars.at(3) / Th_integral);
+    temp_hist->Add(histTh, survival_prob * vars.at(2) / Th_integral);
     hists.push_back((TH1D*)(histTh->Clone("model_geoNu_Th")));
     hists.at(hists.size()-1)->Reset("ICES");
     E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 
     temp_hist->Reset("ICES");
-    temp_hist->Add(histU, survival_prob * vars.at(4) / U_integral);
+    temp_hist->Add(histU, survival_prob * vars.at(3) / U_integral);
     hists.push_back((TH1D*)(histU->Clone("model_geoNu_U")));
     hists.at(hists.size()-1)->Reset("ICES");
     E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));

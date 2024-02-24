@@ -4,8 +4,8 @@
 alphaN::alphaN(const alphaN& mod) {
     Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
-    hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
-    Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
+    hist_O16Deex = mod.hist_O16Deex; Integral_hist_GS = mod.Integral_hist_GS;
+    Integral_hist_ES = mod.Integral_hist_ES;
     E_systs = mod.E_systs; model_Proton = mod.model_Proton;
     iEsys = mod.iEsys; iEsysP = mod.iEsysP;
 }
@@ -13,8 +13,8 @@ alphaN::alphaN(const alphaN& mod) {
 void alphaN::operator = (const alphaN& mod) {
     Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
     hist_ProtontR = mod.hist_ProtontR; hist_C12Scatter = mod.hist_C12Scatter;
-    hist_O16Deex = mod.hist_O16Deex; Integral_hist_ProtontR = mod.Integral_hist_ProtontR;
-    Integral_hist_C12Scatter = mod.Integral_hist_C12Scatter; Integral_hist_O16Deex = mod.Integral_hist_O16Deex;
+    hist_O16Deex = mod.hist_O16Deex; Integral_hist_GS = mod.Integral_hist_GS;
+    Integral_hist_ES = mod.Integral_hist_ES;
     E_systs = mod.E_systs; model_Proton = mod.model_Proton;
     iEsys = mod.iEsys; iEsysP = mod.iEsysP;
 }
@@ -37,11 +37,11 @@ alphaN::alphaN(FitVar* NormGS, FitVar* NormES, Esys* E_syst, Esys* E_syst_proton
     E_systs.push_back(E_syst_proton); iEsysP = 1;
 
     hist_ProtontR = Hist_ProtontR;
-    Integral_hist_ProtontR = hist_ProtontR->Integral();
+    Integral_hist_GS = hist_ProtontR->Integral();
     hist_C12Scatter = Hist_C12Scatter;
-    Integral_hist_C12Scatter = hist_C12Scatter->Integral();
+    Integral_hist_GS += hist_C12Scatter->Integral();
     hist_O16Deex = Hist_O16Deex;
-    Integral_hist_O16Deex = hist_O16Deex->Integral();
+    Integral_hist_ES = hist_O16Deex->Integral();
 
     numVars = Vars.size();
     vars.resize(numVars);
@@ -51,6 +51,7 @@ alphaN::alphaN(FitVar* NormGS, FitVar* NormES, Esys* E_syst, Esys* E_syst_proton
 
     model_spec = (TH1D*)(Hist_ProtontR->Clone());
     model_Proton = (TH1D*)(Hist_ProtontR->Clone());
+    model_spec_sys = (TH1D*)(Hist_ProtontR->Clone());
 }
 
 // Member function
@@ -60,15 +61,15 @@ void alphaN::compute_spec(Double_t* p) {
     model_Proton->Reset("ICES");  // empty it before re-computing it
     model_spec_sys->Reset("ICES");  // empty it before re-computing it
 
-    // Add the ES spectra to spectrum
-    model_spec->Add(hist_C12Scatter, vars.at(0) / Integral_hist_C12Scatter);
-    model_spec->Add(hist_O16Deex, vars.at(1) / Integral_hist_O16Deex);
+    // Add the non proton-recoil spectra to spectrum
+    model_spec->Add(hist_C12Scatter, vars.at(0) / Integral_hist_GS);
+    model_spec->Add(hist_O16Deex, vars.at(1) / Integral_hist_ES);
 
     // Apply Normal (beta) energy systematics (adds stuff to model_spec_sys, doesn't reset it)
     E_systs.at(iEsys)->apply_systematics(model_spec, model_spec_sys);
 
     // Add proton recoil to spectrum, and its own spectrum, to apply proton systematics separately
-    model_Proton->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+    model_Proton->Add(hist_ProtontR, vars.at(0) / Integral_hist_GS);
     // model_spec->Add(model_Proton);
 
     // Apply Proton energy systematics
@@ -79,22 +80,22 @@ void alphaN::Spectra(std::vector<TH1D*>& hists) {
     TH1D* temp_hist = (TH1D*)(hist_ProtontR->Clone("temp_hist"));
     
     temp_hist->Reset("ICES");
-    temp_hist->Add(hist_ProtontR, vars.at(0) / Integral_hist_ProtontR);
+    temp_hist->Add(hist_ProtontR, vars.at(0) / Integral_hist_GS);
     hists.push_back((TH1D*)(hist_ProtontR->Clone("model_alphaN_PR")));
     hists.at(hists.size()-1)->Reset("ICES");
-    E_systs.at(iEsysP)->apply_systematics(temp_hist, hists.at(0));
+    E_systs.at(iEsysP)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 
     temp_hist->Reset("ICES");
-    temp_hist->Add(hist_C12Scatter, vars.at(0) / Integral_hist_C12Scatter);
+    temp_hist->Add(hist_C12Scatter, vars.at(0) / Integral_hist_GS);
     hists.push_back((TH1D*)(hist_C12Scatter->Clone("model_alphaN_C12")));
     hists.at(hists.size()-1)->Reset("ICES");
-    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(1));
+    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 
     temp_hist->Reset("ICES");
-    temp_hist->Add(hist_O16Deex, vars.at(1) / Integral_hist_O16Deex);
+    temp_hist->Add(hist_O16Deex, vars.at(1) / Integral_hist_ES);
     hists.push_back((TH1D*)(hist_O16Deex->Clone("model_alphaN_O16")));
     hists.at(hists.size()-1)->Reset("ICES");
-    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(2));
+    E_systs.at(iEsys)->apply_systematics(temp_hist, hists.at(hists.size()-1));
 }
 
 // Destructor

@@ -16,11 +16,11 @@ def argparser():
         description='Run parameter fitting code')
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/ntuples/', help='Folder where PDFs (root hists) are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples/', help='Folder where PDFs (root hists) are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/2p2gLppo/likelihoods/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
@@ -31,8 +31,11 @@ def argparser():
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=500, help='Number of bins in x and y directions.')
     parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=60, help='Maximum number of bins looped over in one job.')
 
+    parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
+                        default=False, help='For energy correction: True for data, False for MC.')
+
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
-                        default=70, help='Max number of tasks in an array running at any one time.')
+                        default=100, help='Max number of tasks in an array running at any one time.')
     parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
@@ -77,16 +80,16 @@ def checkRepo(repo_address, verbose=False):
 
 ### PDF functions ###
 
-def makePDFjobScript(example_jobScript, overall_folder, commands, verbose):
+def makePDFjobScript(example_jobScript, overall_folder, commands, args):
     '''Create job script to run array of rat macros'''
 
     new_job_address = overall_folder + 'job_scripts/'
-    new_job_address = checkRepo(new_job_address, verbose)
+    new_job_address = checkRepo(new_job_address, args.verbose)
     new_job_address += 'PDF_job.job'
 
     output_logFile_address = overall_folder + 'log_files/'
-    output_logFile_address = checkRepo(output_logFile_address, verbose)
-    output_logFile_address +=  'log_PDF.txt'
+    output_logFile_address = checkRepo(output_logFile_address, args.verbose)
+    output_logFile_address +=  'log_PDF_cut' + str(args.classCut) + '.txt'
 
     new_jobScript = []
     for line in example_jobScript:
@@ -119,18 +122,18 @@ def makePDFs(args):
 
     # Create command
     command = path + 'scripts/make_PDFs.exe '
-    command += ntuple_repo + 'reactorIBD_1000years.ntuple.root '
-    command += ntuple_repo + 'alphaN_1000years.ntuple.root '
-    command += ntuple_repo + 'geoNuTh_1000years.ntuple.root '
-    command += ntuple_repo + 'geoNuU_1000years.ntuple.root '
+    command += ntuple_repo + 'reactorIBD/ReactorIBD.ntuple.root '
+    command += ntuple_repo + 'alphaN/alphaN.ntuple.root '
+    command += ntuple_repo + 'geoNuTh/geoNuTh.ntuple.root '
+    command += ntuple_repo + 'geoNuU/geoNuU.ntuple.root '
     command += pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root '
-    command += str(args.classCut)
+    command += str(args.classCut) + ' ' + str(int(args.is_data))
 
     # Make job script
     jobScript_address = path + 'job_scripts/PDF_job.job'
     with open(jobScript_address, "r") as f:
         example_jobScript = f.readlines()
-    job_address = makePDFjobScript(example_jobScript, pdf_repo, command, args.verbose)
+    job_address = makePDFjobScript(example_jobScript, pdf_repo, command, args)
 
     # Run job script!
     print('Submitting job...')

@@ -10,7 +10,14 @@
 #include <RAT/DB.hh>
 #include <TRandom3.h>
 #include <TMath.h>
+#include <RAT/DU/Point3D.hh>
+#include <RAT/DataCleaningUtility.hh>
+#include <RAT/DU/Utility.hh>
 #include <map>
+
+
+// #define USING_RUN_NUM
+ULong64_t dcAnalysisWord = 36283883733698;  // Converted hex to decimal from 0x2100000042C2
 
 // Define physical constants
 double electron_mass_c2 = 0.510998910;  // MeV
@@ -58,6 +65,27 @@ bool pass_classifier(const double energy, const double class_result, const doubl
 }
 
 
+double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::DU::DetectorStateCorrection& stateCorr, RAT::DU::ReconCalibrator& e_cal) {
+    // Data vs MC energy correction (Tony's)
+    double Ecorr = e_cal.CalibrateEnergyRTF(is_data, E, std::sqrt(pos.X()*pos.X() + pos.Y()*pos.Y()), pos.Z()); // gives the new E
+
+    #ifdef USING_RUN_NUM
+        // Correct for position coverage dependence (Logan's)
+        RAT::DU::Point3D position(0, pos);  // position of event [mm] (as Point3D in PSUP coordinates, see system_id in POINT3D_SHIFTS tables)
+        Ecorr /= stateCorr.GetCorrectionPos(position, 0, 0) / stateCorr.GetCorrection(9394, 0.75058); // a correction factor (divide E by it)
+    #endif
+
+    return Ecorr;
+}
+
+bool dcAppliedAndPassed(const bool is_data, ULong64_t dcApplied, ULong64_t dcFlagged) {
+    if (!is_data) return true;
+    if (!((dcApplied & dcAnalysisWord) == dcAnalysisWord)) return false;  // DC cut is not compatible
+    if (!((dcFlagged & dcAnalysisWord) == dcFlagged)) return false;  // Did not pass DC cut
+    return true;
+}
+
+
 /**
  * @brief Takes in an event tree, and compiles energy histograms.
  * Output is of the form of a map, so that for reactor IBD events, there is one
@@ -74,22 +102,17 @@ bool pass_classifier(const double energy, const double class_result, const doubl
  * @return std::map<std::string, TH1D*> 
  */
 std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const double classiferCut, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
-                                                    const unsigned int nbins, const std::string data_type) {
+                                                    const unsigned int nbins, const std::string data_type, const bool is_data) {
 
     // Define a map of histograms {"hist name", hist}. This is to keep track of reactor IBD origin
     std::map<std::string, TH1D*> hists_map;
 
     // Set branch addresses to unpack TTree
     TString *originReactor = NULL;
-    Double_t parentKE1;
-    Double_t reconEnergy;
-    Double_t reconX;
-    Double_t reconY;
-    Double_t reconZ;
-    ULong64_t eventTime;
+    Double_t parentKE1, reconEnergy, reconX, reconY, reconZ, classResult;
+    ULong64_t eventTime, dcApplied, dcFlagged;
     Bool_t valid;
     Int_t mcIndex;
-    Double_t classResult;
 
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
@@ -99,6 +122,8 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
     EventInfo->SetBranchAddress("fitValid", &valid);
     EventInfo->SetBranchAddress("mcIndex", &mcIndex);
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
+    EventInfo->SetBranchAddress("dcApplied", &dcApplied);
+    EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
     if (data_type == "reactorIBD") {
         // Want to get incoming antinu's origin core and energy
         EventInfo->SetBranchAddress("parentMeta1", &originReactor);
@@ -131,6 +156,10 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
 
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
+    // Initialise DetectorStateCorrection (assume only one run in each file)
+    RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
+    RAT::DU::ReconCalibrator e_cal = RAT::DU::Utility::Get()->GetReconCalibrator();
+
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0;
     double delayedTime;
@@ -138,13 +167,15 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
     TVector3 delayedPos;
     TVector3 promptPos;
     double delay;
+    bool passedDC;
+    double Ecorr;
     unsigned int a = 0;
 
     // Loop through all events:
     // First, find prompt event that pass all cuts.
     // Then go through next 3 events to try to find a delayed event that also passes all cuts.
     while (a < nentries) {
-        if (a % 100 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
+        if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
         EventInfo->GetEntry(a);
         const char* hist_name;
@@ -159,7 +190,10 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
         delayedTime = eventTime;
         delayedMCIndex = mcIndex;
 
-        if (valid and pass_delayed_cuts(reconEnergy, delayedPos)) {
+        passedDC = dcAppliedAndPassed(is_data, dcApplied, dcFlagged);
+        Ecorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
+
+        if (valid and passedDC and pass_delayed_cuts(Ecorr, delayedPos)) {
             nvaliddelayed++;
 
             // Delayed event is valid, check through the previous 100 events for event that passes prompt + classifier + tagging cuts
@@ -171,10 +205,13 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
-                if (valid and pass_prompt_cuts(reconEnergy, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
+                passedDC = dcAppliedAndPassed(is_data, dcApplied, dcFlagged);
+                Ecorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
+
+                if (valid and passedDC and pass_prompt_cuts(Ecorr, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
                     nvalidpair++;
-                    if (pass_classifier(reconEnergy, classResult, classiferCut)) {
+                    if (pass_classifier(Ecorr, classResult, classiferCut)) {
                         // Event pair survived classifier cut
                         nvalid++;
                         if (data_type == "reactorIBD") {
@@ -185,12 +222,12 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
                             }
 
                             // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
-                            E_conv->Fill(reconEnergy, parentKE1);
+                            E_conv->Fill(Ecorr, parentKE1);
 
                         } else if (data_type == "alphaN") {
-                            if (reconEnergy < PROTON_RECOIL_E_MAX) {
+                            if (Ecorr < PROTON_RECOIL_E_MAX) {
                                 hist_name = "alphaN_PR";  // proton recoil
-                            } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
+                            } else if (Ecorr < CARBON12_SCATTER_E_MAX) {
                                 hist_name = "alphaN_C12";  // 12C scatter
                             } else {
                                 hist_name = "alphaN_O16";  // 16O deexcitation
@@ -198,7 +235,7 @@ std::map<std::string, TH1D*> Apply_tagging_and_cuts(TTree* EventInfo, const doub
                         }
 
                         // Add event to relevant histogram
-                        hists_map.at(hist_name)->Fill(reconEnergy);
+                        hists_map.at(hist_name)->Fill(Ecorr);
                     }
                 }
             }
@@ -220,6 +257,7 @@ int main(int argv, char** argc) {
     std::string geoNuU_events_address = argc[4];
     std::string output_file = argc[5];
     double classifier_cut = std::stod(argc[6]);
+    bool is_data = std::stoi(argc[7]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
@@ -247,13 +285,13 @@ int main(int argv, char** argc) {
 
     // Loop through and apply tagging + cuts
     std::cout << "Looping through reactor IBD events..." << std::endl; 
-    std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
+    std::map<std::string, TH1D*> reactor_hist_map = Apply_tagging_and_cuts(reactorEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD", is_data);
     std::cout << "Looping through alpha-n events..." << std::endl; 
-    std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
+    std::map<std::string, TH1D*> alphaN_hist_map = Apply_tagging_and_cuts(alphaNEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN", is_data);
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl; 
-    std::map<std::string, TH1D*> geoNuTh_hist_map = Apply_tagging_and_cuts(geoNuThEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th");
+    std::map<std::string, TH1D*> geoNuTh_hist_map = Apply_tagging_and_cuts(geoNuThEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th", is_data);
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl; 
-    std::map<std::string, TH1D*> geoNuU_hist_map = Apply_tagging_and_cuts(geoNuUEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U");
+    std::map<std::string, TH1D*> geoNuU_hist_map = Apply_tagging_and_cuts(geoNuUEventTree, classifier_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U", is_data);
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;

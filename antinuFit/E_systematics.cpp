@@ -13,6 +13,7 @@
  */
 Esys::Esys(double kB, FitVar* linScale, FitVar* kBp, FitVar* sigPerRootE) {
     // Save variables
+    fKB = kB;
     vC = linScale;
     vKBp = kBp;
     vSigPerRootE = sigPerRootE;
@@ -67,24 +68,25 @@ void Esys::GetVarValues(Double_t* p) {
     if (vKBp->isConstant()) fKBp = vKBp->val();  // provided by user
     else fKBp = p[vKBp->ParIdx()];  // provided by Minuit
 
-    if (vSigPerRootE->isConstant()) fSigPerRootE = vSigPerRootE->val();  // provided by user
-    else fSigPerRootE = p[vSigPerRootE->ParIdx()];  // provided by Minuit
+    // vSigPerRootE is forced to be positive
+    if (vSigPerRootE->isConstant()) fSigPerRootE = std::fabs(vSigPerRootE->val());  // provided by user
+    else fSigPerRootE = std::fabs(p[vSigPerRootE->ParIdx()]);  // provided by Minuit
 
     #ifdef SUPER_DEBUG
-        std::cout << "[Model::GetVarValues]: vC: name = " << vC->name()
+        std::cout << "[Esys::GetVarValues]: vC: name = " << vC->name()
                     << ", val = " << vC->val() << ", prior = " << vC->prior() << ", err = " << vC->err()
                     << ", min = " << vC->min() << ", max = " << vC->max() << ", parIdx = " << vC->ParIdx() << std::endl;
-        std::cout << "[Model::GetVarValues]: fC = " << fC << std::endl;
+        std::cout << "[Esys::GetVarValues]: fC = " << fC << std::endl;
 
-        std::cout << "[Model::GetVarValues]: vKBp: name = " << vKBp->name()
+        std::cout << "[Esys::GetVarValues]: vKBp: name = " << vKBp->name()
                     << ", val = " << vKBp->val() << ", prior = " << vKBp->prior() << ", err = " << vKBp->err()
                     << ", min = " << vKBp->min() << ", max = " << vKBp->max() << ", parIdx = " << vKBp->ParIdx() << std::endl;
-        std::cout << "[Model::GetVarValues]: fKBp = " << fKBp << std::endl;
+        std::cout << "[Esys::GetVarValues]: fKBp = " << fKBp << std::endl;
 
-        std::cout << "[Model::GetVarValues]: vSigPerRootE: name = " << vSigPerRootE->name()
+        std::cout << "[Esys::GetVarValues]: vSigPerRootE: name = " << vSigPerRootE->name()
                     << ", val = " << vSigPerRootE->val() << ", prior = " << vSigPerRootE->prior() << ", err = " << vSigPerRootE->err()
                     << ", min = " << vSigPerRootE->min() << ", max = " << vSigPerRootE->max() << ", parIdx = " << vSigPerRootE->ParIdx() << std::endl;
-        std::cout << "[Model::GetVarValues]: fSigPerRootE = " << fSigPerRootE << std::endl;
+        std::cout << "[Esys::GetVarValues]: fSigPerRootE = " << fSigPerRootE << std::endl;
     #endif
 }
 
@@ -93,6 +95,7 @@ void Esys::GetVarValues(Double_t* p) {
  * 
  */
 void Esys::apply_systematics(TH1D* INhist, TH1D* OUThist) {
+    if (!bIsInit) this->initialise(INhist);
     model_spec_scaled->Reset("ICES");
 
     this->Esys::apply_scaling(INhist);
@@ -105,6 +108,9 @@ void Esys::apply_systematics(TH1D* INhist, TH1D* OUThist) {
  */
 void Esys::apply_scaling(TH1D* INhist) {
     if (fKB == fKBp && fC == 1.0) {
+        #ifdef SUPER_DEBUG
+            std::cout << "[Esys::apply_scaling]: No scaling." << std::endl;
+        #endif
         // No scaling
         model_spec_scaled->Add(INhist);
     } else {
@@ -114,6 +120,10 @@ void Esys::apply_scaling(TH1D* INhist) {
         for (unsigned int i = 1; i < iNumBins+1; ++i) {
             j_min = (unsigned int)(this->inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
             j_max = (unsigned int)(this->inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
+
+            #ifdef SUPER_DEBUG
+                std::cout << "[Esys::apply_scaling]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
+            #endif
 
             if (j_min == j_max) {
                 // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
@@ -141,6 +151,9 @@ void Esys::apply_smearing(TH1D* OUThist) {
     if (5.0 * fSigPerRootE * std::sqrt(model_spec_scaled->GetBinContent(iNumBins)) <= fDE) {
         // 5 sigmas in bin with highest energy is still smaller than bin width -> no smearing (includes sigma=0 case)
         OUThist->Add(model_spec_scaled);
+        #ifdef SUPER_DEBUG
+            std::cout << "[Esys::apply_smearing]: No smearing." << std::endl;
+        #endif
     } else {
         double sigma, weight;
         unsigned int num_bins_5sigmas;
@@ -153,6 +166,11 @@ void Esys::apply_smearing(TH1D* OUThist) {
             j_max = i + num_bins_5sigmas;
             if (j_min < 1) j_min = 1;
             if (j_max > iNumBins) j_max = iNumBins;
+
+            #ifdef SUPER_DEBUG
+                std::cout << "[Esys::apply_smearing]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
+            #endif
+
             for (unsigned int j = j_min; j < j_max+1; ++j) {
                 weight = this->integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
                 OUThist->AddBinContent(model_spec_scaled->GetBinContent(j), weight);
@@ -170,9 +188,15 @@ void Esys::apply_smearing(TH1D* OUThist) {
 double Esys::inv_scaling(double E) {
     if (fKB == fKBp) {
         // Only linear scaling
+        #ifdef SUPER_DEBUG
+            std::cout << "[Esys::inv_scaling]: Only linear scaling. E = " << E << ", fC = " << fC << std::endl;
+        #endif
         return E / fC;
     } else {
-    return (fKBp * E - 1.0 + std::sqrt((1.0 - fKBp * E) * (1.0 - fKBp * E) + 4.0 * fKB * E)) / (2.0 * fKB * fC);
+        #ifdef SUPER_DEBUG
+            std::cout << "[Esys::inv_scaling]: E = " << E << ", fC = " << fC << ", fKBp = " << fKBp << ", fKB = " << fKB << std::endl;
+        #endif
+        return (fKBp * E - 1.0 + std::sqrt((1.0 - fKBp * E) * (1.0 - fKBp * E) + 4.0 * fKB * E)) / (2.0 * fKB * fC);
     }
 }
 

@@ -11,10 +11,6 @@ Model::Model(const Model& mod) {
 
 Model::Model() {}
 
-void Model::compute_spec(Double_t* p) {}
-
-void Model::hold_osc_params_const(bool isTrue) {}
-
 void Model::operator = (const Model& mod) {
     Vars = mod.Vars;
     vars = mod.vars;

@@ -15,7 +15,7 @@ class alphaN: public Model {
         TH1D* hist_ProtontR;
         TH1D* hist_C12Scatter;
         TH1D* hist_O16Deex;
-        double Integral_hist_ProtontR, Integral_hist_C12Scatter, Integral_hist_O16Deex;
+        double Integral_hist_GS, Integral_hist_ES;
         unsigned int iEsys, iEsysP;
 
         TH1D* model_Proton;

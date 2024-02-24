@@ -40,7 +40,7 @@ class Model {
 
             for (unsigned int i = 0; i < E_systs.size(); ++i) {
                 #ifdef SUPER_DEBUG
-                    std::cout << "[Model::GetVarValues]: E_systs.at(" << i << "):" std::endl;
+                    std::cout << "[Model::GetVarValues]: E_systs.at(" << i << ")" << std::endl;
                 #endif
                 E_systs.at(i)->GetVarValues(p);
             }
@@ -52,8 +52,8 @@ class Model {
         Model();
 
         // Member function
-        virtual void compute_spec(Double_t* p);
-        virtual void hold_osc_params_const(bool isTrue);
+        virtual void compute_spec(Double_t* p) {};
+        virtual void hold_osc_params_const(bool isTrue) {};
         TH1D* Spectrum() {return model_spec_sys;};
         void Spectra(std::vector<TH1D*>& hists) {};
 
