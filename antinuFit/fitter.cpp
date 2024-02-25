@@ -20,58 +20,11 @@ double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 
 
-Fitter::Fitter(TH1D* Data, std::vector<FitVar*>& Variables, std::vector<Model*>& Models) {
-
-    numVars = Variables.size();
-    variables.resize(numVars);
-    var_bestFit_errs = new double[numVars];
-
-    numModels = Models.size();
-    models.resize(numModels);
-    for (unsigned int i = 0; i < numModels; ++i) {
-        models.at(i) = Models.at(i);
-    }
-
-    var_bestFits = new Double_t[numVars];
+Fitter::Fitter(TH1D& Data) {
 
     data = Data;
-    numBins = data->GetXaxis()->GetNbins();
-    tot_fitModel = (TH1D*)(data->Clone());
-    tot_fitModel->SetName("tot_fit_model");
-    tot_fitModel->SetTitle("Total Fit Spectrum");
-
-    var_bestFits = new Double_t[numVars];
-
-    //The default minimizer is Minuit, you can also try Minuit2
-    // TVirtualFitter::SetDefaultFitter("Minuit2");
-    TVirtualFitter::SetDefaultFitter("Minuit");
-    minuit = TVirtualFitter::Fitter(0, numVars);
-    
-    // set print level
-    minuit->ExecuteCommand("SET PRINT", arglist, 2);
-
-    // minimiser settings
-    arglist[0] = 5000; // number of function calls
-    arglist[1] = 0.01; // tolerance
-
-    // (void (*fcn)(Int_t&, Double_t*, Double_t& f, Double_t*, Int_t))
-    SetFunc();
-
-    for (unsigned int i = 0; i < numVars; ++i) {
-        variables.at(i) = Variables.at(i);
-        // Sets the parameter
-        minuit->SetParameter(i, variables.at(i)->name().c_str(), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
-        // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically
-        minuit->GetParameter(i, const_cast<char*>(variables.at(i)->name().c_str()), variables.at(i)->prior(), variables.at(i)->err(), variables.at(i)->min(), variables.at(i)->max());
-        variables.at(i)->ParIdx() = i;
-    }
-}
-
-Fitter::Fitter(TH1D* Data) {
-
-    data = Data;
-    numBins = data->GetXaxis()->GetNbins();
-    tot_fitModel = (TH1D*)(data->Clone());
+    numBins = data.GetXaxis()->GetNbins();
+    tot_fitModel = (TH1D*)(data.Clone());
     tot_fitModel->SetName("tot_fit_model");
     tot_fitModel->SetTitle("Total Fit Spectrum");
 

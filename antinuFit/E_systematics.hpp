@@ -7,33 +7,35 @@
 #include <sstream>
 #include <TH1.h>
 #include "fitVar.hpp"
+#include "fitter.hpp"
 
 
-class Esys {
+class Esys : Fitter {
     private:
         // Scaling: E' = (1 + fDc) * E
         // Non-linearity: E' = E * (1 + fkB * E) / (1 + (fkB + fDkB) * E)
         // Smearing: Gaussian std = fSigPerRootE * sqrt(E)
-        FitVar *vC, *vKBp, *vSigPerRootE;
-        double fC, fKBp, fSigPerRootE;
+        unsigned int iC, iKBp, iSigPerRootE;
         double fKB;
+        unsigned int Esys_idx;
 
         // Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
         double fEmin, fDE, fEratio;
         unsigned int iNumBins;
 
-        TH1D* model_spec_scaled;
+        unsigned int tempHist_idx;
         bool bIsInit;
 
     public:
         // Constructors
-        Esys(double kB, FitVar* linScale, FitVar* kBp, FitVar* sigPerRootE);
+        Esys(const Esys& systematic);
+        Esys(const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx) {fKB = kB; iC = linScale_idx; iKBp = kBp_idx; iSigPerRootE = sigPerRootE_idx;};
+        Esys(unsigned int EsysIdx, const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx) : Esys(kB, linScale_idx, kBp_idx, sigPerRootE_idx) {Esys_idx = EsysIdx;};
         void operator = (const Esys& systematic);
 
         // Member functions
+        void SetEsysIdx(unsigned int EsysIdx) {Esys_idx = EsysIdx;};
         void initialise(TH1D* example_hist);
-
-        void GetVarValues(Double_t* p);
 
         void apply_systematics(TH1D* INhist, TH1D* OUThist);
         void apply_scaling(TH1D* INhist);

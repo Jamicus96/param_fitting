@@ -51,10 +51,16 @@ class Reactor: public Model {
 
     public:
         // Constructors
+        Reactor() {};
         Reactor(const Reactor& mod);
         void operator = (const Reactor& mod);
-        Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, FitVar* totNorm, Esys* E_syst, RAT::DB* DB);
+        Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
+                const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
+                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB);
+        Reactor(const unsigned int ModIdx, const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
+                const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
+                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) : Reactor(ModIdx, Dm21_2_idx,
+                Dm32_2_idx, s12_2_idx, s13_2_idx, norms_idx, totNorm_idx, Esys_idx, Reactor_hists, E_conv_hist, Reactor_names, DB) {model_idx = ModIdx;};
 
         // Member function
         void compute_unosc_integrals();
