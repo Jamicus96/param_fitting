@@ -27,7 +27,7 @@
 #include "utils.hpp"
 
 
-void Fit_spectra(Fitter* antinuFitter, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+void Fit_spectra(Fitter& antinuFitter, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min,
                                                      const double Theta12_max, const unsigned int Theta12_nSteps);
 
@@ -90,7 +90,7 @@ int main(int argv, char** argc) {
     /* ~~~~~~~~ FITTING ~~~~~~~~ */
 
     // Create fitter object
-    Fitter* antinuFitter = create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
+    Fitter antinuFitter = create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
 
     // Make list of Dm_21^2 and s_12^2 values to iterate over
     std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, Theta12_min, Theta12_max, Theta12_nSteps);
@@ -135,7 +135,7 @@ int main(int argv, char** argc) {
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(Fitter* antinuFitter, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
+void Fit_spectra(Fitter antinuFitter, const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
@@ -147,14 +147,14 @@ void Fit_spectra(Fitter* antinuFitter, const std::vector<std::vector<double>>& v
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // Set sinTheta12 value
-        antinuFitter->GetVars().at(11)->val() = sinTheta12.at(i);
+        antinuFitter.GetVars().val("sinsqrtheta12") = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << antinuFitter->GetVars().at(11)->val() << std::endl;
-        antinuFitter->GetModels().at(2)->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
+        antinuFitter.GetModels().at(0)->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // Set Dm21 value
-            antinuFitter->GetVars().at(9)->val() = Dm21.at(j);
+            antinuFitter.GetVars().val("deltamsqr21") = Dm21.at(j);
             if (verbose) std::cout << "Dm_21^2 = " << antinuFitter->GetVars().at(9)->val() << std::endl;
-            antinuFitter->GetModels().at(1)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+            antinuFitter.GetModels().at(2)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
             minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter->fit_models());
         }
     }

@@ -1,60 +1,35 @@
 #include "model_Reactor.hpp"
 
 
-Reactor::Reactor(const Reactor& mod) {
-    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
-    numVars = mod.numVars; iDm_21_2 = mod.iDm_21_2; iDm_32_2 = mod.iDm_32_2; iS_12_2 = mod.iS_12_2; iS_13_2 = mod.iS_13_2;
-    iNorms = mod.iNorms; H_ee_vac = mod.H_ee_vac; a0_vac = mod.a0_vac; a1_vac = mod.a1_vac; Y_ee_vac = mod.Y_ee_vac;
-    eigen = mod.eigen; X_mat = mod.X_mat; baselines = mod.baselines; reactor_hists = mod.reactor_hists; num_reactors = mod.num_reactors;
-    hists_Nbins = mod.hists_Nbins; E_conv = mod.E_conv; reactor_names = mod.reactor_names; reactor_idx = mod.reactor_idx;
-    osc_hists = mod.osc_hists; unosc_hist_ints = mod.unosc_hist_ints; computed_osc_specs = mod.computed_osc_specs; db = mod.db;
-}
-void Reactor::operator = (const Reactor& mod) {
-    Vars = mod.Vars; E_systs = mod.E_systs; vars = mod.vars; numVars = mod.numVars; model_spec = mod.model_spec; model_spec_sys = mod.model_spec_sys;
-    numVars = mod.numVars; iDm_21_2 = mod.iDm_21_2; iDm_32_2 = mod.iDm_32_2; iS_12_2 = mod.iS_12_2; iS_13_2 = mod.iS_13_2;
-    iNorms = mod.iNorms; H_ee_vac = mod.H_ee_vac; a0_vac = mod.a0_vac; a1_vac = mod.a1_vac; Y_ee_vac = mod.Y_ee_vac;
-    eigen = mod.eigen; X_mat = mod.X_mat; baselines = mod.baselines; reactor_hists = mod.reactor_hists; num_reactors = mod.num_reactors;
-    hists_Nbins = mod.hists_Nbins; E_conv = mod.E_conv; reactor_names = mod.reactor_names; reactor_idx = mod.reactor_idx;
-    osc_hists = mod.osc_hists; unosc_hist_ints = mod.unosc_hist_ints; computed_osc_specs = mod.computed_osc_specs; db = mod.db;
-}
+FitVars Fitter::Vars;
+Esys Fitter::Esysts;
 
-Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS_13_2, const std::vector<TH1D*>& Reactor_hists,
-                TH2D* E_conv_hist, std::vector<std::string>& Reactor_names, const std::vector<FitVar*>& Norms, FitVar* totNorm,
-                Esys* E_syst, RAT::DB* DB) {
 
-    // Save variables
-    Vars.push_back(vDm_21_2); iDm_21_2 = 0;
-    Vars.push_back(vDm_32_2); iDm_32_2 = 1;
-    Vars.push_back(vS_12_2); iS_12_2 = 2;
-    Vars.push_back(vS_13_2); iS_13_2 = 3;
-    E_systs.push_back(E_syst);
-
-    if (Reactor_names.size() != Norms.size()) {
+Reactor::Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
+                 const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
+                 const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+    
+    if (Reactor_names.size() != norms_idx.size()) {
         std::cout << "[Reactor] ERROR: Reactor_names and Norms should have the same size!" << std::endl;
         exit(1);
     }
+
+    // Save variables
+    iDm_21_2 = Dm21_2_idx;
+    iDm_32_2 = Dm32_2_idx;
+    iS_12_2 = s12_2_idx;
+    iS_13_2 = s13_2_idx;
+    iEsys = Esys_idx;
     reactor_names = Reactor_names;
-
-    for (unsigned int i = 0; i < Norms.size(); ++i) {
-        Vars.push_back(Norms.at(i));
-        iNorms.push_back(4 + i);
-    }
-    Vars.push_back(totNorm); iTotNorm = Vars.size() - 1;
-    numVars = Vars.size();
-
-    vars.resize(numVars);
-    for (unsigned int i = 0; i < numVars; ++i) {
-        vars.at(i) = Vars.at(i)->val();
-    }
-
+    iNorms = norms_idx;
+    iTotNorm = totNorm_idx;
     db = DB;
 
     // Save hist variables
     reactor_hists = Reactor_hists;
     num_reactors = reactor_hists.size();
     hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
-    E_conv = (TH2D*)(E_conv_hist->Clone());
-
+    E_conv = E_conv_hist; E_conv->SetName("Reactor::E_conv");
     baselines.resize(num_reactors);
 
     // Set up empty vectors
@@ -62,12 +37,8 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
     X_mat.resize(3);
 
     // Create histogram to sum oscillated reactor events, based off reactor_names
-    model_spec = (TH1D*)(reactor_hists.at(0)->Clone());
-    model_spec_sys = (TH1D*)(reactor_hists.at(0)->Clone());
     for (unsigned int i = 0; i < reactor_names.size(); ++i) {
-        osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone()));
-
-        osc_hists.at(i)->SetName(reactor_names.at(i).c_str());
+        osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone(("Reactor::osc_hists::" + reactor_names.at(i)).c_str())));
         osc_hists.at(i)->SetTitle((reactor_names.at(i) + " spectrum").c_str());
     }
     unosc_hist_ints.resize(reactor_names.size());
@@ -92,10 +63,12 @@ Reactor::Reactor(FitVar* vDm_21_2, FitVar* vDm_32_2, FitVar* vS_12_2, FitVar* vS
     }
 
     // Compute baselines
-    Reactor::compute_baselines();
+    this->compute_baselines();
 
     // Compute unoscillated histogram integrals for the different sources in Reactor_names
     this->compute_unosc_integrals();
+
+    this->AddModel("Reactor", reactor_hists.at(0));
 }
 
 void Reactor::compute_unosc_integrals() {
@@ -117,10 +90,10 @@ void Reactor::compute_oscillation_constants() {
     #endif
 
     // Upacks variables
-    const double fDmSqr21 = vars.at(iDm_21_2);
-    const double fDmSqr32 = vars.at(iDm_32_2);
-    const double fSSqrTheta12 = vars.at(iS_12_2);
-    const double fSSqrTheta13 = vars.at(iS_13_2);
+    const double fDmSqr21 = Vars.val(iDm_21_2);
+    const double fDmSqr32 = Vars.val(iDm_32_2);
+    const double fSSqrTheta12 = Vars.val(iS_12_2);
+    const double fSSqrTheta13 = Vars.val(iS_13_2);
     #ifdef DEBUG
         std::cout << "[Reactor::compute_oscillation_constants]: fDmSqr21 = " << fDmSqr21 << ", fDmSqr32 = " << fDmSqr32
                   << ", fSSqrTheta12 = " << fSSqrTheta12 << ", fSSqrTheta13 = " << fSSqrTheta13 << std::endl;
@@ -244,20 +217,16 @@ void Reactor::compute_osc_specs() {
 }
 
 
-void Reactor::hold_osc_params_const(bool isTrue) {
+void Reactor::hold_osc_params_const(const bool isTrue) {
     if (!isTrue) {
         #ifdef DEBUG
             std::cout << "[Reactor::hold_osc_params_const]: NOT holding oscillation parameters constant" << std::endl;
         #endif
         computed_osc_specs = false;
-    } else if (Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant()) {
+    } else if (Vars.isConstant(iDm_21_2) && Vars.isConstant(iDm_32_2) && Vars.isConstant(iS_12_2) && Vars.isConstant()) {
         #ifdef DEBUG
             std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
         #endif
-        vars.at(iDm_21_2) = Vars.at(iDm_21_2)->val();
-        vars.at(iDm_32_2) = Vars.at(iDm_32_2)->val();
-        vars.at(iS_12_2) = Vars.at(iS_12_2)->val();
-        vars.at(iS_13_2) = Vars.at(iS_13_2)->val();
         this->compute_osc_specs();
         computed_osc_specs = true;
     } else {
@@ -265,13 +234,12 @@ void Reactor::hold_osc_params_const(bool isTrue) {
     }
 }
 
-void Reactor::compute_spec(Double_t* p) {
-    this->GetVarValues(p);
-    model_spec->Reset("ICES");  // empty it before re-computing it
-    model_spec_sys->Reset("ICES");  // empty it before re-computing it
+void Reactor::compute_spec() {
+    model_noEsys->Reset("ICES");  // empty it before re-computing it
+    model_Esys->Reset("ICES");  // empty it before re-computing it
 
     // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
-    if (!(Vars.at(iDm_21_2)->isConstant() && Vars.at(iDm_32_2)->isConstant() && Vars.at(iS_12_2)->isConstant() && Vars.at(iS_13_2)->isConstant() && computed_osc_specs)) {
+    if (!(Vars.isConstant(iDm_21_2) && Vars.isConstant(iDm_32_2) && Vars.isConstant(iS_12_2) && Vars.isConstant(iS_13_2) && computed_osc_specs)) {
         #ifdef SUPER_DEBUG
             std::cout << "[Reactor::compute_spec]: computing oscillation specs" << std::endl;
         #endif
@@ -282,11 +250,11 @@ void Reactor::compute_spec(Double_t* p) {
         #ifdef SUPER_DEBUG
             std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
         #endif
-        model_spec->Add(osc_hists.at(i), vars.at(iTotNorm) * vars.at(iNorms.at(i)) / unosc_hist_ints.at(i));
+        model_noEsys->Add(osc_hists.at(i), Vars.val(iTotNorm) * Vars.val(iNorms.at(i)) / unosc_hist_ints.at(i));
     }
 
     // Apply energy systematics
-    E_systs.at(0)->apply_systematics(model_spec, model_spec_sys);
+    Esysts.apply_systematics(iEsys, model_noEsys, model_Esys);
 }
 
 
@@ -298,23 +266,11 @@ void Reactor::Spectra(std::vector<TH1D*>& hists) {
             std::cout << "[Reactor::GetOscReactorHists]: filling hists.at(" << i << ")" << std::endl;
         #endif
         temp_hist->Reset("ICES");
-        temp_hist->Add(osc_hists.at(i), Vars.at(iNorms.at(i))->val() / unosc_hist_ints.at(i));
+        temp_hist->Add(osc_hists.at(i), Vars.val(iNorms.at(i)) / unosc_hist_ints.at(i));
         hists.push_back((TH1D*)(osc_hists.at(i)->Clone(("model_" + reactor_names.at(i)).c_str())));
         hists.at(hists.size()-1)->Reset("ICES");
-        E_systs.at(0)->apply_systematics(temp_hist, hists.at(hists.size()-1));
+        Esysts.apply_systematics(iEsys, temp_hist, hists.at(hists.size()-1));
     }
-}
-
-std::vector<std::string>& Reactor::GetReactorNames() {return reactor_names;}
-
-Reactor::~Reactor() {
-    // for (auto p : reactor_hists) {delete p;}
-    reactor_hists.clear();
-    for (auto p : osc_hists) {delete p;}
-    osc_hists.clear();
-    // delete db;
-    // for (auto p : Vars) {delete p;}
-    Vars.clear();
 }
 
 
@@ -366,10 +322,10 @@ std::vector<std::string> SplitString(std::string str) {
  */
 TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude) {
   // reference http://www.mathworks.co.uk/help/aeroblks/llatoecefposition.html
-  static double toRad = TMath::Pi()/180.;
-  static double Earthradius = 6378137.0; //Radius of the Earth (in meters)
-  static double f = 1./298.257223563; //Flattening factor WGS84 Model
-  static double L, rs, x, y, z;
+  double toRad = TMath::Pi()/180.;
+  double Earthradius = 6378137.0; //Radius of the Earth (in meters)
+  double f = 1./298.257223563; //Flattening factor WGS84 Model
+  double L, rs, x, y, z;
   L = atan( pow((1. - f),2)*tan(latitude*toRad))*180./TMath::Pi();
   rs = sqrt( pow(Earthradius,2)/(1. + (1./pow((1. - f),2) - 1.)*pow(sin(L*toRad),2)));
   x = (rs*cos(L*toRad)*cos(longitude*toRad) + altitude*cos(latitude*toRad)*cos(longitude*toRad))/1000; // in km

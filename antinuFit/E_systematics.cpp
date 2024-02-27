@@ -1,33 +1,32 @@
 #include "E_systematics.hpp"
 
 
+FitVars Fitter::Vars;
+std::vector<TH1D*> Fitter::hists;
 
-Esys::Esys(const Esys& systematic) {
-    fKB = systematic.fKB;
-    iC = systematic.iC;
-    iKBp = systematic.iKBp;
-    iSigPerRootE = systematic.iSigPerRootE;
+unsigned int Fitter::numEsysts;
+unsigned int Fitter::numHists;
 
-    fEmin = systematic.fEmin;
-    fDE = systematic.fDE;
-    fEratio = systematic.fEratio;
-    iNumBins = systematic.iNumBins;
-    model_spec_scaled = systematic.model_spec_scaled;
-    bIsInit = systematic.bIsInit;
-}
+std::vector<std::string> Esys::names;
+std::vector<unsigned int> Esys::iC, Esys::iKBp, Esys::iSigPerRootE;
+std::vector<double> Esys::fKB;
 
-void Esys::operator = (const Esys& systematic) {
-    fKB = systematic.fKB;
-    iC = systematic.iC;
-    iKBp = systematic.iKBp;
-    iSigPerRootE = systematic.iSigPerRootE;
+// Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
+std::vector<double> Esys::fEmin, Esys::fDE, Esys::fEratio;
+std::vector<unsigned int> Esys::iNumBins, Esys::tempHist_idx;
+std::vector<bool> Esys::bIsInit;
 
-    fEmin = systematic.fEmin;
-    fDE = systematic.fDE;
-    fEratio = systematic.fEratio;
-    iNumBins = systematic.iNumBins;
-    model_spec_scaled = systematic.model_spec_scaled;
-    bIsInit = systematic.bIsInit;
+
+void Esys::AddEsys(const std::string name, const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx) {
+    ++numEsysts;
+
+    names.push_back(name);
+    fKB.push_back(kB); iC.push_back(linScale_idx);
+    iKBp.push_back(kBp_idx); iSigPerRootE.push_back(sigPerRootE_idx);
+
+    fEmin.push_back(0.0); fDE.push_back(0.0);
+    fEratio.push_back(0.0); iNumBins.push_back(0);
+    tempHist_idx.push_back(0); bIsInit.push_back(false);
 }
 
 /**
@@ -36,18 +35,19 @@ void Esys::operator = (const Esys& systematic) {
  * Assumes histograms have constant bin sizes.
  * 
  */
-void Esys::initialise(TH1D* example_hist) {
+void Esys::initialise(const unsigned int idx, TH1D* example_hist) {
     // Record binning information
-    fEmin = example_hist->GetBinCenter(1);
-    fDE = example_hist->GetBinCenter(2) - example_hist->GetBinCenter(1);
-    fEratio = fEmin / fDE;
-    iNumBins = example_hist->GetXaxis()->GetNbins();
+    fEmin.at(idx) = example_hist->GetBinCenter(1);
+    fDE.at(idx) = example_hist->GetBinCenter(2) - example_hist->GetBinCenter(1);
+    fEratio.at(idx) = fEmin.at(idx) / fDE.at(idx);
+    iNumBins.at(idx) = example_hist->GetXaxis()->GetNbins();
 
     // Set up empty histogram
     hists.push_back((TH1D*)(example_hist->Clone()));  // temporary hist for internal use
-    tempHist_idx = hists.size() - 1;
+    ++numHists;
+    tempHist_idx.at(idx) = numHists;
 
-    bIsInit = true;
+    bIsInit.at(idx) = true;
 }
 
 
@@ -55,32 +55,32 @@ void Esys::initialise(TH1D* example_hist) {
  * @brief Applies all three systematic corrections in a row: linear scaling -> non-linear scaling -> smearing
  * 
  */
-void Esys::apply_systematics(TH1D* INhist, TH1D* OUThist) {
-    if (!bIsInit) this->initialise(INhist);
-    hists.at(tempHist_idx)->Reset("ICES");
+void Esys::apply_systematics(const unsigned int idx, TH1D* INhist, TH1D* OUThist) {
+    if (!bIsInit.at(idx)) this->initialise(idx, INhist);
+    hists.at(tempHist_idx.at(idx))->Reset("ICES");
 
-    this->Esys::apply_scaling(INhist);
-    this->Esys::apply_smearing(OUThist);
+    this->Esys::apply_scaling(idx, INhist);
+    this->Esys::apply_smearing(idx, OUThist);
 }
 
 /**
  * @brief Applied the linear and non linear scaling (in that order)
  * 
  */
-void Esys::apply_scaling(TH1D* INhist) {
-    if (fKB == Vars.val(iKBp) && Vars.val(iC) == 1.0) {
+void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
+    if (fKB.at(idx) == Vars.val(iKBp.at(idx)) && Vars.val(iC.at(idx)) == 1.0) {
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::apply_scaling]: No scaling." << std::endl;
         #endif
         // No scaling
-        model_spec_scaled->Add(INhist);
+        hists.at(tempHist_idx.at(idx))->Add(INhist);
     } else {
         unsigned int j_min;
         unsigned int j_max;
         double weight;
-        for (unsigned int i = 1; i < iNumBins+1; ++i) {
-            j_min = (unsigned int)(this->inv_scaling(fEmin + fDE * (i - 0.5)) / fDE + 0.5 - fEratio);
-            j_max = (unsigned int)(this->inv_scaling(fEmin + fDE * (i + 0.5)) / fDE + 0.5 - fEratio);
+        for (unsigned int i = 1; i < iNumBins.at(idx)+1; ++i) {
+            j_min = (unsigned int)(this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
+            j_max = (unsigned int)(this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
 
             #ifdef SUPER_DEBUG
                 std::cout << "[Esys::apply_scaling]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
@@ -89,16 +89,16 @@ void Esys::apply_scaling(TH1D* INhist) {
             if (j_min == j_max) {
                 // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
                 // If scaling is a trivial transformation, it produces weight = 1
-                weight = (this->inv_scaling(fEmin + fDE * (j_min + 0.5)) - this->inv_scaling(fEmin + fDE * (j_min - 0.5))) / fDE;
-                hists.at(tempHist_idx)->AddBinContent(INhist->GetBinContent(j_min), weight);
+                weight = (this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) - this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5))) / fDE.at(idx);
+                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_min), weight);
             } else {
-                weight = this->inv_scaling(fEmin + fDE * (j_min + 0.5)) / fDE - fEratio + (i - 0.5);
-                hists.at(tempHist_idx)->AddBinContent(INhist->GetBinContent(j_min), weight);
+                weight = this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) / fDE.at(idx) - fEratio.at(idx) + (i - 0.5);
+                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_min), weight);
                 for (unsigned int j = j_min+1; j < j_max; ++j) {
-                    hists.at(tempHist_idx)->AddBinContent(INhist->GetBinContent(j), 1.0);
+                    hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j), 1.0);
                 }
-                weight = fEratio + (i + 0.5) - this->inv_scaling(fEmin + fDE * (j_min - 0.5)) / fDE;
-                hists.at(tempHist_idx)->AddBinContent(INhist->GetBinContent(j_max), weight);
+                weight = fEratio.at(idx) + (i + 0.5) - this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5)) / fDE.at(idx);
+                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_max), weight);
             }
         }
     }
@@ -108,10 +108,10 @@ void Esys::apply_scaling(TH1D* INhist) {
  * @brief Applies smearing
  * 
  */
-void Esys::apply_smearing(TH1D* OUThist) {
-    if (5.0 * Vars.val(iSigPerRootE) * std::sqrt(hists.at(tempHist_idx)->GetBinContent(iNumBins)) <= fDE) {
+void Esys::apply_smearing(const unsigned int idx, TH1D* OUThist) {
+    if (5.0 * Vars.val(iSigPerRootE.at(idx)) * std::sqrt(hists.at(tempHist_idx.at(idx))->GetBinContent(iNumBins.at(idx))) <= fDE.at(idx)) {
         // 5 sigmas in bin with highest energy is still smaller than bin width -> no smearing (includes sigma=0 case)
-        OUThist->Add(hists.at(tempHist_idx));
+        OUThist->Add(hists.at(tempHist_idx.at(idx)));
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::apply_smearing]: No smearing." << std::endl;
         #endif
@@ -119,22 +119,22 @@ void Esys::apply_smearing(TH1D* OUThist) {
         double sigma, weight;
         unsigned int num_bins_5sigmas;
         int j_min, j_max;
-        for (unsigned int i = 1; i < iNumBins+1; ++i) {
-            sigma = Vars.val(iSigPerRootE) * std::sqrt(hists.at(tempHist_idx)->GetBinContent(i));
-            num_bins_5sigmas = (unsigned int)(5.0 * sigma / fDE);
+        for (unsigned int i = 1; i < iNumBins.at(idx)+1; ++i) {
+            sigma = Vars.val(iSigPerRootE.at(idx)) * std::sqrt(hists.at(tempHist_idx.at(idx))->GetBinContent(i));
+            num_bins_5sigmas = (unsigned int)(5.0 * sigma / fDE.at(idx));
 
             j_min = i - num_bins_5sigmas;
             j_max = i + num_bins_5sigmas;
             if (j_min < 1) j_min = 1;
-            if (j_max > iNumBins) j_max = iNumBins;
+            if (j_max > iNumBins.at(idx)) j_max = iNumBins.at(idx);
 
             #ifdef SUPER_DEBUG
                 std::cout << "[Esys::apply_smearing]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
             #endif
 
             for (unsigned int j = j_min; j < j_max+1; ++j) {
-                weight = this->integ_normal(fDE * (j - i - 0.5) / sigma, fDE * (j - i + 0.5) / sigma);
-                OUThist->AddBinContent(hists.at(tempHist_idx)->GetBinContent(j), weight);
+                weight = this->integ_normal(fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
+                OUThist->AddBinContent(hists.at(tempHist_idx.at(idx))->GetBinContent(j), weight);
             }
         }
     }
@@ -146,21 +146,21 @@ void Esys::apply_smearing(TH1D* OUThist) {
 //     return ((1.0 + fkB * lin_scaled) / (1.0 + (fkB + vars.at(vDkB)) * lin_scaled)) * lin_scaled;
 // }
 
-double Esys::inv_scaling(double E) {
-    if (fKB == Vars.val(iKBp)) {
+double Esys::inv_scaling(const unsigned int idx, const double E) {
+    if (fKB.at(idx) == Vars.val(iKBp.at(idx))) {
         // Only linear scaling
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::inv_scaling]: Only linear scaling. E = " << E << ", fC = " << fC << std::endl;
         #endif
-        return E / fC;
+        return E / Vars.val(iKBp.at(iC));
     } else {
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::inv_scaling]: E = " << E << ", fC = " << fC << ", fKBp = " << fKBp << ", fKB = " << fKB << std::endl;
         #endif
-        return (Vars.val(iKBp) * E - 1.0 + std::sqrt((1.0 - Vars.val(iKBp) * E) * (1.0 - Vars.val(iKBp) * E) + 4.0 * fKB * E)) / (2.0 * fKB * Vars.val(iC));
+        return (Vars.val(iKBp.at(idx)) * E - 1.0 + std::sqrt((1.0 - Vars.val(iKBp.at(idx)) * E) * (1.0 - Vars.val(iKBp.at(idx)) * E) + 4.0 * fKB.at(idx) * E)) / (2.0 * fKB.at(idx) * Vars.val(iC.at(idx)));
     }
 }
 
-double Esys::integ_normal(double x1, double x2) {
+double Esys::integ_normal(const unsigned int idx, const double x1, const double x2) {
     return 0.5 * (std::erfc(x1 / std::sqrt(2.0)) - std::erfc(x2 / std::sqrt(2.0)));
 }

@@ -263,24 +263,23 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& v
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
 
     // Create fitter object
-    Fitter* antinuFitter = create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
+    Fitter antinuFitter = create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
 
-    double ll = antinuFitter->fit_models();
+    double ll = antinuFitter.fit_models();
     std::cout << "ll = " << ll <<std::endl;
 
     // Add spectra to list
-    antinuFitter->GetAllSpectra(spectra);
+    antinuFitter.GetAllSpectra(spectra);
 
     // Add data hist to list
-    spectra.push_back(antinuFitter->GetData());
+    spectra.push_back(antinuFitter.DataHist());
 
     // Record best fit variables
-    std::vector<FitVar*> Vars = antinuFitter->GetVars();
-    for (unsigned int i = 0; i < Vars.size(); ++i) {
-        vars.insert({Vars.at(i)->name(), Vars.at(i)->val()});
+    for (unsigned int i = 0; i < antinuFitter.GetVars().GetNumVars(); ++i) {
+        vars.insert({antinuFitter.GetVars().name(i), antinuFitter.GetVars().val(i)});
     }
 }
 

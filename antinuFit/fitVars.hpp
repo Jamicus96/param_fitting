@@ -1,15 +1,14 @@
 // header guard:
-#ifndef fitVar
-#define fitVar
+#ifndef fitVars
+#define fitVars
 
 // include
 #include <iostream>
 #include <TVectorD.h>
 
 
-class FitVars {
+class FitVars : Fitter {
     private:
-        static unsigned int numVars;
         static std::vector<std::string> parnames;
         static std::vector<double> values;
         static std::vector<double> vpriors;
@@ -24,7 +23,7 @@ class FitVars {
         FitVars() {numVars = 0;};
 
         // Member function
-        AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant = false) {
+        static void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant = false) {
             ++numVars;
             parnames.push_back(Parname);
             values.push_back(Value);
@@ -35,20 +34,10 @@ class FitVars {
             vhighs.push_back(Vhigh);
             holdConstants.push_back(HoldConstant);
 
-            if (holdConstant) verrs.at(numVars-1) = 0.0;
+            if (HoldConstant) verrs.at(numVars-1) = 0.0;
         };
 
-        void HoldConstant(bool isTrue) {
-            if (isTrue) {
-                holdConstant = true;  // This will tell us that it's held constant
-                verr = 0.0;  // This will tell Minuit to hold it constant
-            } else {
-                holdConstant = false;
-                verr = verr_copy;
-            }
-        };
-
-        unsigned int findIdx(const std::string Parname) {
+        static unsigned int findIdx(const std::string Parname) {
             for (unsigned int varIdx = 0; varIdx < numVars; ++varIdx) {
                 if (Parname == parnames.at(varIdx)) return varIdx;
             }
@@ -56,23 +45,34 @@ class FitVars {
             exit(1);
             return 0;
         };
-        unsigned int GetNumVars() {return numVars;};
-        std::string& name(unsigned int idx) {return parnames.at(idx);};
-        double& val(unsigned int idx) {return values.at(idx);};
-        double& prior(unsigned int idx) {return vpriors.at(idx);};
-        double& err(unsigned int idx) {return verrs.at(idx);};
-        double& min(unsigned int idx) {return vlows.at(idx);};
-        double& max(unsigned int idx) {return vhighs.at(idx);};
-        bool isConstant(unsigned int idx) {return holdConstants.at(idx);};
 
-        double& val(std::string Parname) {return values.at(this->findIdx(Parname));};
-        double& prior(std::string Parname) {return vpriors.at(this->findIdx(Parname));};
-        double& err(std::string Parname) {return verrs.at(this->findIdx(Parname));};
-        double& min(std::string Parname) {return vlows.at(this->findIdx(Parname));};
-        double& max(std::string Parname) {return vhighs.at(this->findIdx(Parname));};
-        bool isConstant(std::string Parname) {return holdConstants.at(this->findIdx(Parname));};
+        static void HoldConstant(const unsigned int idx, const bool isTrue) {
+            if (isTrue) {
+                holdConstant.at(idx) = true;  // This will tell us that it's held constant
+                verrs.at(idx) = 0.0;  // This will tell Minuit to hold it constant
+            } else {
+                holdConstant.at(idx) = false;
+                verrs.at(idx) = verr_copy.at(idx);
+            }
+        };
+        static unsigned int GetNumVars() {return numVars;};
+        static std::string& name(unsigned int idx) {return parnames.at(idx);};
+        static double& val(unsigned int idx) {return values.at(idx);};
+        static double& prior(unsigned int idx) {return vpriors.at(idx);};
+        static double& err(unsigned int idx) {return verrs.at(idx);};
+        static double& min(unsigned int idx) {return vlows.at(idx);};
+        static double& max(unsigned int idx) {return vhighs.at(idx);};
+        static bool isConstant(unsigned int idx) {return holdConstants.at(idx);};
 
-        void GetVarValues(Double_t* p) {
+        static void HoldConstant(const std::string Parname, const bool isTrue) {HoldConstant(findIdx(Parname), isTrue);};
+        static double& val(std::string Parname) {return val(findIdx(Parname));};
+        static double& prior(std::string Parname) {return prior(findIdx(Parname));};
+        static double& err(std::string Parname) {return err(findIdx(Parname));};
+        static double& min(std::string Parname) {return min(findIdx(Parname));};
+        static double& max(std::string Parname) {return max(findIdx(Parname));};
+        static bool isConstant(std::string Parname) {return isConstant(findIdx(Parname));};
+
+        static void GetVarValues(Double_t* p) {
             #ifdef SUPER_DEBUG
                 std::cout << "[FitVars::GetVarValues]: numVars = " << numVars << std::endl;
             #endif

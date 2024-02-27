@@ -1,6 +1,6 @@
 // header guard:
-#ifndef model
-#define model
+#ifndef models
+#define models
 
 // include
 #include <TVectorD.h>
@@ -14,24 +14,30 @@ class Model : Fitter {
     private:
 
     protected:
-        unsigned int model_idx;
+        std::string ModName;
+        TH1D* model_noEsys;
+        TH1D* model_Esys;
 
     public:
         // Constructors
-        Model(const Model& mod) {model_idx = mod.model_idx;};
-        Model() {};
-        Model(unsigned int ModIdx) {model_idx = ModIdx;};
+        Model() {++numMods;};
 
         // Member function
-        void SetModIdx(unsigned int ModIdx) {model_idx = ModIdx;};
-        virtual void compute_spec(Double_t* p) {};
+        void AddModel() {++numMods;};
+        void AddModel(std::string modName, TH1D* templateHist) {
+            model_noEsys = (TH1D*)(templateHist->Clone((modName + "::model_noEsys").c_str()));
+            model_Esys = (TH1D*)(templateHist->Clone((modName + "::model_Esys").c_str()));
+            ++numMods;
+        };
+        virtual void compute_spec() {};
         virtual void hold_osc_params_const(bool isTrue) {};
-        void Spectra(std::vector<TH1D*>& hists) {};
-
-        virtual void operator = (const Model& mod) {model_idx = mod.model_idx;};
+        virtual void Spectra(std::vector<TH1D*>& hists) {};
+        TH1D* GetModelNoEsys() {return model_noEsys;};
+        TH1D* GetModelEsys() {return model_noEsys;};
+        std::string& GetName() {return ModName;};
 
         // Destructor
-        virtual ~Model() {};
+       virtual ~Model() {delete model_noEsys; delete model_Esys;};
 };
 
 //end header guard

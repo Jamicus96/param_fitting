@@ -9,15 +9,18 @@
 #include <TH2.h>
 #include <TMath.h>
 #include <RAT/DB.hh>
+#include "fitter.hpp"
 #include "model.hpp"
-#include "fitVar.hpp"
+#include "fitVars.hpp"
 #include "E_systematics.hpp"
 
-class Reactor: public Model {
+class Reactor : public Model {
     private:
+        std::string ModName = "Reactor";
         // Indices pointing to variables
         unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2, iTotNorm;
         std::vector<unsigned int> iNorms;
+        unsigned int iEsys;
 
         // Initial oscillation parameters that only depend on
         // Dm_21^2, Dm_32^2, s_12^2, s_13^2 and electron density
@@ -27,7 +30,7 @@ class Reactor: public Model {
         double Y_ee_vac;
 
         // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-        static constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
+        constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
 
         // Computed oscillation paramters depending only on E [MeV], but not on L [km]
         std::vector<double> eigen;  // Antinu propagation Hamiltonian eigenvalues
@@ -51,16 +54,18 @@ class Reactor: public Model {
 
     public:
         // Constructors
-        Reactor() {};
-        Reactor(const Reactor& mod);
-        void operator = (const Reactor& mod);
         Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
                 const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
                 const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB);
-        Reactor(const unsigned int ModIdx, const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
-                const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
-                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) : Reactor(ModIdx, Dm21_2_idx,
-                Dm32_2_idx, s12_2_idx, s13_2_idx, norms_idx, totNorm_idx, Esys_idx, Reactor_hists, E_conv_hist, Reactor_names, DB) {model_idx = ModIdx;};
+        
+        Reactor(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
+                const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
+                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+            std::vector<unsigned int>& norms_idx;
+            for (unsigned int i = 0; i < norms_names.size(); ++i) norms_idx.push_back(Vars.findIdx(norms_idx.at(i)));
+            Reactor(Vars.findIdx(Dm21_2_name), Vars.findIdx(Dm32_2_name), Vars.findIdx(s12_2_name), Vars.findIdx(s13_2_name), norms_idx,
+                    Vars.findIdx(totNorm_name), Esysts.findIdx(Esys_name), Reactor_hists, E_conv_hist, Reactor_names, DB);
+        };
 
         // Member function
         void compute_unosc_integrals();
@@ -69,11 +74,11 @@ class Reactor: public Model {
         void re_compute_consts(const double& E);
         double survival_prob(const double& E, const double& L);
         void compute_baselines();
-        void hold_osc_params_const(bool isTrue);
+        void hold_osc_params_const(const bool isTrue);
 
-        void compute_spec(Double_t* p);
+        void compute_spec();
 
-        std::vector<std::string>& GetReactorNames();
+        std::vector<std::string>& GetReactorNames() {return reactor_names;};
         void Spectra(std::vector<TH1D*>& hists);
     
         // Destructor

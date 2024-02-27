@@ -9,9 +9,12 @@
 #include <TH1.h>
 #include <iostream>
 #include <algorithm>
-#include "fitVar.hpp"
+#include "fitVars.hpp"
+#include "E_systematics.hpp"
 #include "model.hpp"
-
+#include "model_Reactor.hpp"
+#include "model_alphaN.hpp"
+#include "model_geoNu.hpp"
 
 class Fitter {
     private:
@@ -20,15 +23,8 @@ class Fitter {
 
         static Double_t* var_bestFits;
         static double* var_bestFit_errs;
-        static unsigned int numVars;
 
-        static std::vector<Esys*> Esysts;
-        static unsigned int numEsysts;
-
-        static std::vector<Model*> models;
-        static unsigned int numModels;
-
-        static TH1D data, tot_fitModel;
+        static TH1D* data, tot_fitModel;
         static unsigned int numBins;
 
         // For minuit
@@ -37,33 +33,33 @@ class Fitter {
 
     protected:
         static FitVars Vars;
+        static Esys Esysts;
+        static std::vector<Model*> Mods;
         static std::vector<TH1D*> hists;
+
+        static unsigned int numVars;
+        static unsigned int numEsysts;
+        static unsigned int numMods;
+        static unsigned int numHists;
 
     public:
         // Constructors
         Fitter();
         Fitter(TH1D& Data) {data = Data;};
 
-        // Constructing functions function
-        void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant = false) {
-            Vars.AddVar(Parname, Value, Verr, Vlow, Vhigh, HoldConstant);
+        // Adding models
+        void AddReactorMod(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
+                           const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
+                           const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+            Mods.push_back(new Reactor(Dm21_2_name, Dm32_2_name, s12_2_name, s13_2_name, norms_names, totNorm_name, Esys_name, Reactor_hists, E_conv_hist, Reactor_names, DB));
+        };
+        void AddAlphaNMod(const std::string NormGS_name, const std::string NormES_name, const std::string E_syst_name,
+                          const std::string E_syst_proton_name, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
+            Mods.push_back(new alphaN(NormGS_name, NormES_name, E_syst_name, E_syst_proton_name, Hist_ProtontR, Hist_C12Scatter, Hist_O16Deex));
+        };
+        void AddGeoNuMod(const std::string NormTh_name, const std::string NormU_name, const std::string vS_12_2_name, const std::string vS_13_2_name, const std::string E_syst_name, TH1D* Hist_Th, TH1D* Hist_U) {
+            Mods.push_back(new geoNu(NormTh_name, NormU_name, vS_12_2_name, vS_13_2_name, E_syst_name, Hist_Th, Hist_U));
         }
-        void AddEsys(const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx) {
-            Esysts.push_back(new Esys(numEsysts, kB, linScale_idx, kBp_idx, sigPerRootE_idx));
-            ++numEsysts;
-        };
-        void AddEsys(const double kB, const std::string linScale_name, const std::string kBp_name, const std::string sigPerRootE_name) {
-            Esysts.push_back(new Esys(numEsysts, kB, Vars.findIdx(linScale_name), Vars.findIdx(kBp_name), Vars.findIdx(sigPerRootE_name)));
-            ++numEsysts;
-        };
-
-        void AddModel() {models.push_back(new Model(numModels)); ++numModels;};
-        void AddReactorModel(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
-                             const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
-                             const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
-            models.push_back(new Reactor(numModels, Dm21_2_idx, Dm32_2_idx, s12_2_idx, s13_2_idx, norms_idx, totNorm_idx, Esys_idx, Reactor_hists, E_conv_hist, Reactor_names, DB));
-            ++numModels;
-        };
 
         // Fitting functions
         static double fit_models();
@@ -76,13 +72,15 @@ class Fitter {
         static double GetFitParError(const unsigned int parIdx) {return minuit->GetParError(parIdx);};
         static double GetFitCovarianceMatrixElement(const unsigned int i, const unsigned int j) {return minuit->GetCovarianceMatrixElement(i, j);};
 
-        static double ExtendedConstrainedLogLikelihood(Double_t* p);
+        static double ExtendedConstrainedLogLikelihood();
 
         // Get info functions
         void GetAllSpectra(std::vector<TH1D*>& hists);
         static FitVars& GetVars() {return Vars;};
-        static std::vector<Model*>& GetModels() {return models;};
-        static TH1D& GetData() {return data;};
+        static Esys& GetEsysts() {return Esysts;};
+        static std::vector<Model*>& GetModels() {return Mods;};
+        static TH1D* DataHist() {return data;};
+        static SetData(TH1D* Data) {data = Data;};
         static std::vector<TH1D*>& GetHists() {return hists;};
 
         // Destructor

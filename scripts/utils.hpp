@@ -26,7 +26,7 @@
 #include "model_Reactor.hpp"
 
 
-Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db);
+Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
@@ -72,7 +72,7 @@ double kB_err_P = 0.004;        // Error in kB_P for proton recoils (not fractio
  * @param db 
  * @return Fitter* 
  */
-Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db) {
+Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
     std::vector<TH1D*> reactor_hists;
@@ -81,42 +81,41 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
     TH2D E_conv;
     read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, E_conv);
 
+    /* ~~~~~~~~ INITIALISE ~~~~~~~~ */
+
+    Fitter antinuFitter = Fitter();
+
     /* ~~~~~~~~ OSCILLATION CONSTANTS ~~~~~~~~ */
 
-    // Create oscillation variables
-    FitVar* vDm21_2 = new FitVar("deltamsqr21", Dm21_2, 0, Dm21_2, Dm21_2);
-    FitVar* vDm32_2 = new FitVar("deltamsqr32", Dm32_2, 0, Dm32_2, Dm32_2);
-    FitVar* vS_12_2 = new FitVar("sinsqrtheta12", s_12_2, 0, s_12_2, s_12_2);
-    FitVar* vS_13_2 = new FitVar("sinsqrtheta13", s_13_2, 0, s_13_2, s_13_2);
-
-    vDm21_2->HoldConstant(true);
-    vDm32_2->HoldConstant(true);
-    vS_12_2->HoldConstant(true);
-    vS_13_2->HoldConstant(true);
+    // Add oscillation variables
+    antinuFitter.GetVars().AddVar("deltamsqr21", Dm21_2, 0, Dm21_2, Dm21_2, true);
+    antinuFitter.GetVars().AddVar("deltamsqr32", Dm32_2, 0, Dm32_2, Dm32_2, true);
+    antinuFitter.GetVars().AddVar("sinsqrtheta12", s_12_2, 0, s_12_2, s_12_2, true);
+    antinuFitter.GetVars().AddVar("sinsqrtheta13", s_13_2, 0, s_13_2, s_13_2, true);
 
 
     /* ~~~~~~~~ ENERGY SYSTEMATICS ~~~~~~~~ */
 
-    // Beta variables
+    // Add beta variables
     double linScale_min = 1.0 - 3.0 * linScale_err;
     double kBp_min = kB - 3.0 * kB_err;
     if (linScale_min < 0.0) linScale_min = 0.0;
     if (kBp_min < 0.0) kBp_min = 0.0;
-    FitVar* linScale = new FitVar("linScale", 1.0, linScale_err, linScale_min, 1.0 + 3.0 * linScale_err);
-    FitVar* kBp = new FitVar("kBp", kB, kB_err, kBp_min, kB + 3.0 * kB_err);
+    antinuFitter.GetVars().AddVar("linScale", 1.0, linScale_err, linScale_min, 1.0 + 3.0 * linScale_err);
+    antinuFitter.GetVars().AddVar("kBp", kB, kB_err, kBp_min, kB + 3.0 * kB_err);
 
-    // Proton variables (linear scaling is the same, but independent)
+    // Add proton variables (linear scaling is the same, but independent)
     double kBp_P_min = kB_P - 3.0 * kB_err_P;  // same error, but different Birk's constant
     if (kBp_P_min < 0.0) kBp_P_min = 0.0;
-    FitVar* linScale_P = new FitVar("linScale_P", 1.0, linScale_err, linScale_min, 1.0 + 3.0 * linScale_err);
-    FitVar* kBp_P = new FitVar("kBp_P", kB_P, kB_err_P, kBp_P_min, kB_P + 3.0 * kB_err_P);
+    antinuFitter.GetVars().AddVar("linScale_P", 1.0, linScale_err, linScale_min, 1.0 + 3.0 * linScale_err);
+    antinuFitter.GetVars().AddVar("kBp_P", kB_P, kB_err_P, kBp_P_min, kB_P + 3.0 * kB_err_P);
 
-    // Smearing variable (same for all, allow to be negative, absolute value taken in calculations)
-    FitVar* smearSigmaSqrtE = new FitVar("sigPerSqrtE", 0.0, sigPerSqrtE, -3.0 * sigPerSqrtE, 3.0 * sigPerSqrtE);
+    // Add smearing variable (same for all, allow to be negative, absolute value taken in calculations)
+    antinuFitter.GetVars().AddVar("sigPerSqrtE", 0.0, sigPerSqrtE, -3.0 * sigPerSqrtE, 3.0 * sigPerSqrtE);
 
-    // Create energy systamtics objects (beta and proton)
-    Esys* E_system = new Esys(kB, linScale, kBp, smearSigmaSqrtE);
-    Esys* E_system_P = new Esys(kB_P, linScale_P, kBp_P, smearSigmaSqrtE);
+    // Add energy systamtics objects (beta and proton), and link them to variables above
+    antinuFitter.GetEsysts().AddEsys("EsysBeta", kB, "linScale", "kBp", "sigPerSqrtE");
+    antinuFitter.GetEsysts().AddEsys("EsysProton", kB, "linScale_P", "kBp_P", "sigPerSqrtE");
 
 
     /* ~~~~~~~~ GEO-NU ~~~~~~~~ */
@@ -131,13 +130,14 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
     double geoNuNorm_frac_min = 1.0 - 3.0 * geoNu_err;
     if (geoNuNorm_frac_min < 0.0) geoNuNorm_frac_min = 0.0;
     
-    FitVar* geoNuNormTh = new FitVar("geoNuNorm_Th", N_geoNu * geoNu_hist_fracs.at(0), geoNu_err * N_geoNu * geoNu_hist_fracs.at(0),
-                       geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(0), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(0));
-    FitVar* geoNuNormU = new FitVar("geoNuNorm_U", N_geoNu * geoNu_hist_fracs.at(1), geoNu_err * N_geoNu * geoNu_hist_fracs.at(1),
-                       geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(1), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(1));
+    antinuFitter.GetVars().AddVar("geoNuNorm_Th", N_geoNu * geoNu_hist_fracs.at(0), geoNu_err * N_geoNu * geoNu_hist_fracs.at(0),
+                                  geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(0), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(0));
+    antinuFitter.GetVars().AddVar("geoNuNorm_U", N_geoNu * geoNu_hist_fracs.at(1), geoNu_err * N_geoNu * geoNu_hist_fracs.at(1),
+                                  geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(1), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(1));
 
-    geoNu* geoNuMod = new geoNu(geoNuNormTh, geoNuNormU, vS_12_2, vS_13_2, E_system, geoNu_hists.at(geoNu_hist_idx.at(0)), geoNu_hists.at(geoNu_hist_idx.at(1)));
-    geoNuMod->hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
+    // Add geo-nu model, linking it to approproate variables and E-systematics defined above
+    antinuFitter.AddGeoNuMod("geoNuNorm_Th", "geoNuNorm_U", "sinsqrtheta12", "sinsqrtheta13", "EsysBeta", geoNu_hists.at(geoNu_hist_idx.at(0)), geoNu_hists.at(geoNu_hist_idx.at(1)));
+    antinuFitter.GetModels().at(0)->hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
 
 
     /* ~~~~~~~~ ALPHA-N ~~~~~~~~ */
@@ -156,15 +156,16 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
     double ES_Norm_min = (1.0 - 3.0 * alphaN_err_ES) * N_alphaN * ES_frac;
     if (ES_Norm_min < 0.0) ES_Norm_min = 0.0;
 
-    FitVar* alphaNNorm_GS = new FitVar("alphaNNorm_GS", N_alphaN * GS_frac, alphaN_err_GS * N_alphaN * GS_frac, GS_Norm_min, (1.0 + 3.0 * alphaN_err_GS) * N_alphaN * GS_frac);
-    FitVar* alphaNNorm_ES = new FitVar("alphaNNorm_ES", N_alphaN * ES_frac, alphaN_err_ES * N_alphaN * ES_frac, ES_Norm_min, (1.0 + 3.0 * alphaN_err_ES) * N_alphaN * ES_frac);
+    antinuFitter.GetVars().AddVar("alphaNNorm_GS", N_alphaN * GS_frac, alphaN_err_GS * N_alphaN * GS_frac, GS_Norm_min, (1.0 + 3.0 * alphaN_err_GS) * N_alphaN * GS_frac);
+    antinuFitter.GetVars().AddVar("alphaNNorm_ES", N_alphaN * ES_frac, alphaN_err_ES * N_alphaN * ES_frac, ES_Norm_min, (1.0 + 3.0 * alphaN_err_ES) * N_alphaN * ES_frac);
 
     for (unsigned int i = 0; i < 3; ++i) {
         std::cout << "alphaN_hists.at(" << i << ")->GetName() = " << alphaN_hists.at(i)->GetName() << std::endl;
         std::cout << "alphaN_hists.at(" << i << ")->Integral()  = " << alphaN_hists.at(i)->Integral() << std::endl;
     }
 
-    alphaN* alphaNMod = new alphaN(alphaNNorm_GS, alphaNNorm_ES, E_system, E_system_P, alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
+    // Add alpha-n model, linking it to approproate variables and E-systematics defined above
+    antinuFitter.AddAlphaNMod("alphaNNorm_GS", "alphaNNorm_ES", "EsysBeta", "EsysProton", alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
 
     /* ~~~~~~~~ REACTOR-NU ~~~~~~~~ */
 
@@ -173,7 +174,7 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
 
     std::vector<double> reac_hist_fracs;
     compute_reac_unosc_fracs(reactor_hists, reactor_names, reac_hist_fracs);
-    std::vector<FitVar*> ReactorNorms;
+    std::vector<std::string> ReactorNorms_VarNames;
     double reacNorm;
     double reacLowLim;
     for (unsigned int i = 0; i < reac_hist_fracs.size(); ++i) {
@@ -181,15 +182,18 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
         reacNorm = reac_hist_fracs.at(i) * N_IBD;
         reacLowLim = (1.0 - 3.0 * IBD_err_indiv) * reacNorm;
         if (reacLowLim < 0.0) reacLowLim = 0.0;
-        ReactorNorms.push_back(new FitVar(reactor_names.at(i).c_str(), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm));
+        antinuFitter.GetVars().AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm);
+        ReactorNorms_VarNames.push_back("reactorNorm_" + reactor_names.at(i));
     }
     // Extra overall normalisation (= 1), to add shared unceetainties 
     reacLowLim = 1.0 - 3.0 * IBD_err_tot;
     if (reacLowLim < 0.0) reacLowLim = 0.0;
-    FitVar* totNorm = new FitVar("reactor_totNorm", 1.0, IBD_err_tot, reacLowLim, 1.0 + 3.0 * IBD_err_tot);
+    antinuFitter.GetVars().AddVar("reactorNorm_tot", 1.0, IBD_err_tot, reacLowLim, 1.0 + 3.0 * IBD_err_tot);
 
-    Reactor* ReactorMod = new Reactor(vDm21_2, vDm32_2, vS_12_2, vS_13_2, reactor_hists, &E_conv, reactor_names, ReactorNorms, totNorm, E_system, db);
-    ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+    // Add reactor model, linking it to approproate variables and E-systematics defined above
+    antinuFitter.AddReactorMod("deltamsqr21", "deltamsqr32", "sinsqrtheta12", "sinsqrtheta13", ReactorNorms_VarNames,
+                               "reactorNorm_tot", "EsysBeta", reactor_hists, &E_conv, reactor_names, ReactorNorms, totNorm, db);
+    antinuFitter.GetModels().at(2)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
     /* ~~~~~~~~ AZIMOV DATASET ~~~~~~~~ */
@@ -197,9 +201,7 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
     // Make fake dataset out of PDF hists (same function called to make PDFs)
     std::cout << "Creating fake dataset..." << std::endl;
     std::vector<TH1D*> hists;
-    ReactorMod->Spectra(hists);
-    alphaNMod->Spectra(hists);
-    geoNuMod->Spectra(hists);
+    antinuFitter.GetAllSpectra(hists);
     
     TH1D* data = (TH1D*)hists.at(0)->Clone("data");
     data->SetTitle("Azimov Dataset");
@@ -234,24 +236,9 @@ Fitter* create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
 
     std::cout << "data integral = " << data->Integral() << std::endl;
 
+    // Add Azimov dataset as data
+    antinuFitter.SetData(data);
 
-    /* ~~~~~~~~ SUBMIT FITTING ~~~~~~~~ */
-
-    // Package variables and models together, and pass to fitter (just use ReactorNorms vector)
-    ReactorNorms.push_back(totNorm);
-    ReactorNorms.push_back(alphaNNorm_GS); ReactorNorms.push_back(alphaNNorm_ES);
-    ReactorNorms.push_back(geoNuNormTh); ReactorNorms.push_back(geoNuNormU);
-
-    ReactorNorms.push_back(vDm21_2); ReactorNorms.push_back(vDm32_2);
-    ReactorNorms.push_back(vS_12_2); ReactorNorms.push_back(vS_13_2);
-
-    ReactorNorms.push_back(linScale); ReactorNorms.push_back(kBp);
-    ReactorNorms.push_back(linScale_P); ReactorNorms.push_back(kBp_P);
-    ReactorNorms.push_back(smearSigmaSqrtE);
-
-    std::vector<Model*> models = {geoNuMod, ReactorMod, alphaNMod};
-
-    Fitter* antinuFitter = new Fitter(data, ReactorNorms, models);
 
     return antinuFitter;
 }

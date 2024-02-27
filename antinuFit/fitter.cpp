@@ -5,19 +5,24 @@
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
 
-std::vector<FitVar*> Fitter::variables;
 Double_t* Fitter::var_bestFits;
 double* Fitter::var_bestFit_errs;
-unsigned int Fitter::numVars;
-
-std::vector<Model*> Fitter::models;
-unsigned int Fitter::numModels;
 
 TH1D* Fitter::data, *Fitter::tot_fitModel;
 unsigned int Fitter::numBins;
 
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
+
+FitVars Fitter::Vars;
+Esys Fitter::Esysts;
+std::vector<Model*> Fitter::Mods;
+std::vector<TH1D*> Fitter::hists;
+
+unsigned int Fitter::numVars;
+unsigned int Fitter::numEsysts;
+unsigned int Fitter::numMods;
+unsigned int Fitter::numHists;
 
 
 Fitter::Fitter(TH1D& Data) {
@@ -54,19 +59,20 @@ Double_t Fitter::fitFunc(Double_t* p) {
     tot_fitModel->Reset("ICES");
 
     // Compute the total spectrum from all the models, using parameters p
-    for (unsigned int iModel = 0; iModel < numModels; ++iModel) {
-        models.at(iModel)->compute_spec(p);
-        tot_fitModel->Add(models.at(iModel)->Spectrum());
+    Vars.GetVarValues(p);
+    for (unsigned int iModel = 0; iModel < numMods; ++iModel) {
+        Mods.at(iModel)->compute_spec();
+        tot_fitModel->Add(Mods.at(iModel)->GetModelEsys());
         #ifdef SUPER_DEBUG
             std::cout << "[Fitter::fitFunc]: Added model " << iModel << ", tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
         #endif
     }
 
     // Compute test statistic (minus, since minuit minizes, but we want max)
-    return - ExtendedConstrainedLogLikelihood(p);
+    return - ExtendedConstrainedLogLikelihood();
 }
 
-double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
+double Fitter::ExtendedConstrainedLogLikelihood() {
     // Model PDFs have already been scaled by their respective norms, and added together
     // Assume data and models have the same binning (could generalise at some point)
     double logL = - tot_fitModel->Integral();
@@ -80,9 +86,9 @@ double Fitter::ExtendedConstrainedLogLikelihood(Double_t* p) {
     // Add in constraints
     for (unsigned int iVar = 0; iVar < numVars; ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
-        if (!(variables.at(iVar)->isConstant())) {
+        if (!Vars.isConstant(iVar)) {
             // Add gaussian constraint
-            logL -= 0.5 * (p[iVar] - variables.at(iVar)->prior())*(p[iVar] - variables.at(iVar)->prior()) / (variables.at(iVar)->err()*variables.at(iVar)->err());
+            logL -= 0.5 * (Vars.val(iVar) - Vars.val.prior(iVar))*(Vars.val(iVar) - Vars.val.prior(iVar)) / (Vars.err(iVar)*Vars.err(iVar));
         }
     }
     #ifdef SUPER_DEBUG
@@ -109,18 +115,18 @@ double Fitter::fit_models() {
 }
 
 void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
-    TH1D* total_hist = (TH1D*)(models.at(0)->Spectrum()->Clone("Total_Model_Spectrum"));
+    TH1D* total_hist = (TH1D*)(Mods.at(0)->Spectrum()->Clone("Total_Model_Spectrum"));
     total_hist->SetTitle("Total Model Spectrum");
-    for (unsigned int iModel = 0; iModel < numModels; ++iModel) {
+    for (unsigned int iModel = 0; iModel < numMods; ++iModel) {
         // Add total spectra
-        hists.push_back((TH1D*)(models.at(iModel)->Spectrum()->Clone()));
-        hists.at(hists.size()-1)->Add(models.at(iModel)->Spectrum());
+        hists.push_back((TH1D*)(Mods.at(iModel)->Spectrum()->Clone()));
+        hists.at(hists.size()-1)->Add(Mods.at(iModel)->Spectrum());
 
         // Add to total overall specrtrum
         total_hist->Add(hists.at(hists.size()-1));
 
         // Add constituent spectra
-        models.at(iModel)->Spectra(hists);
+        Mods.at(iModel)->Spectra(hists);
     }
     hists.push_back(total_hist);
 }
