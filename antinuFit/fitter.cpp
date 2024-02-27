@@ -22,7 +22,7 @@ std::vector<bool> FitVars::holdConstants;
 
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
-TH1D* Fitter::data, *Fitter::tot_fitModel;
+TH1D *Fitter::data, *Fitter::tot_fitModel;
 unsigned int Fitter::numBins;
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
@@ -30,15 +30,12 @@ FitVars Fitter::Vars;
 Esys Fitter::Esysts;
 std::vector<Model*> Fitter::Mods;
 unsigned int Fitter::numMods;
+bool Fitter::dataIsSet = false;
 
 
-Fitter::Fitter(TH1D& Data) {
+Fitter::Fitter(TH1D* Data) {
 
-    data = Data;
-    numBins = data.GetXaxis()->GetNbins();
-    tot_fitModel = (TH1D*)(data.Clone());
-    tot_fitModel->SetName("tot_fit_model");
-    tot_fitModel->SetTitle("Total Fit Spectrum");
+    SetData(Data);
 
     //The default minimizer is Minuit, you can also try Minuit2
     // TVirtualFitter::SetDefaultFitter("Minuit2");
@@ -59,7 +56,20 @@ Fitter::Fitter(TH1D& Data) {
 
 Fitter::Fitter() {}
 
+void Fitter::SetData(TH1D* Data) {
+    data = Data;
+    numBins = data->GetXaxis()->GetNbins();
+    tot_fitModel = (TH1D*)(data->Clone());
+    tot_fitModel->SetName("tot_fit_model");
+    tot_fitModel->SetTitle("Total Fit Spectrum");
+    dataIsSet = true;
+}
+
 Double_t Fitter::fitFunc(Double_t* p) {
+    if (!dataIsSet || numMods == 0) {
+        std::cout << "Attempting to perform fit with no models or no data!" << std::endl;
+        exit(1);
+    }
     // Reset total model spectrum to zero
     tot_fitModel->Reset("ICES");
 
@@ -89,11 +99,11 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
     #endif
 
     // Add in constraints
-    for (unsigned int iVar = 0; iVar < numVars; ++ iVar) {
+    for (unsigned int iVar = 0; iVar < Vars.GetNumVars(); ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
         if (!Vars.isConstant(iVar)) {
             // Add gaussian constraint
-            logL -= 0.5 * (Vars.val(iVar) - Vars.val.prior(iVar))*(Vars.val(iVar) - Vars.val.prior(iVar)) / (Vars.err(iVar)*Vars.err(iVar));
+            logL -= 0.5 * (Vars.val(iVar) - Vars.prior(iVar))*(Vars.val(iVar) - Vars.prior(iVar)) / (Vars.err(iVar)*Vars.err(iVar));
         }
     }
     #ifdef SUPER_DEBUG
@@ -120,12 +130,12 @@ double Fitter::fit_models() {
 }
 
 void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
-    TH1D* total_hist = (TH1D*)(Mods.at(0)->Spectrum()->Clone("Total_Model_Spectrum"));
+    TH1D* total_hist = (TH1D*)(Mods.at(0)->GetModelEsys()->Clone("Total_Model_Spectrum"));
     total_hist->SetTitle("Total Model Spectrum");
     for (unsigned int iModel = 0; iModel < numMods; ++iModel) {
         // Add total spectra
-        hists.push_back((TH1D*)(Mods.at(iModel)->Spectrum()->Clone()));
-        hists.at(hists.size()-1)->Add(Mods.at(iModel)->Spectrum());
+        hists.push_back((TH1D*)(Mods.at(iModel)->GetModelEsys()->Clone()));
+        hists.at(hists.size()-1)->Add(Mods.at(iModel)->GetModelEsys());
 
         // Add to total overall specrtrum
         total_hist->Add(hists.at(hists.size()-1));

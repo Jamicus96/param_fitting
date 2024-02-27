@@ -20,23 +20,23 @@ alphaN::alphaN(const unsigned int NormGS_idx, const unsigned int NormES_idx, con
 
 // Member function
 void alphaN::compute_spec() {
-    models_noEsys.at(modIdx)->Reset("ICES");  // empty it before re-computing it
+    model_noEsys->Reset("ICES");  // empty it before re-computing it
     model_Proton->Reset("ICES");  // empty it before re-computing it
-    models_Esys.at(modIdx)->Reset("ICES");  // empty it before re-computing it
+    model_Esys->Reset("ICES");  // empty it before re-computing it
 
     // Add the non proton-recoil spectra to spectrum
-    models_noEsys.at(modIdx)->Add(hist_C12Scatter, Vars.val(iNormGS) / Integral_hist_GS);
-    models_noEsys.at(modIdx)->Add(hist_O16Deex, Vars.val(iNormES) / Integral_hist_ES);
+    model_noEsys->Add(hist_C12Scatter, Vars.val(iNormGS) / Integral_hist_GS);
+    model_noEsys->Add(hist_O16Deex, Vars.val(iNormES) / Integral_hist_ES);
 
     // Apply Normal (beta) energy systematics (adds stuff to model_spec_sys, doesn't reset it)
-    Esysts.apply_systematics(iEsys, models_noEsys.at(modIdx), models_Esys.at(modIdx));
+    Esysts.apply_systematics(iEsys, model_noEsys, model_Esys);
 
     // Add proton recoil to spectrum, and its own spectrum, to apply proton systematics separately
     model_Proton->Add(hist_ProtontR, Vars.val(iNormGS) / Integral_hist_GS);
-    // models_noEsys.at(modIdx)->Add(model_Proton);
+    // model_noEsys->Add(model_Proton);
 
     // Apply Proton energy systematics
-    Esysts.apply_systematics(iEsysP, model_Proton, models_Esys.at(modIdx));
+    Esysts.apply_systematics(iEsysP, model_Proton, model_Esys);
 }
 
 void alphaN::Spectra(std::vector<TH1D*>& hists) {

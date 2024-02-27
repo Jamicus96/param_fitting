@@ -220,7 +220,7 @@ void Reactor::hold_osc_params_const(const bool isTrue) {
             std::cout << "[Reactor::hold_osc_params_const]: NOT holding oscillation parameters constant" << std::endl;
         #endif
         computed_osc_specs = false;
-    } else if (Vars.isConstant(iDm_21_2) && Vars.isConstant(iDm_32_2) && Vars.isConstant(iS_12_2) && Vars.isConstant()) {
+    } else if (Vars.isConstant(iDm_21_2) && Vars.isConstant(iDm_32_2) && Vars.isConstant(iS_12_2) && Vars.isConstant(iS_13_2)) {
         #ifdef DEBUG
             std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
         #endif

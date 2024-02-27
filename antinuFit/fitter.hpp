@@ -21,12 +21,14 @@ class Fitter {
         static TVirtualFitter* minuit;
         static double arglist[2];
 
-        static TH1D* data, tot_fitModel;
+        static TH1D *data, *tot_fitModel;
         static unsigned int numBins;
 
         // For minuit
         static double minfuncOut, edm, errdef;
         static int nvpar, nparx;
+
+        static bool dataIsSet;
 
     protected:
         static FitVars Vars;
@@ -37,7 +39,7 @@ class Fitter {
     public:
         // Constructors
         Fitter();
-        Fitter(TH1D* Data) {data = Data;};
+        Fitter(TH1D* Data);
 
         // Adding models
         void AddReactorMod(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
@@ -75,7 +77,7 @@ class Fitter {
         static Esys& GetEsysts() {return Esysts;};
         static std::vector<Model*>& GetModels() {return Mods;};
         static TH1D* DataHist() {return data;};
-        static void SetData(TH1D* Data) {data = Data;};
+        static void SetData(TH1D* Data);
 
         // Destructor
         ~Fitter() {};

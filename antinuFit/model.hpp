@@ -6,7 +6,8 @@
 #include <TVectorD.h>
 #include <iostream>
 #include <TH1.h>
-#include "fitter.hpp"
+#include "fitVars.hpp"
+#include "E_systematics.hpp"
 
 // #define SUPER_DEBUG
 

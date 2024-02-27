@@ -18,7 +18,7 @@
 #include <map>
 
 #include "fitter.hpp"
-#include "fitVar.hpp"
+#include "fitVars.hpp"
 #include "E_systematics.hpp"
 #include "model.hpp"
 #include "model_alphaN.hpp"
@@ -26,7 +26,7 @@
 #include "model_Reactor.hpp"
 
 
-Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db);
+void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
@@ -70,9 +70,8 @@ double kB_err_P = 0.004;        // Error in kB_P for proton recoils (not fractio
  * @param s_12_2 
  * @param s_13_2 
  * @param db 
- * @return Fitter* 
  */
-Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db) {
+void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
     std::vector<TH1D*> reactor_hists;
@@ -192,7 +191,7 @@ Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
 
     // Add reactor model, linking it to approproate variables and E-systematics defined above
     antinuFitter.AddReactorMod("deltamsqr21", "deltamsqr32", "sinsqrtheta12", "sinsqrtheta13", ReactorNorms_VarNames,
-                               "reactorNorm_tot", "EsysBeta", reactor_hists, &E_conv, reactor_names, ReactorNorms, totNorm, db);
+                               "reactorNorm_tot", "EsysBeta", reactor_hists, &E_conv, reactor_names, db);
     antinuFitter.GetModels().at(2)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
@@ -238,9 +237,6 @@ Fitter& create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, do
 
     // Add Azimov dataset as data
     antinuFitter.SetData(data);
-
-
-    return antinuFitter;
 }
 
 

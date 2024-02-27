@@ -22,7 +22,7 @@
 #include <TLatex.h>
 
 #include "fitter.hpp"
-#include "fitVar.hpp"
+#include "fitVars.hpp"
 #include "E_systematics.hpp"
 #include "model.hpp"
 #include "model_alphaN.hpp"
@@ -263,7 +263,8 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& v
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
 
     // Create fitter object
-    Fitter antinuFitter = create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
+    create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
+    Fitter antinuFitter = Fitter();
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
