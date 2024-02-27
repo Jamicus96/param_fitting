@@ -1,7 +1,5 @@
 #include "model_geoNu.hpp"
 
-FitVars Fitter::Vars;
-Esys Fitter::Esysts;
 
 
 geoNu::geoNu(const unsigned int NormTh_idx, const unsigned int NormU_idx, const unsigned int vS_12_2_idx,

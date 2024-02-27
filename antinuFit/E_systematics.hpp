@@ -24,10 +24,11 @@ class Esys {
         static std::vector<unsigned int> iNumBins;
         static TH1D* tempHist;
         static std::vector<bool> bIsInit;
+        static FitVars Vars;
 
     public:
         // Constructors
-        Esys() {numEsysts = 0;};
+        Esys() {};
         static void AddEsys(const std::string name, const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx);
         static void AddEsys(const std::string name, const double kB, const std::string linScale_name, const std::string kBp_name, const std::string sigPerRootE_name) {
             AddEsys(name, kB, Vars.findIdx(linScale_name), Vars.findIdx(kBp_name), Vars.findIdx(sigPerRootE_name));

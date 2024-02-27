@@ -7,7 +7,7 @@
 #include <TVectorD.h>
 
 
-class FitVars : Fitter {
+class FitVars {
     private:
         static unsigned int numVars;
         static std::vector<std::string> parnames;
@@ -21,7 +21,7 @@ class FitVars : Fitter {
 
     public:
         // Constructors
-        FitVars() {numVars = 0;};
+        FitVars() {};
 
         // Member function
         static void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant = false) {

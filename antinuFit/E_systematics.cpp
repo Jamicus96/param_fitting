@@ -1,21 +1,6 @@
 #include "E_systematics.hpp"
 
 
-FitVars Fitter::Vars;
-std::vector<TH1D*> Fitter::hists;
-
-unsigned int Esys::numEsysts;
-
-std::vector<std::string> Esys::names;
-std::vector<unsigned int> Esys::iC, Esys::iKBp, Esys::iSigPerRootE;
-std::vector<double> Esys::fKB;
-
-// Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
-std::vector<double> Esys::fEmin, Esys::fDE, Esys::fEratio;
-std::vector<unsigned int> Esys::iNumBins;
-TH1D* Esys::tempHist;
-std::vector<bool> Esys::bIsInit;
-
 
 void Esys::AddEsys(const std::string name, const double kB, const unsigned int linScale_idx, const unsigned int kBp_idx, const unsigned int sigPerRootE_idx) {
     ++numEsysts;

@@ -17,6 +17,8 @@ class Model {
         std::string ModName;
         TH1D* model_noEsys;
         TH1D* model_Esys;
+        FitVars Vars;
+        Esys Esysts;
 
     public:
         // Constructors

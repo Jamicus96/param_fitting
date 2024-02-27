@@ -1,24 +1,35 @@
 #include "fitter.hpp"
 
 
+unsigned int Esys::numEsysts = 0;
+std::vector<std::string> Esys::names;
+std::vector<unsigned int> Esys::iC, Esys::iKBp, Esys::iSigPerRootE;
+std::vector<double> Esys::fKB;
+std::vector<double> Esys::fEmin, Esys::fDE, Esys::fEratio;
+std::vector<unsigned int> Esys::iNumBins;
+TH1D* Esys::tempHist;
+std::vector<bool> Esys::bIsInit;
+
+unsigned int FitVars::numVars = 0;
+std::vector<std::string> FitVars::parnames;
+std::vector<double> FitVars::values;
+std::vector<double> FitVars::vpriors;
+std::vector<double> FitVars::verrs;
+std::vector<double> FitVars::verr_copies;
+std::vector<double> FitVars::vlows;
+std::vector<double> FitVars::vhighs;
+std::vector<bool> FitVars::holdConstants;
 
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
-
-
 TH1D* Fitter::data, *Fitter::tot_fitModel;
 unsigned int Fitter::numBins;
-
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
-
 FitVars Fitter::Vars;
 Esys Fitter::Esysts;
 std::vector<Model*> Fitter::Mods;
-std::vector<TH1D*> Fitter::hists;
-
 unsigned int Fitter::numMods;
-unsigned int Fitter::numHists;
 
 
 Fitter::Fitter(TH1D& Data) {

@@ -1,9 +1,6 @@
 #include "model_alphaN.hpp"
 
 
-FitVars Fitter::Vars;
-Esys Fitter::Esysts;
-
 
 alphaN::alphaN(const unsigned int NormGS_idx, const unsigned int NormES_idx, const unsigned int E_syst_idx, const unsigned int E_syst_proton_idx, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
 

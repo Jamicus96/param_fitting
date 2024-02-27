@@ -76,7 +76,6 @@ class Fitter {
         static std::vector<Model*>& GetModels() {return Mods;};
         static TH1D* DataHist() {return data;};
         static SetData(TH1D* Data) {data = Data;};
-        static std::vector<TH1D*>& GetHists() {return hists;};
 
         // Destructor
         ~Fitter() {};

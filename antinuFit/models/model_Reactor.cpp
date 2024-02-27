@@ -1,9 +1,6 @@
 #include "model_Reactor.hpp"
 
 
-FitVars Fitter::Vars;
-Esys Fitter::Esysts;
-
 
 Reactor::Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
                  const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
