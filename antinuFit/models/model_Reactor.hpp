@@ -9,12 +9,11 @@
 #include <TH2.h>
 #include <TMath.h>
 #include <RAT/DB.hh>
-#include "fitter.hpp"
 #include "model.hpp"
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
 
-class Reactor : public Model {
+class Reactor: public Model {
     private:
         std::string ModName = "Reactor";
         // Indices pointing to variables
@@ -82,7 +81,7 @@ class Reactor : public Model {
         void Spectra(std::vector<TH1D*>& hists);
     
         // Destructor
-        ~Reactor();
+        ~Reactor() {};
 };
 
 std::vector<std::string> SplitString(std::string str);

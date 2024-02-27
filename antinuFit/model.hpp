@@ -1,6 +1,6 @@
 // header guard:
-#ifndef models
-#define models
+#ifndef model
+#define model
 
 // include
 #include <TVectorD.h>

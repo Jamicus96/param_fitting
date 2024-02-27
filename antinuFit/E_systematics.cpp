@@ -11,7 +11,7 @@ void Esys::AddEsys(const std::string name, const double kB, const unsigned int l
 
     fEmin.push_back(0.0); fDE.push_back(0.0);
     fEratio.push_back(0.0); iNumBins.push_back(0);
-    tempHist_idx.push_back(0); bIsInit.push_back(false);
+    bIsInit.push_back(false);
 }
 
 /**
@@ -38,11 +38,11 @@ void Esys::initialise(const unsigned int idx, TH1D* example_hist) {
  * 
  */
 void Esys::apply_systematics(const unsigned int idx, TH1D* INhist, TH1D* OUThist) {
-    if (!bIsInit.at(idx)) this->initialise(idx, INhist);
+    if (!bIsInit.at(idx)) initialise(idx, INhist);
     tempHist->Reset("ICES");
 
-    this->Esys::apply_scaling(idx, INhist);
-    this->Esys::apply_smearing(idx, OUThist);
+    Esys::apply_scaling(idx, INhist);
+    Esys::apply_smearing(idx, OUThist);
 }
 
 /**
@@ -61,8 +61,8 @@ void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
         unsigned int j_max;
         double weight;
         for (unsigned int i = 1; i < iNumBins.at(idx)+1; ++i) {
-            j_min = (unsigned int)(this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
-            j_max = (unsigned int)(this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
+            j_min = (unsigned int)(inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
+            j_max = (unsigned int)(inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
 
             #ifdef SUPER_DEBUG
                 std::cout << "[Esys::apply_scaling]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
@@ -71,15 +71,15 @@ void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
             if (j_min == j_max) {
                 // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
                 // If scaling is a trivial transformation, it produces weight = 1
-                weight = (this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) - this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5))) / fDE.at(idx);
+                weight = (inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) - inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5))) / fDE.at(idx);
                 tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
             } else {
-                weight = this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) / fDE.at(idx) - fEratio.at(idx) + (i - 0.5);
+                weight = inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) / fDE.at(idx) - fEratio.at(idx) + (i - 0.5);
                 tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
                 for (unsigned int j = j_min+1; j < j_max; ++j) {
                     tempHist->AddBinContent(INhist->GetBinContent(j), 1.0);
                 }
-                weight = fEratio.at(idx) + (i + 0.5) - this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5)) / fDE.at(idx);
+                weight = fEratio.at(idx) + (i + 0.5) - inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5)) / fDE.at(idx);
                 tempHist->AddBinContent(INhist->GetBinContent(j_max), weight);
             }
         }
@@ -115,7 +115,7 @@ void Esys::apply_smearing(const unsigned int idx, TH1D* OUThist) {
             #endif
 
             for (unsigned int j = j_min; j < j_max+1; ++j) {
-                weight = this->integ_normal(fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
+                weight = integ_normal(idx, fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
                 OUThist->AddBinContent(tempHist->GetBinContent(j), weight);
             }
         }
@@ -134,7 +134,7 @@ double Esys::inv_scaling(const unsigned int idx, const double E) {
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::inv_scaling]: Only linear scaling. E = " << E << ", fC = " << fC << std::endl;
         #endif
-        return E / Vars.val(iKBp.at(iC));
+        return E / Vars.val(iC.at(idx));
     } else {
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::inv_scaling]: E = " << E << ", fC = " << fC << ", fKBp = " << fKBp << ", fKB = " << fKB << std::endl;

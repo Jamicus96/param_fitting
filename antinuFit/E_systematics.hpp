@@ -45,7 +45,7 @@ class Esys {
         };
 
         static void initialise(const unsigned int idx, TH1D* example_hist);
-        static void initialise(std::string Parname, TH1D* example_hist) {initialise(Vars.findIdx(Parname), example_hist)};
+        static void initialise(std::string Parname, TH1D* example_hist) {initialise(Vars.findIdx(Parname), example_hist);};
 
         static unsigned int GetNumEsysts() {return numEsysts;};
 
@@ -53,15 +53,15 @@ class Esys {
         static void apply_scaling(const unsigned int idx, TH1D* INhist);
         static void apply_smearing(const unsigned int idx, TH1D* OUThist);
 
-        static void apply_systematics(std::string Parname, TH1D* INhist, TH1D* OUThist) {apply_systematics(Vars.findIdx(Parname), INhist, OUThist)};
-        static void apply_scaling(std::string Parname, TH1D* INhist) {apply_scaling(Vars.findIdx(Parname), INhist)};
-        static void apply_smearing(std::string Parname, TH1D* OUThist) {apply_smearing(Vars.findIdx(Parname), OUThist)};
+        static void apply_systematics(std::string Parname, TH1D* INhist, TH1D* OUThist) {apply_systematics(Vars.findIdx(Parname), INhist, OUThist);};
+        static void apply_scaling(std::string Parname, TH1D* INhist) {apply_scaling(Vars.findIdx(Parname), INhist);};
+        static void apply_smearing(std::string Parname, TH1D* OUThist) {apply_smearing(Vars.findIdx(Parname), OUThist);};
 
         static double inv_scaling(const unsigned int idx, const double E);
         static double integ_normal(const unsigned int idx, const double x1, const double x2);
 
-        static double inv_scaling(std::string Parname, const double E) {return inv_scaling(Vars.findIdx(Parname), E)};
-        static double integ_normal(std::string Parname, const double x1, const double x2) {return integ_normal(Vars.findIdx(Parname), x1, x2)};
+        static double inv_scaling(std::string Parname, const double E) {return inv_scaling(Vars.findIdx(Parname), E);};
+        static double integ_normal(std::string Parname, const double x1, const double x2) {return integ_normal(Vars.findIdx(Parname), x1, x2);};
 
         // Destructor
         ~Esys() {};

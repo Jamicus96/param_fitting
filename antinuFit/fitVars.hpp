@@ -24,7 +24,7 @@ class FitVars {
         FitVars() {};
 
         // Member function
-        static void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool HoldConstant = false) {
+        static void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false) {
             ++numVars;
             parnames.push_back(Parname);
             values.push_back(Value);
@@ -33,9 +33,9 @@ class FitVars {
             verr_copies.push_back(Verr);
             vlows.push_back(Vlow);
             vhighs.push_back(Vhigh);
-            holdConstants.push_back(HoldConstant);
+            holdConstants.push_back(holdConstant);
 
-            if (HoldConstant) verrs.at(numVars-1) = 0.0;
+            if (holdConstant) verrs.at(numVars-1) = 0.0;
         };
 
         static unsigned int findIdx(const std::string Parname) {
@@ -49,11 +49,11 @@ class FitVars {
 
         static void HoldConstant(const unsigned int idx, const bool isTrue) {
             if (isTrue) {
-                holdConstant.at(idx) = true;  // This will tell us that it's held constant
+                holdConstants.at(idx) = true;  // This will tell us that it's held constant
                 verrs.at(idx) = 0.0;  // This will tell Minuit to hold it constant
             } else {
-                holdConstant.at(idx) = false;
-                verrs.at(idx) = verr_copy.at(idx);
+                holdConstants.at(idx) = false;
+                verrs.at(idx) = verr_copies.at(idx);
             }
         };
         static unsigned int GetNumVars() {return numVars;};
@@ -91,7 +91,7 @@ class FitVars {
         };
 
         // Destructor
-        ~FitVar() {};
+        ~FitVars() {};
 };
 
 //end header guard

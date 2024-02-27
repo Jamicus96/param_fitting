@@ -10,7 +10,7 @@
 #include "fitVars.hpp"
 
 
-class alphaN : public Model {
+class alphaN: public Model {
     private:
         std::string ModName = "alphaN";
         unsigned int iNormGS, iNormES, iEsys, iEsysP;
