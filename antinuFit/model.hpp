@@ -10,7 +10,7 @@
 
 // #define SUPER_DEBUG
 
-class Model : Fitter {
+class Model {
     private:
 
     protected:
@@ -20,14 +20,12 @@ class Model : Fitter {
 
     public:
         // Constructors
-        Model() {++numMods;};
+        Model() {};
 
         // Member function
-        void AddModel() {++numMods;};
         void AddModel(std::string modName, TH1D* templateHist) {
             model_noEsys = (TH1D*)(templateHist->Clone((modName + "::model_noEsys").c_str()));
             model_Esys = (TH1D*)(templateHist->Clone((modName + "::model_Esys").c_str()));
-            ++numMods;
         };
         virtual void compute_spec() {};
         virtual void hold_osc_params_const(bool isTrue) {};

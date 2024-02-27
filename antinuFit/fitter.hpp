@@ -21,9 +21,6 @@ class Fitter {
         static TVirtualFitter* minuit;
         static double arglist[2];
 
-        static Double_t* var_bestFits;
-        static double* var_bestFit_errs;
-
         static TH1D* data, tot_fitModel;
         static unsigned int numBins;
 
@@ -35,30 +32,28 @@ class Fitter {
         static FitVars Vars;
         static Esys Esysts;
         static std::vector<Model*> Mods;
-        static std::vector<TH1D*> hists;
-
-        static unsigned int numVars;
-        static unsigned int numEsysts;
         static unsigned int numMods;
-        static unsigned int numHists;
 
     public:
         // Constructors
         Fitter();
-        Fitter(TH1D& Data) {data = Data;};
+        Fitter(TH1D* Data) {data = Data;};
 
         // Adding models
         void AddReactorMod(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
                            const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
                            const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
             Mods.push_back(new Reactor(Dm21_2_name, Dm32_2_name, s12_2_name, s13_2_name, norms_names, totNorm_name, Esys_name, Reactor_hists, E_conv_hist, Reactor_names, DB));
+            ++numMods;
         };
         void AddAlphaNMod(const std::string NormGS_name, const std::string NormES_name, const std::string E_syst_name,
                           const std::string E_syst_proton_name, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
             Mods.push_back(new alphaN(NormGS_name, NormES_name, E_syst_name, E_syst_proton_name, Hist_ProtontR, Hist_C12Scatter, Hist_O16Deex));
+            ++numMods;
         };
         void AddGeoNuMod(const std::string NormTh_name, const std::string NormU_name, const std::string vS_12_2_name, const std::string vS_13_2_name, const std::string E_syst_name, TH1D* Hist_Th, TH1D* Hist_U) {
             Mods.push_back(new geoNu(NormTh_name, NormU_name, vS_12_2_name, vS_13_2_name, E_syst_name, Hist_Th, Hist_U));
+            ++numMods;
         }
 
         // Fitting functions

@@ -5,8 +5,6 @@
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
 
-Double_t* Fitter::var_bestFits;
-double* Fitter::var_bestFit_errs;
 
 TH1D* Fitter::data, *Fitter::tot_fitModel;
 unsigned int Fitter::numBins;
@@ -19,8 +17,6 @@ Esys Fitter::Esysts;
 std::vector<Model*> Fitter::Mods;
 std::vector<TH1D*> Fitter::hists;
 
-unsigned int Fitter::numVars;
-unsigned int Fitter::numEsysts;
 unsigned int Fitter::numMods;
 unsigned int Fitter::numHists;
 
@@ -33,12 +29,10 @@ Fitter::Fitter(TH1D& Data) {
     tot_fitModel->SetName("tot_fit_model");
     tot_fitModel->SetTitle("Total Fit Spectrum");
 
-    var_bestFits = new Double_t[numVars];
-
     //The default minimizer is Minuit, you can also try Minuit2
     // TVirtualFitter::SetDefaultFitter("Minuit2");
     TVirtualFitter::SetDefaultFitter("Minuit");
-    minuit = TVirtualFitter::Fitter(0, numVars);
+    minuit = TVirtualFitter::Fitter(0, Vars.GetNumVars());
     
     arglist[0] = 0;
     // set print level

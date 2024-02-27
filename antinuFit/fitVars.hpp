@@ -9,6 +9,7 @@
 
 class FitVars : Fitter {
     private:
+        static unsigned int numVars;
         static std::vector<std::string> parnames;
         static std::vector<double> values;
         static std::vector<double> vpriors;

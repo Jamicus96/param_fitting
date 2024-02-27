@@ -7,11 +7,11 @@
 #include <sstream>
 #include <TH1.h>
 #include "fitVars.hpp"
-#include "fitter.hpp"
 
 
-class Esys : Fitter {
+class Esys {
     private:
+        static unsigned int numEsysts;
         static std::vector<std::string> names;
         // Scaling: E' = (1 + fDc) * E
         // Non-linearity: E' = E * (1 + fkB * E) / (1 + (fkB + fDkB) * E)
@@ -21,7 +21,8 @@ class Esys : Fitter {
 
         // Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
         static std::vector<double> fEmin, fDE, fEratio;
-        static std::vector<unsigned int> iNumBins, tempHist_idx;
+        static std::vector<unsigned int> iNumBins;
+        static TH1D* tempHist;
         static std::vector<bool> bIsInit;
 
     public:

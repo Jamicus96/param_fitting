@@ -4,8 +4,7 @@
 FitVars Fitter::Vars;
 std::vector<TH1D*> Fitter::hists;
 
-unsigned int Fitter::numEsysts;
-unsigned int Fitter::numHists;
+unsigned int Esys::numEsysts;
 
 std::vector<std::string> Esys::names;
 std::vector<unsigned int> Esys::iC, Esys::iKBp, Esys::iSigPerRootE;
@@ -13,7 +12,8 @@ std::vector<double> Esys::fKB;
 
 // Middle of lowest energy bin, bin width, and the ratio fEmin/fDE
 std::vector<double> Esys::fEmin, Esys::fDE, Esys::fEratio;
-std::vector<unsigned int> Esys::iNumBins, Esys::tempHist_idx;
+std::vector<unsigned int> Esys::iNumBins;
+TH1D* Esys::tempHist;
 std::vector<bool> Esys::bIsInit;
 
 
@@ -43,10 +43,7 @@ void Esys::initialise(const unsigned int idx, TH1D* example_hist) {
     iNumBins.at(idx) = example_hist->GetXaxis()->GetNbins();
 
     // Set up empty histogram
-    hists.push_back((TH1D*)(example_hist->Clone()));  // temporary hist for internal use
-    ++numHists;
-    tempHist_idx.at(idx) = numHists;
-
+    tempHist = (TH1D*)(example_hist->Clone());  // temporary hist for internal use
     bIsInit.at(idx) = true;
 }
 
@@ -57,7 +54,7 @@ void Esys::initialise(const unsigned int idx, TH1D* example_hist) {
  */
 void Esys::apply_systematics(const unsigned int idx, TH1D* INhist, TH1D* OUThist) {
     if (!bIsInit.at(idx)) this->initialise(idx, INhist);
-    hists.at(tempHist_idx.at(idx))->Reset("ICES");
+    tempHist->Reset("ICES");
 
     this->Esys::apply_scaling(idx, INhist);
     this->Esys::apply_smearing(idx, OUThist);
@@ -73,7 +70,7 @@ void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
             std::cout << "[Esys::apply_scaling]: No scaling." << std::endl;
         #endif
         // No scaling
-        hists.at(tempHist_idx.at(idx))->Add(INhist);
+        tempHist->Add(INhist);
     } else {
         unsigned int j_min;
         unsigned int j_max;
@@ -90,15 +87,15 @@ void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
                 // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
                 // If scaling is a trivial transformation, it produces weight = 1
                 weight = (this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) - this->inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5))) / fDE.at(idx);
-                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_min), weight);
+                tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
             } else {
                 weight = this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) / fDE.at(idx) - fEratio.at(idx) + (i - 0.5);
-                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_min), weight);
+                tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
                 for (unsigned int j = j_min+1; j < j_max; ++j) {
-                    hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j), 1.0);
+                    tempHist->AddBinContent(INhist->GetBinContent(j), 1.0);
                 }
                 weight = fEratio.at(idx) + (i + 0.5) - this->inv_scaling(fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5)) / fDE.at(idx);
-                hists.at(tempHist_idx.at(idx))->AddBinContent(INhist->GetBinContent(j_max), weight);
+                tempHist->AddBinContent(INhist->GetBinContent(j_max), weight);
             }
         }
     }
@@ -109,9 +106,9 @@ void Esys::apply_scaling(const unsigned int idx, TH1D* INhist) {
  * 
  */
 void Esys::apply_smearing(const unsigned int idx, TH1D* OUThist) {
-    if (5.0 * Vars.val(iSigPerRootE.at(idx)) * std::sqrt(hists.at(tempHist_idx.at(idx))->GetBinContent(iNumBins.at(idx))) <= fDE.at(idx)) {
+    if (5.0 * Vars.val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinContent(iNumBins.at(idx))) <= fDE.at(idx)) {
         // 5 sigmas in bin with highest energy is still smaller than bin width -> no smearing (includes sigma=0 case)
-        OUThist->Add(hists.at(tempHist_idx.at(idx)));
+        OUThist->Add(tempHist);
         #ifdef SUPER_DEBUG
             std::cout << "[Esys::apply_smearing]: No smearing." << std::endl;
         #endif
@@ -120,7 +117,7 @@ void Esys::apply_smearing(const unsigned int idx, TH1D* OUThist) {
         unsigned int num_bins_5sigmas;
         int j_min, j_max;
         for (unsigned int i = 1; i < iNumBins.at(idx)+1; ++i) {
-            sigma = Vars.val(iSigPerRootE.at(idx)) * std::sqrt(hists.at(tempHist_idx.at(idx))->GetBinContent(i));
+            sigma = Vars.val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinContent(i));
             num_bins_5sigmas = (unsigned int)(5.0 * sigma / fDE.at(idx));
 
             j_min = i - num_bins_5sigmas;
@@ -134,7 +131,7 @@ void Esys::apply_smearing(const unsigned int idx, TH1D* OUThist) {
 
             for (unsigned int j = j_min; j < j_max+1; ++j) {
                 weight = this->integ_normal(fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
-                OUThist->AddBinContent(hists.at(tempHist_idx.at(idx))->GetBinContent(j), weight);
+                OUThist->AddBinContent(tempHist->GetBinContent(j), weight);
             }
         }
     }

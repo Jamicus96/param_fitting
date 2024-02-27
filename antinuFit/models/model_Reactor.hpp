@@ -30,7 +30,7 @@ class Reactor : public Model {
         double Y_ee_vac;
 
         // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-        constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
+        static constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
 
         // Computed oscillation paramters depending only on E [MeV], but not on L [km]
         std::vector<double> eigen;  // Antinu propagation Hamiltonian eigenvalues
@@ -61,8 +61,8 @@ class Reactor : public Model {
         Reactor(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
                 const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
                 const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
-            std::vector<unsigned int>& norms_idx;
-            for (unsigned int i = 0; i < norms_names.size(); ++i) norms_idx.push_back(Vars.findIdx(norms_idx.at(i)));
+            std::vector<unsigned int> norms_idx;
+            for (unsigned int i = 0; i < norms_names.size(); ++i) norms_idx.push_back(Vars.findIdx(norms_names.at(i)));
             Reactor(Vars.findIdx(Dm21_2_name), Vars.findIdx(Dm32_2_name), Vars.findIdx(s12_2_name), Vars.findIdx(s13_2_name), norms_idx,
                     Vars.findIdx(totNorm_name), Esysts.findIdx(Esys_name), Reactor_hists, E_conv_hist, Reactor_names, DB);
         };

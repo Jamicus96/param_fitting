@@ -17,30 +17,30 @@ make_PDFs: make_PDFs.cpp
 re_combine_fits: E_systematics.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o re_combine_fits.o 
 	${COMPILE} E_systematics.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o re_combine_fits.o -o scripts/re_combine_fits.exe ${INCLUDE}
 
-re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVar.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
+re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVars.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
 	${COMPILE} scripts/re_combine_fits.cpp -c ${INCLUDE}
 
 # fit_params
 fit_params: E_systematics.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o 
 	${COMPILE} E_systematics.o model_alphaN.o model_geoNu.o model_Reactor.o fitter.o fit_params.o -o scripts/fit_params.exe ${INCLUDE}
 
-fit_params.o: fit_params.cpp fitter.hpp fitVar.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
+fit_params.o: fit_params.cpp fitter.hpp fitVars.hpp model.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
 	${COMPILE} scripts/fit_params.cpp -c ${INCLUDE}
 
 # antinuFit
-fitter.o: fitter.cpp fitter.hpp fitVar.hpp model.hpp
+fitter.o: fitter.cpp fitter.hpp fitVars.hpp model.hpp
 	${COMPILE} antinuFit/fitter.cpp -c ${INCLUDE}
 
-E_systematics.o: E_systematics.cpp E_systematics.hpp fitter.hpp fitVar.hpp
+E_systematics.o: E_systematics.cpp E_systematics.hpp fitter.hpp fitVars.hpp
 	${COMPILE} antinuFit/E_systematics.cpp -c ${INCLUDE}
 
-model_alphaN.o: model_alphaN.cpp model_alphaN.hpp model.hpp fitter.hpp E_systematics.hpp fitVar.hpp
+model_alphaN.o: model_alphaN.cpp model_alphaN.hpp model.hpp fitter.hpp E_systematics.hpp fitVars.hpp
 	${COMPILE} antinuFit/models/model_alphaN.cpp -c ${INCLUDE}
 
-model_geoNu.o: model_geoNu.cpp model_geoNu.hpp model.hpp fitter.hpp E_systematics.hpp fitVar.hpp
+model_geoNu.o: model_geoNu.cpp model_geoNu.hpp model.hpp fitter.hpp E_systematics.hpp fitVars.hpp
 	${COMPILE} antinuFit/models/model_geoNu.cpp -c ${INCLUDE}
 
-model_Reactor.o: model_Reactor.cpp model_Reactor.hpp model.hpp fitter.hpp E_systematics.hpp fitVar.hpp
+model_Reactor.o: model_Reactor.cpp model_Reactor.hpp model.hpp fitter.hpp E_systematics.hpp fitVars.hpp
 	${COMPILE} antinuFit/models/model_Reactor.cpp -c ${INCLUDE}
 
 
