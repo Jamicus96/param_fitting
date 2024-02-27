@@ -6,10 +6,15 @@ Reactor::Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, c
                  const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
                  const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
     
+    ModName = "Reactor";
     if (Reactor_names.size() != norms_idx.size()) {
         std::cout << "[Reactor] ERROR: Reactor_names and Norms should have the same size!" << std::endl;
         exit(1);
     }
+
+    #ifdef antinuDEBUG
+        std::cout << "[Reactor::Reactor]: Vars.GetNumVars() = " << Vars.GetNumVars() << std::endl;
+    #endif
 
     // Save variables
     iDm_21_2 = Dm21_2_idx;
@@ -21,6 +26,10 @@ Reactor::Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, c
     iNorms = norms_idx;
     iTotNorm = totNorm_idx;
     db = DB;
+
+    #ifdef antinuDEBUG
+        std::cout << "[Reactor::Reactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iTotNorm = " << iTotNorm << std::endl;
+    #endif
 
     // Save hist variables
     reactor_hists = Reactor_hists;
@@ -65,7 +74,11 @@ Reactor::Reactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, c
     // Compute unoscillated histogram integrals for the different sources in Reactor_names
     this->compute_unosc_integrals();
 
-    this->AddModel("Reactor", reactor_hists.at(0));
+    this->AddModel(ModName, reactor_hists.at(0));
+
+    #ifdef antinuDEBUG
+        std::cout << "[Reactor::Reactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iTotNorm = " << iTotNorm << std::endl;
+    #endif
 }
 
 void Reactor::compute_unosc_integrals() {
@@ -82,22 +95,23 @@ void Reactor::compute_unosc_integrals() {
  * 
  */
 void Reactor::compute_oscillation_constants() {
-    #ifdef DEBUG
+    #ifdef antinuDEBUG
         std::cout << "[Reactor::compute_oscillation_constants]: Computing oscillation constants" << std::endl;
+        std::cout << "[Reactor::compute_oscillation_constants]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << std::endl;
     #endif
 
     // Upacks variables
-    const double fDmSqr21 = Vars.val(iDm_21_2);
-    const double fDmSqr32 = Vars.val(iDm_32_2);
-    const double fSSqrTheta12 = Vars.val(iS_12_2);
-    const double fSSqrTheta13 = Vars.val(iS_13_2);
-    #ifdef DEBUG
+    double fDmSqr21 = Vars.val(iDm_21_2);
+    double fDmSqr32 = Vars.val(iDm_32_2);
+    double fSSqrTheta12 = Vars.val(iS_12_2);
+    double fSSqrTheta13 = Vars.val(iS_13_2);
+    #ifdef antinuDEBUG
         std::cout << "[Reactor::compute_oscillation_constants]: fDmSqr21 = " << fDmSqr21 << ", fDmSqr32 = " << fDmSqr32
                   << ", fSSqrTheta12 = " << fSSqrTheta12 << ", fSSqrTheta13 = " << fSSqrTheta13 << std::endl;
     #endif
 
     // Do calculation
-    const double fDmSqr31 = fDmSqr32 + fDmSqr21;
+    double fDmSqr31 = fDmSqr32 + fDmSqr21;
 
     H_ee_vac = fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31 * (fSSqrTheta13 - (1.0/3.0));
     a0_vac = - (2.0/27.0) * (fDmSqr21*fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31*fDmSqr31)
@@ -215,13 +229,17 @@ void Reactor::compute_osc_specs() {
 
 
 void Reactor::hold_osc_params_const(const bool isTrue) {
+    #ifdef antinuDEBUG
+        std::cout << "[Reactor::hold_osc_params_const]: Vars.GetNumVars() = " << Vars.GetNumVars() << std::endl;
+        std::cout << "[Reactor::hold_osc_params_const]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << std::endl;
+    #endif
     if (!isTrue) {
-        #ifdef DEBUG
+        #ifdef antinuDEBUG
             std::cout << "[Reactor::hold_osc_params_const]: NOT holding oscillation parameters constant" << std::endl;
         #endif
         computed_osc_specs = false;
     } else if (Vars.isConstant(iDm_21_2) && Vars.isConstant(iDm_32_2) && Vars.isConstant(iS_12_2) && Vars.isConstant(iS_13_2)) {
-        #ifdef DEBUG
+        #ifdef antinuDEBUG
             std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
         #endif
         this->compute_osc_specs();

@@ -12,7 +12,6 @@
 
 class alphaN: public Model {
     private:
-        std::string ModName = "alphaN";
         unsigned int iNormGS, iNormES, iEsys, iEsysP;
 
         TH1D* hist_ProtontR;

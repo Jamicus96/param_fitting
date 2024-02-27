@@ -13,7 +13,6 @@
 
 class geoNu: public Model {
     private:
-        std::string ModName = "geoNu";
         unsigned int iNormTh, iNormU, iS_12_2, iS_13_2, iE_syst;
         TH1D *histTh, *histU;
         double Th_integral, U_integral;

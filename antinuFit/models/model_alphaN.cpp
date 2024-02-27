@@ -4,6 +4,7 @@
 
 alphaN::alphaN(const unsigned int NormGS_idx, const unsigned int NormES_idx, const unsigned int E_syst_idx, const unsigned int E_syst_proton_idx, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
 
+    ModName = "alphaN";
     iNormGS = NormGS_idx; iNormES = NormES_idx; iEsys = E_syst_idx; iEsysP = E_syst_proton_idx;
 
     hist_ProtontR = Hist_ProtontR;
@@ -15,7 +16,7 @@ alphaN::alphaN(const unsigned int NormGS_idx, const unsigned int NormES_idx, con
 
     model_Proton = (TH1D*)(Hist_ProtontR->Clone("alphaN::temp_model_PR"));
 
-    this->AddModel("alphaN", Hist_ProtontR);
+    this->AddModel(ModName, Hist_ProtontR);
 }
 
 // Member function

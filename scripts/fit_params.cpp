@@ -151,12 +151,12 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
         // Set sinTheta12 value
         antinuFitter.GetVars().val("sinsqrtheta12") = sinTheta12.at(i);
         if (verbose) std::cout << "s_12^2 = " << antinuFitter.GetVars().val("sinsqrtheta12") << std::endl;
-        antinuFitter.GetModels().at(0)->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
+        antinuFitter.GetModel("geoNu")->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // Set Dm21 value
             antinuFitter.GetVars().val("deltamsqr21") = Dm21.at(j);
             if (verbose) std::cout << "Dm_21^2 = " << antinuFitter.GetVars().val("deltamsqr21") << std::endl;
-            antinuFitter.GetModels().at(2)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+            antinuFitter.GetModel("Reactor")->hold_osc_params_const(true); // This will also compute oscillated reactor specs
             minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
         }
     }

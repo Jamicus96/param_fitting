@@ -15,7 +15,6 @@
 
 class Reactor: public Model {
     private:
-        std::string ModName = "Reactor";
         // Indices pointing to variables
         unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2, iTotNorm;
         std::vector<unsigned int> iNorms;
@@ -60,8 +59,13 @@ class Reactor: public Model {
         Reactor(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
                 const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
                 const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+
             std::vector<unsigned int> norms_idx;
             for (unsigned int i = 0; i < norms_names.size(); ++i) norms_idx.push_back(Vars.findIdx(norms_names.at(i)));
+            #ifdef antinuDEBUG
+                std::cout << "[Reactor::Reactor]: Vars.GetNumVars() = " << Vars.GetNumVars() << std::endl;
+            #endif
+
             Reactor(Vars.findIdx(Dm21_2_name), Vars.findIdx(Dm32_2_name), Vars.findIdx(s12_2_name), Vars.findIdx(s13_2_name), norms_idx,
                     Vars.findIdx(totNorm_name), Esysts.findIdx(Esys_name), Reactor_hists, E_conv_hist, Reactor_names, DB);
         };

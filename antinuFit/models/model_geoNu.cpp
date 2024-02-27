@@ -5,6 +5,7 @@
 geoNu::geoNu(const unsigned int NormTh_idx, const unsigned int NormU_idx, const unsigned int vS_12_2_idx,
       const unsigned int vS_13_2_idx, const unsigned int E_syst_idx, TH1D* Hist_Th, TH1D* Hist_U) {
 
+    ModName = "geoNu";
     iNormTh = NormTh_idx; iNormU = NormU_idx; iS_12_2 = vS_12_2_idx; iS_13_2 = vS_13_2_idx; iE_syst = E_syst_idx;
     histTh = Hist_Th; histTh->SetName("geoNu::histTh");
     histU = Hist_U; histU->SetName("geoNu::histU");
@@ -13,7 +14,7 @@ geoNu::geoNu(const unsigned int NormTh_idx, const unsigned int NormU_idx, const 
 
     computed_survival_prob = false;
 
-    this->AddModel("geoNu", histTh);
+    this->AddModel(ModName, histTh);
 }
 
 void geoNu::geoNu_survival_prob() {

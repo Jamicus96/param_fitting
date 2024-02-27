@@ -136,7 +136,7 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 
     // Add geo-nu model, linking it to approproate variables and E-systematics defined above
     antinuFitter.AddGeoNuMod("geoNuNorm_Th", "geoNuNorm_U", "sinsqrtheta12", "sinsqrtheta13", "EsysBeta", geoNu_hists.at(geoNu_hist_idx.at(0)), geoNu_hists.at(geoNu_hist_idx.at(1)));
-    antinuFitter.GetModels().at(0)->hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
+    antinuFitter.GetModel("geoNu")->hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
 
 
     /* ~~~~~~~~ ALPHA-N ~~~~~~~~ */
@@ -192,7 +192,7 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
     // Add reactor model, linking it to approproate variables and E-systematics defined above
     antinuFitter.AddReactorMod("deltamsqr21", "deltamsqr32", "sinsqrtheta12", "sinsqrtheta13", ReactorNorms_VarNames,
                                "reactorNorm_tot", "EsysBeta", reactor_hists, &E_conv, reactor_names, db);
-    antinuFitter.GetModels().at(2)->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+    antinuFitter.GetModel("Reactor")->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
     /* ~~~~~~~~ AZIMOV DATASET ~~~~~~~~ */

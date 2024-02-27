@@ -130,6 +130,16 @@ double Fitter::fit_models() {
 }
 
 void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
+
+    if (numMods == 0) {
+        std::cout << "Attempting to perform fit with no models!" << std::endl;
+        exit(1);
+    }
+
+    for (unsigned int iModel = 0; iModel < numMods; ++iModel) {
+        Mods.at(iModel)->compute_spec();
+    }
+
     TH1D* total_hist = (TH1D*)(Mods.at(0)->GetModelEsys()->Clone("Total_Model_Spectrum"));
     total_hist->SetTitle("Total Model Spectrum");
     for (unsigned int iModel = 0; iModel < numMods; ++iModel) {

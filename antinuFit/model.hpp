@@ -10,6 +10,7 @@
 #include "E_systematics.hpp"
 
 // #define SUPER_DEBUG
+#define antinuDEBUG
 
 class Model {
     private:
@@ -27,6 +28,9 @@ class Model {
 
         // Member function
         void AddModel(std::string modName, TH1D* templateHist) {
+            #ifdef antinuDEBUG
+                std::cout << "[Model::AddModel]: Creating model_noEsys and model_Esys hists for " << modName << " model." << std::endl;
+            #endif
             model_noEsys = (TH1D*)(templateHist->Clone((modName + "::model_noEsys").c_str()));
             model_Esys = (TH1D*)(templateHist->Clone((modName + "::model_Esys").c_str()));
         };
