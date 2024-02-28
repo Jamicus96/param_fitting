@@ -20,7 +20,6 @@
 #include "fitter.hpp"
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
-#include "model.hpp"
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 #include "model_Reactor.hpp"
@@ -137,7 +136,10 @@ int main(int argv, char** argc) {
  */
 void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
-    Fitter antinuFitter = Fitter();
+    Fitter* antinuFitter = Fitter::GetInstance();
+    FitVars* Vars = FitVars::GetInstance();
+    Reactor* ReactorMod = Reactor::GetInstance();
+    geoNu* geoNuMod = geoNu::GetInstance();
 
     // Unpack
     std::vector<double> sinTheta12 = var_params.at(0);
@@ -149,15 +151,15 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // Set sinTheta12 value
-        antinuFitter.GetVars().val("sinsqrtheta12") = sinTheta12.at(i);
-        if (verbose) std::cout << "s_12^2 = " << antinuFitter.GetVars().val("sinsqrtheta12") << std::endl;
-        antinuFitter.GetModel("geoNu")->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
+        Vars->val("sinsqrtheta12") = sinTheta12.at(i);
+        if (verbose) std::cout << "s_12^2 = " << Vars->val("sinsqrtheta12") << std::endl;
+        geoNuMod->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
             // Set Dm21 value
-            antinuFitter.GetVars().val("deltamsqr21") = Dm21.at(j);
-            if (verbose) std::cout << "Dm_21^2 = " << antinuFitter.GetVars().val("deltamsqr21") << std::endl;
-            antinuFitter.GetModel("Reactor")->hold_osc_params_const(true); // This will also compute oscillated reactor specs
-            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter.fit_models());
+            Vars->val("deltamsqr21") = Dm21.at(j);
+            if (verbose) std::cout << "Dm_21^2 = " << Vars->val("deltamsqr21") << std::endl;
+            ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter->fit_models());
         }
     }
 }

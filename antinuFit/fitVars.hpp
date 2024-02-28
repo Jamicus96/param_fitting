@@ -9,22 +9,39 @@
 
 class FitVars {
     private:
-        static unsigned int numVars;
-        static std::vector<std::string> parnames;
-        static std::vector<double> values;
-        static std::vector<double> vpriors;
-        static std::vector<double> verrs;
-        static std::vector<double> verr_copies;
-        static std::vector<double> vlows;
-        static std::vector<double> vhighs;
-        static std::vector<bool> holdConstants;
+        static FitVars *FitVarInstance_;
+
+        unsigned int numVars;
+        std::vector<std::string> parnames;
+        std::vector<double> values;
+        std::vector<double> vpriors;
+        std::vector<double> verrs;
+        std::vector<double> verr_copies;
+        std::vector<double> vlows;
+        std::vector<double> vhighs;
+        std::vector<bool> holdConstants;
+    
+    protected:
+        // Constructors/desctructors
+        FitVars() : numVars(0) {}
+        ~FitVars() {}
 
     public:
-        // Constructors
-        FitVars() {};
+        // Should not be cloneable.
+        FitVars(FitVars &other) = delete;
+
+        // Should not be assignable.
+        void operator=(const FitVars &) = delete;
+        /**
+         * This is the static method that controls the access to the FitVars
+         * instance. On the first run, it creates a FitVars object and places it
+         * into the static field. On subsequent runs, it returns the client existing
+         * object stored in the static field.
+         */
+        static FitVars *GetInstance();
 
         // Member function
-        static void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false) {
+        void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false) {
             ++numVars;
             parnames.push_back(Parname);
             values.push_back(Value);
@@ -36,18 +53,18 @@ class FitVars {
             holdConstants.push_back(holdConstant);
 
             if (holdConstant) verrs.at(numVars-1) = 0.0;
-        };
+        }
 
-        static unsigned int findIdx(const std::string Parname) {
+        unsigned int findIdx(const std::string Parname) {
             for (unsigned int varIdx = 0; varIdx < numVars; ++varIdx) {
                 if (Parname == parnames.at(varIdx)) return varIdx;
             }
             std::cout << "[FitVars::findIdx]: Parameter '" << Parname << "' not found!" << std::endl;
             exit(1);
             return 0;
-        };
+        }
 
-        static void HoldConstant(const unsigned int idx, const bool isTrue) {
+        void HoldConstant(const unsigned int idx, const bool isTrue) {
             if (isTrue) {
                 holdConstants.at(idx) = true;  // This will tell us that it's held constant
                 verrs.at(idx) = 0.0;  // This will tell Minuit to hold it constant
@@ -55,25 +72,25 @@ class FitVars {
                 holdConstants.at(idx) = false;
                 verrs.at(idx) = verr_copies.at(idx);
             }
-        };
-        static unsigned int GetNumVars() {return numVars;};
-        static std::string& name(unsigned int idx) {return parnames.at(idx);};
-        static double& val(unsigned int idx) {return values.at(idx);};
-        static double& prior(unsigned int idx) {return vpriors.at(idx);};
-        static double& err(unsigned int idx) {return verrs.at(idx);};
-        static double& min(unsigned int idx) {return vlows.at(idx);};
-        static double& max(unsigned int idx) {return vhighs.at(idx);};
-        static bool isConstant(unsigned int idx) {return holdConstants.at(idx);};
+        }
+        unsigned int GetNumVars() {return numVars;}
+        std::string& name(unsigned int idx) {return parnames.at(idx);}
+        double& val(unsigned int idx) {return values.at(idx);}
+        double& prior(unsigned int idx) {return vpriors.at(idx);}
+        double& err(unsigned int idx) {return verrs.at(idx);}
+        double& min(unsigned int idx) {return vlows.at(idx);}
+        double& max(unsigned int idx) {return vhighs.at(idx);}
+        bool isConstant(unsigned int idx) {return holdConstants.at(idx);}
 
-        static void HoldConstant(const std::string Parname, const bool isTrue) {HoldConstant(findIdx(Parname), isTrue);};
-        static double& val(std::string Parname) {return val(findIdx(Parname));};
-        static double& prior(std::string Parname) {return prior(findIdx(Parname));};
-        static double& err(std::string Parname) {return err(findIdx(Parname));};
-        static double& min(std::string Parname) {return min(findIdx(Parname));};
-        static double& max(std::string Parname) {return max(findIdx(Parname));};
-        static bool isConstant(std::string Parname) {return isConstant(findIdx(Parname));};
+        void HoldConstant(const std::string Parname, const bool isTrue) {HoldConstant(findIdx(Parname), isTrue);}
+        double& val(std::string Parname) {return val(findIdx(Parname));}
+        double& prior(std::string Parname) {return prior(findIdx(Parname));}
+        double& err(std::string Parname) {return err(findIdx(Parname));}
+        double& min(std::string Parname) {return min(findIdx(Parname));}
+        double& max(std::string Parname) {return max(findIdx(Parname));}
+        bool isConstant(std::string Parname) {return isConstant(findIdx(Parname));}
 
-        static void GetVarValues(Double_t* p) {
+        void GetVarValues(Double_t* p) {
             #ifdef SUPER_DEBUG
                 std::cout << "[FitVars::GetVarValues]: numVars = " << numVars << std::endl;
             #endif
@@ -88,11 +105,25 @@ class FitVars {
                     std::cout << "[FitVars::GetVarValues]: vars.at(" << i << ") = " << vars.at(i) << std::endl;
                 #endif
             }
-        };
-
-        // Destructor
-        ~FitVars() {};
+        }
 };
+
+/**
+ * Static methods should be defined outside the class.
+ */
+FitVars* FitVars::FitVarInstance_{nullptr};
+
+/**
+ * The first time we call GetInstance we will lock the storage location
+ *      and then we make sure again that the variable is null and then we
+ *      set the value. RU:
+ */
+FitVars *FitVars::GetInstance() {
+    if (FitVarInstance_ == nullptr) {
+        FitVarInstance_ = new FitVars();
+    }
+    return FitVarInstance_;
+}
 
 //end header guard
 #endif

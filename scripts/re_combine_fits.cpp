@@ -24,7 +24,6 @@
 #include "fitter.hpp"
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
-#include "model.hpp"
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 #include "model_Reactor.hpp"
@@ -264,23 +263,24 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& v
 
     // Create fitter object
     create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
-    Fitter antinuFitter = Fitter();
+    Fitter* antinuFitter = Fitter::GetInstance();
+    FitVars* Vars = FitVars::GetInstance();
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
 
-    double ll = antinuFitter.fit_models();
+    double ll = antinuFitter->fit_models();
     std::cout << "ll = " << ll <<std::endl;
 
     // Add spectra to list
-    antinuFitter.GetAllSpectra(spectra);
+    antinuFitter->GetAllSpectra(spectra);
 
     // Add data hist to list
-    spectra.push_back(antinuFitter.DataHist());
+    spectra.push_back(antinuFitter->DataHist());
 
     // Record best fit variables
-    for (unsigned int i = 0; i < antinuFitter.GetVars().GetNumVars(); ++i) {
-        vars.insert({antinuFitter.GetVars().name(i), antinuFitter.GetVars().val(i)});
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        vars.insert({Vars->name(i), Vars->val(i)});
     }
 }
 
