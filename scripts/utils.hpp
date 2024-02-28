@@ -81,7 +81,6 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 
     /* ~~~~~~~~ INITIALISE ~~~~~~~~ */
 
-    Fitter* antinuFitter = Fitter::GetInstance();
     FitVars* Vars = FitVars::GetInstance();
     Esys* Esysts = Esys::GetInstance();
     Reactor* ReactorMod = Reactor::GetInstance();
@@ -116,9 +115,10 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
     // Add smearing variable (same for all, allow to be negative, absolute value taken in calculations)
     Vars->AddVar("sigPerSqrtE", 0.0, sigPerSqrtE, -3.0 * sigPerSqrtE, 3.0 * sigPerSqrtE);
 
+
     // Add energy systamtics objects (beta and proton), and link them to variables above
     Esysts->AddEsys("EsysBeta", kB, "linScale", "kBp", "sigPerSqrtE");
-    Esysts->AddEsys("EsysProton", kB, "linScale_P", "kBp_P", "sigPerSqrtE");
+    Esysts->AddEsys("EsysProton", kB_P, "linScale_P", "kBp_P", "sigPerSqrtE");
 
 
     /* ~~~~~~~~ GEO-NU ~~~~~~~~ */
@@ -203,19 +203,21 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
     std::cout << "Creating fake dataset..." << std::endl;
-    std::vector<TH1D*> hists;
-    antinuFitter->GetAllSpectra(hists);
-    
-    TH1D* data = (TH1D*)hists.at(0)->Clone("data");
+
+    ReactorMod->compute_spec();
+    alphaNMod->compute_spec();
+    geoNuMod->compute_spec();
+
+    TH1D* data = (TH1D*)(ReactorMod->GetModelEsys()->Clone("data"));
     data->SetTitle("Azimov Dataset");
     data->Reset("ICES");
+    
     std::cout << "data integral = " << data->Integral() << std::endl;
-
-    // Add spectra (already re-sclaed)
-    for (unsigned int i = 0; i < hists.size(); ++i) {
-        std::cout << hists.at(i)->GetName() << " integral = " << hists.at(i)->Integral() << std::endl;
-        data->Add(hists.at(i));  // Add reactor events
-    }
+    data->Add(ReactorMod->GetModelEsys());
+    std::cout << "data integral = " << data->Integral() << std::endl;
+    data->Add(alphaNMod->GetModelEsys());
+    std::cout << "data integral = " << data->Integral() << std::endl;
+    data->Add(geoNuMod->GetModelEsys());
     std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Set bins outside "real data" cuts to zero
@@ -239,7 +241,8 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 
     std::cout << "data integral = " << data->Integral() << std::endl;
 
-    // Add Azimov dataset as data
+    // Initialise fitter, and add Azimov dataset as data
+    Fitter* antinuFitter = Fitter::GetInstance();
     antinuFitter->SetData(data);
 }
 

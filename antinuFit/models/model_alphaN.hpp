@@ -56,7 +56,7 @@ class alphaN {
             hist_O16Deex = Hist_O16Deex;
             Integral_hist_ES = hist_O16Deex->Integral();
 
-            model_Proton = (TH1D*)(Hist_ProtontR->Clone("alphaN::temp_model_PR"));
+            model_Proton = (TH1D*)(hist_ProtontR->Clone("alphaN::temp_model_PR"));
 
             model_noEsys = (TH1D*)(hist_ProtontR->Clone("alphaN::model_noEsys"));
             model_Esys = (TH1D*)(hist_ProtontR->Clone("alphaN::model_Esys"));
@@ -80,6 +80,18 @@ class alphaN {
             model_Proton->Reset("ICES");  // empty it before re-computing it
             model_Esys->Reset("ICES");  // empty it before re-computing it
 
+            #ifdef SUPER_DEBUG
+                std::cout << "[alphaN::compute_spec]: hist_C12Scatter->Integral() = " << hist_C12Scatter->Integral() << std::endl;
+                std::cout << "[alphaN::compute_spec]: hist_O16Deex->Integral() = " << hist_O16Deex->Integral() << std::endl;
+                std::cout << "[alphaN::compute_spec]: hist_ProtontR->Integral() = " << hist_ProtontR->Integral() << std::endl;
+
+                std::cout << "[alphaN::compute_spec]: Vars->val(iNormGS) = " << Vars->val(iNormGS) << std::endl;
+                std::cout << "[alphaN::compute_spec]: Vars->val(iNormES) = " << Vars->val(iNormES) << std::endl;
+
+                std::cout << "[alphaN::compute_spec]: Integral_hist_GS = " << Integral_hist_GS << std::endl;
+                std::cout << "[alphaN::compute_spec]: Integral_hist_ES = " << Integral_hist_ES << std::endl;
+            #endif
+
             // Add the non proton-recoil spectra to spectrum
             model_noEsys->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_hist_GS);
             model_noEsys->Add(hist_O16Deex, Vars->val(iNormES) / Integral_hist_ES);
@@ -93,6 +105,9 @@ class alphaN {
 
             // Apply Proton energy systematics
             Esysts->apply_systematics(iEsysP, model_Proton, model_Esys);
+            #ifdef SUPER_DEBUG
+                std::cout << "[alphaN::compute_spec]: 9 model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
+            #endif
         }   
         void Spectra(std::vector<TH1D*>& hists) {
             FitVars* Vars = FitVars::GetInstance();
@@ -119,7 +134,7 @@ class alphaN {
         }
     
         TH1D* GetModelNoEsys() {return model_noEsys;}
-        TH1D* GetModelEsys() {return model_noEsys;}
+        TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
 };

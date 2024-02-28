@@ -113,7 +113,8 @@ class Reactor {
             reactor_hists = Reactor_hists;
             num_reactors = reactor_hists.size();
             hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
-            E_conv = E_conv_hist; E_conv->SetName("Reactor::E_conv");
+            E_conv = (TH2D*)(E_conv_hist->Clone("Reactor::E_conv"));
+            E_conv->Reset("ICES"); E_conv->Add(E_conv_hist);
             baselines.resize(num_reactors);
 
             // Set up empty vectors
@@ -147,10 +148,10 @@ class Reactor {
             }
 
             // Compute baselines
-            this->compute_baselines();
+            compute_baselines();
 
             // Compute unoscillated histogram integrals for the different sources in Reactor_names
-            this->compute_unosc_integrals();
+            compute_unosc_integrals();
 
             model_noEsys = (TH1D*)(reactor_hists.at(0)->Clone("Reactor::model_noEsys"));
             model_Esys = (TH1D*)(reactor_hists.at(0)->Clone("Reactor::model_Esys"));
@@ -191,11 +192,11 @@ class Reactor {
 
         void compute_osc_specs() {
             // Compute oscillation constants
-            this->compute_oscillation_constants();
+            compute_oscillation_constants();
 
             // Reset total reactor histograms (i.e. empty them)
             for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-                #ifdef DEBUG
+                #ifdef antinuDEBUG
                     std::cout << "[Reactor::compute_osc_specs]: resetting osc_hists.at(" << i << ")" << std::endl;
                 #endif
                 osc_hists.at(i)->Reset("ICES");
@@ -206,9 +207,15 @@ class Reactor {
             double weighted_av_P;
             double weight;
             std::string origin_reactor;
+            #ifdef antinuDEBUG
+                std::cout << "[Reactor::compute_osc_specs]: hists_Nbins = " << hists_Nbins << std::endl;
+                std::cout << "[Reactor::compute_osc_specs]: E_conv->GetXaxis()->GetNbins() = " << E_conv->GetXaxis()->GetNbins() << std::endl;
+                std::cout << "[Reactor::compute_osc_specs]: E_conv->GetYaxis()->GetNbins() = " << E_conv->GetYaxis()->GetNbins() << std::endl;
+            #endif
+
             for (unsigned int i = 1; i <= hists_Nbins; ++i) {
                 E = reactor_hists.at(0)->GetXaxis()->GetBinCenter(i);
-                this->re_compute_consts(E);
+                re_compute_consts(E);
                 for (unsigned int j = 0; j < num_reactors; ++j) {
                     // Integrate survival prob over E_nu, weigther by E_nu(E_e) distribution -> weigthed average survival prob
                     weighted_av_P = 0.0;
@@ -317,7 +324,7 @@ class Reactor {
                 #ifdef antinuDEBUG
                     std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
                 #endif
-                this->compute_osc_specs();
+                compute_osc_specs();
                 computed_osc_specs = true;
             } else {
                 std::cout << "[Reactor] WARNING: Oscillation constants not held constant for fitting, since they were not set to constants before hand." << std::endl;
@@ -335,7 +342,7 @@ class Reactor {
                 #ifdef SUPER_DEBUG
                     std::cout << "[Reactor::compute_spec]: computing oscillation specs" << std::endl;
                 #endif
-                this->compute_osc_specs();
+                compute_osc_specs();
             }
             
             for (unsigned int i = 0; i < osc_hists.size(); ++i) {
@@ -370,7 +377,7 @@ class Reactor {
 
     
         TH1D* GetModelNoEsys() {return model_noEsys;}
-        TH1D* GetModelEsys() {return model_noEsys;}
+        TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
 };

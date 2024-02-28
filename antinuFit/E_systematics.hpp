@@ -113,6 +113,9 @@ class Esys {
                     j_min = (unsigned int)(inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
                     j_max = (unsigned int)(inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) / fDE.at(idx) + 0.5 - fEratio.at(idx));
 
+                    if (j_min < 1) j_min = 1;
+                    if (j_max > iNumBins.at(idx)) j_max = iNumBins.at(idx);
+
                     #ifdef SUPER_DEBUG
                         std::cout << "[Esys::apply_scaling]: i = " << i << ", j € {" << j_min << ", " << j_max << "}." << std::endl;
                     #endif
@@ -188,12 +191,12 @@ class Esys {
             if (fKB.at(idx) == Vars->val(iKBp.at(idx))) {
                 // Only linear scaling
                 #ifdef SUPER_DEBUG
-                    std::cout << "[Esys::inv_scaling]: Only linear scaling. E = " << E << ", fC = " << fC << std::endl;
+                    std::cout << "[Esys::inv_scaling]: Only linear scaling. E = " << E << ", fC = " << Vars->val(iC.at(idx)) << std::endl;
                 #endif
                 return E / Vars->val(iC.at(idx));
             } else {
                 #ifdef SUPER_DEBUG
-                    std::cout << "[Esys::inv_scaling]: E = " << E << ", fC = " << fC << ", fKBp = " << fKBp << ", fKB = " << fKB << std::endl;
+                    std::cout << "[Esys::inv_scaling]: E = " << E << ", fC = " << Vars->val(iC.at(idx)) << ", fKBp = " << Vars->val(iKBp.at(idx)) << ", fKB = " << fKB.at(idx) << std::endl;
                 #endif
                 return (Vars->val(iKBp.at(idx)) * E - 1.0 + std::sqrt((1.0 - Vars->val(iKBp.at(idx)) * E) * (1.0 - Vars->val(iKBp.at(idx)) * E) + 4.0 * fKB.at(idx) * E)) / (2.0 * fKB.at(idx) * Vars->val(iC.at(idx)));
             }

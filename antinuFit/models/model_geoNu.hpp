@@ -80,7 +80,7 @@ class geoNu {
             if (!isTrue) {
                 computed_survival_prob = false;
             } else if (isTrue && Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2)) {
-                this->geoNu_survival_prob();
+                geoNu_survival_prob();
                 computed_survival_prob = true;
             } else {
                 std::cout << "[geoNu] WARNING: Oscillation constants not held constant for fitting, since they were not set to constants before hand." << std::endl;
@@ -95,7 +95,7 @@ class geoNu {
 
             // If the oscillation parameters are constant and the survival prob was already computed, can skip this step!
             if (!(Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2) && computed_survival_prob)) {
-                this->geoNu_survival_prob();
+                geoNu_survival_prob();
             }
 
             model_noEsys->Add(histTh, survival_prob * Vars->val(iNormTh) / Th_integral);
@@ -123,7 +123,7 @@ class geoNu {
         }
 
         TH1D* GetModelNoEsys() {return model_noEsys;}
-        TH1D* GetModelEsys() {return model_noEsys;}
+        TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
 };
