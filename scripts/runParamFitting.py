@@ -29,7 +29,7 @@ def argparser():
 
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999., help='Classifier cut (remove events below this)')
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=500, help='Number of bins in x and y directions.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=60, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=False, help='For energy correction: True for data, False for MC.')
