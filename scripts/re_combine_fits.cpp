@@ -33,8 +33,8 @@
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist);
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::map<std::string, double>& vars);
-void GetFitSpectra(std::vector<TH1D*>& hists, std::map<std::string, double>& vars, std::string PDFs_address, double Dm21_2, double S_12_2);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists);
+void GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, double Dm21_2, double S_12_2);
 
 
 int main(int argv, char** argc) {
@@ -77,12 +77,11 @@ int main(int argv, char** argc) {
     std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist);
 
     std::vector<TH1D*> spectra;
-    std::map<std::string, double> vars;
-    GetFitSpectra(spectra, vars, PDFs_address, min_vals.at(1), min_vals.at(2));
+    GetFitSpectra(spectra, PDFs_address, min_vals.at(1), min_vals.at(2));
 
     // Print hist to text file too
     std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
-    print_to_txt(txt_fileName, new_hists.at(0), spectra, vars);
+    print_to_txt(txt_fileName, new_hists.at(0), spectra);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -200,7 +199,7 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
  * @param txt_fileName 
  * @param minllHist 
  */
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::map<std::string, double>& vars) {
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists) {
     std::ofstream datafile;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
 
@@ -240,15 +239,10 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<T
         }
         datafile << std::endl;
     }
-
-    datafile << "# Variables:" << std::endl;
-    for (auto& x : vars) {
-        datafile << x.first << " " << x.second << std::endl;
-    }
 }
 
 
-void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& vars, std::string PDFs_address, double Dm21_2, double S_12_2) {
+void GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, double Dm21_2, double S_12_2) {
 
     // Get DB
     RAT::DB::Get()->SetAirplaneModeStatus(true);
@@ -262,9 +256,8 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& v
     const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
 
     // Create fitter object
-    create_fitter(PDFs_address, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
+    create_fitter(PDFs_address, Dm21_2, fDmSqr32, pow(sin(S_12_2  * TMath::Pi() / 180.), 2), fSSqrTheta13, db);
     Fitter* antinuFitter = Fitter::GetInstance();
-    FitVars* Vars = FitVars::GetInstance();
 
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
@@ -277,11 +270,6 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::map<std::string, double>& v
 
     // Add data hist to list
     spectra.push_back(antinuFitter->DataHist());
-
-    // Record best fit variables
-    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-        vars.insert({Vars->name(i), Vars->val(i)});
-    }
 }
 
 

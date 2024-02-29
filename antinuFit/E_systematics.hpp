@@ -8,7 +8,6 @@
 #include <TH1.h>
 #include "fitVars.hpp"
 
-
 class Esys {
     private:
         static Esys *EsysInstance_;
@@ -123,16 +122,16 @@ class Esys {
                     if (j_min == j_max) {
                         // Bin j maps over the whole of bin i (and possibly some of its neighbouring bins)
                         // If scaling is a trivial transformation, it produces weight = 1
-                        weight = (inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) - inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5))) / fDE.at(idx);
-                        tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
+                        weight = (inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) - inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5))) / fDE.at(idx);
+                        tempHist->AddBinContent(i, INhist->GetBinContent(j_min) * weight);
                     } else {
-                        weight = inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min + 0.5)) / fDE.at(idx) - fEratio.at(idx) + (i - 0.5);
-                        tempHist->AddBinContent(INhist->GetBinContent(j_min), weight);
+                        weight = fEratio.at(idx) + (j_min + 0.5) - (inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i - 0.5)) / fDE.at(idx));
+                        tempHist->AddBinContent(i, INhist->GetBinContent(j_min)* weight);
                         for (unsigned int j = j_min+1; j < j_max; ++j) {
-                            tempHist->AddBinContent(INhist->GetBinContent(j), 1.0);
+                            tempHist->AddBinContent(i, INhist->GetBinContent(j));
                         }
-                        weight = fEratio.at(idx) + (i + 0.5) - inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (j_min - 0.5)) / fDE.at(idx);
-                        tempHist->AddBinContent(INhist->GetBinContent(j_max), weight);
+                        weight = (inv_scaling(idx, fEmin.at(idx) + fDE.at(idx) * (i + 0.5)) / fDE.at(idx)) - fEratio.at(idx) - (j_max - 0.5);
+                        tempHist->AddBinContent(i, INhist->GetBinContent(j_max) * weight);
                     }
                 }
             }
@@ -165,7 +164,7 @@ class Esys {
 
                     for (unsigned int j = j_min; j < j_max+1; ++j) {
                         weight = integ_normal(idx, fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
-                        OUThist->AddBinContent(tempHist->GetBinContent(j), weight);
+                        OUThist->AddBinContent(i, tempHist->GetBinContent(j) * weight);
                     }
                 }
             }

@@ -203,7 +203,7 @@ class Reactor {
             }
 
             // Assume all the histograms have the same E binning
-            double E;
+            double Ee, Enu;
             double weighted_av_P;
             double weight;
             std::string origin_reactor;
@@ -213,19 +213,27 @@ class Reactor {
                 std::cout << "[Reactor::compute_osc_specs]: E_conv->GetYaxis()->GetNbins() = " << E_conv->GetYaxis()->GetNbins() << std::endl;
             #endif
 
-            for (unsigned int i = 1; i <= hists_Nbins; ++i) {
-                E = reactor_hists.at(0)->GetXaxis()->GetBinCenter(i);
-                re_compute_consts(E);
-                for (unsigned int j = 0; j < num_reactors; ++j) {
-                    // Integrate survival prob over E_nu, weigther by E_nu(E_e) distribution -> weigthed average survival prob
-                    weighted_av_P = 0.0;
-                    for (unsigned int k = 1; k <= E_conv->GetYaxis()->GetNbins(); ++k) {
-                        weight = E_conv->GetBinContent(i, k);
-                        if (weight > 0.0) weighted_av_P += weight * survival_prob(E, baselines.at(j));
-                    }
+            // Loop over event energy bins (positron energy)
+            for (unsigned int iBin = 1; iBin <= hists_Nbins; ++iBin) {
+                Ee = reactor_hists.at(0)->GetXaxis()->GetBinCenter(iBin);
 
-                    // Add value of bin from reactor core to appropriate hist, scaled by survival probability
-                    osc_hists.at(reactor_idx.at(j))->AddBinContent(i, weighted_av_P * reactor_hists.at(j)->GetBinContent(i));
+                // Integrate survival prob over E_nu, weigthed by E_nu(E_e) distribution -> weigthed average survival prob
+                weighted_av_P = 0.0;
+                for (unsigned int k = 1; k <= E_conv->GetYaxis()->GetNbins(); ++k) {
+                    weight = E_conv->GetBinContent(iBin, k);
+
+                    // Most of the histogram is empty, so only bother if > 0
+                    if (weight > 0.0) {
+                        // Compute associated antinu energy, and re-compute oscillation parameters
+                        Enu = E_conv->GetYaxis()->GetBinCenter(k);
+                        re_compute_consts(Enu);
+
+                        // Loop over all PDFs
+                        for (unsigned int iReac = 0; iReac < num_reactors; ++iReac) {
+                            // Add value of bin from reactor core to appropriate hist, scaled by survival probability
+                            osc_hists.at(reactor_idx.at(iReac))->AddBinContent(iBin, weight * survival_prob(Enu, baselines.at(iReac)) * reactor_hists.at(iReac)->GetBinContent(iBin));
+                        }
+                    }
                 }
             }
         }
