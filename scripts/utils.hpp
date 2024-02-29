@@ -116,6 +116,12 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
     Vars->AddVar("sigPerSqrtE", 0.0, sigPerSqrtE, -3.0 * sigPerSqrtE, 3.0 * sigPerSqrtE);
 
 
+    // Vars->AddVar("linScale", 1, 0, 1, 1, true);
+    // Vars->AddVar("kBp", kB, 0, kB, kB, true);
+    // Vars->AddVar("linScale_P", 1, 0, 1, 1, true);
+    // Vars->AddVar("kBp_P", kB_P, 0, kB_P, kB_P, true);
+    // Vars->AddVar("sigPerSqrtE", 0, 0, 0, 0, true);
+
     // Add energy systamtics objects (beta and proton), and link them to variables above
     Esysts->AddEsys("EsysBeta", kB, "linScale", "kBp", "sigPerSqrtE");
     Esysts->AddEsys("EsysProton", kB_P, "linScale_P", "kBp_P", "sigPerSqrtE");
@@ -223,27 +229,25 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
     // Set bins outside "real data" cuts to zero
     double dE = data->GetBinCenter(2) - data->GetBinCenter(1);
     double bin_centre, bin_top, bin_bottom;
+    unsigned int min_bin = data->GetXaxis()->GetNbins();
+    unsigned int max_bin = 0;
     for (unsigned int i = 1; i < data->GetXaxis()->GetNbins() + 1; ++i) {
         bin_centre = data->GetBinCenter(i);
-        bin_top = bin_centre + 0.5 * dE;
-        bin_bottom = bin_centre - 0.5 * dE;
-
-        if (bin_bottom >= 0.7 && bin_top <= 8.0) {
-            continue;
-        } else if (bin_top <= 0.7 || bin_bottom >= 0.8) {
+        if (bin_centre <= 0.7 || bin_centre >= 8.0) {
             data->SetBinContent(i, 0.0);
-        } else if (bin_bottom < 0.7) {
-            data->SetBinContent(i, data->GetBinContent(i) * (0.7 - bin_bottom) / dE);
         } else {
-            data->SetBinContent(i, data->GetBinContent(i) * (bin_top - 8.0) / dE);
+            if (i < min_bin) min_bin = i;
+            if (i > max_bin) max_bin = i;
         }
     }
+
 
     std::cout << "data integral = " << data->Integral() << std::endl;
 
     // Initialise fitter, and add Azimov dataset as data
     Fitter* antinuFitter = Fitter::GetInstance();
     antinuFitter->SetData(data);
+    antinuFitter->SetBinLims(min_bin, max_bin);
 }
 
 

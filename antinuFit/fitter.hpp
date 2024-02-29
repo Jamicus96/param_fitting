@@ -14,7 +14,7 @@
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 
-
+#define antinuDEBUG
 class Fitter {
     private:
         static Fitter *FitterInstance_;
@@ -25,6 +25,9 @@ class Fitter {
         static TH1D *data, *tot_fitModel;
         static unsigned int numBins;
         static bool dataIsSet;
+
+        static unsigned int BinMin, BinMax;
+        static bool setLims;
 
         // For minuit
         static double minfuncOut, edm, errdef;
@@ -100,6 +103,7 @@ class Fitter {
         static void GetAllSpectra(std::vector<TH1D*>& hists);
         static TH1D* DataHist();
         static void SetData(TH1D* Data);
+        static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
 };
 
 // Static methods should be defined outside the class.
@@ -112,6 +116,8 @@ unsigned int Fitter::numBins;
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 bool Fitter::dataIsSet = false;
+unsigned int Fitter::BinMin, Fitter::BinMax;
+bool Fitter::setLims = false;
 
 /**
  * The first time we call GetInstance we will lock the storage location
@@ -156,11 +162,19 @@ double Fitter::fit_models() {
         std::cout << "[Fitter::fit_models]: Dm21^2 = " << Vars->val("deltamsqr21") << std::endl;
     #endif
 
-    minuit->ExecuteCommand("MIGRAD", arglist, 2);
+    int iErr = 1;
+    unsigned int num_attempts = 0;
+    while (iErr) {
+        ++num_attempts;
+        iErr = minuit->ExecuteCommand("MIGRAD", arglist, 2);
+        if (num_attempts >= 15) break;
+    }
 
     //get result
-    minuit->GetStats(minfuncOut, edm, errdef, nvpar, nparx);
-    std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << std::endl;
+    if (iErr == 0) minuit->GetStats(minfuncOut, edm, errdef, nvpar, nparx);
+    else minfuncOut = 0;
+
+    std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << ", edm = " << edm << ", errdef = " << errdef << ", iErr = " << iErr << ", num_attempts = " << num_attempts << std::endl;
     return minfuncOut;
 }
 
@@ -216,9 +230,17 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
     #endif
     // Model PDFs have already been scaled by their respective norms, and added together
     // Assume data and models have the same binning (could generalise at some point)
-    double logL = - tot_fitModel->Integral();
+    double logL = 0, binContent;
     for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
-        if (tot_fitModel->GetBinContent(ibin) > 0) logL += data->GetBinContent(ibin) * log(tot_fitModel->GetBinContent(ibin));
+        if (setLims) {
+            if (ibin >= BinMin && ibin <= BinMax) {
+                binContent = tot_fitModel->GetBinContent(ibin);
+                if (binContent > 0) logL += - binContent + data->GetBinContent(ibin) * log(binContent);
+            }
+        } else {
+            binContent = tot_fitModel->GetBinContent(ibin);
+            if (binContent > 0) logL += - binContent + data->GetBinContent(ibin) * log(binContent);
+        }
     }
     #ifdef SUPER_DEBUG
         std::cout << "[Fitter::ExtendedConstrainedLogLikelihood]: +PDFs logL = " << logL << std::endl;
@@ -317,6 +339,14 @@ void Fitter::SetData(TH1D* Data) {
     tot_fitModel->SetName("tot_fit_model");
     tot_fitModel->SetTitle("Total Fit Spectrum");
     dataIsSet = true;
+}
+
+void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) {
+    BinMin = Bin_min; BinMax = Bin_max;
+    setLims = true;
+    #ifdef antinuDEBUG
+        std::cout << "[Fitter::SetBinLims]: BinMin = " << BinMin << ", BinMax = " << BinMax << std::endl;
+    #endif
 }
 
 
