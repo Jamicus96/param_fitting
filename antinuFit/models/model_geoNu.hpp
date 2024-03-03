@@ -104,6 +104,7 @@ class geoNu {
             // Apply energy systematics
             Esysts->apply_systematics(iE_syst, model_noEsys, model_Esys);
         }
+        
         void Spectra(std::vector<TH1D*>& hists) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();

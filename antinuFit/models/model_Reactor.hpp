@@ -376,7 +376,7 @@ class Reactor {
                     std::cout << "[Reactor::GetOscReactorHists]: filling hists.at(" << i << ")" << std::endl;
                 #endif
                 temp_hist->Reset("ICES");
-                temp_hist->Add(osc_hists.at(i), Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
+                temp_hist->Add(osc_hists.at(i), Vars->val(iTotNorm) * Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
                 hists.push_back((TH1D*)(osc_hists.at(i)->Clone(("model_" + reactor_names.at(i)).c_str())));
                 hists.at(hists.size()-1)->Reset("ICES");
                 Esysts->apply_systematics(iEsys, temp_hist, hists.at(hists.size()-1));

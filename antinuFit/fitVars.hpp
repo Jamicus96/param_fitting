@@ -99,10 +99,9 @@ class FitVars {
                 values.at(i) = p[i];  // provided by Minuit
 
                 #ifdef SUPER_DEBUG
-                    std::cout << "[FitVars::GetVarValues]: Vars.at(" << i << "): name = " << Vars.at(i)->name()
-                              << ", val = " << Vars.at(i)->val() << ", prior = " << Vars.at(i)->prior() << ", err = " << Vars.at(i)->err()
-                              << ", min = " << Vars.at(i)->min() << ", max = " << Vars.at(i)->max() << ", parIdx = " << Vars.at(i)->ParIdx() << std::endl;
-                    std::cout << "[FitVars::GetVarValues]: vars.at(" << i << ") = " << vars.at(i) << std::endl;
+                    std::cout << "[FitVars::GetVarValues]: Vars.at(" << i << "): name = " << parnames.at(i)
+                              << ", val = " << values.at(i) << ", prior = " << vpriors.at(i) << ", err = " << verrs.at(i)
+                              << ", min = " << vlows.at(i) << ", max = " << vhighs.at(i) << std::endl;
                 #endif
             }
         }

@@ -14,7 +14,7 @@
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 
-#define antinuDEBUG
+
 class Fitter {
     private:
         static Fitter *FitterInstance_;
@@ -66,8 +66,8 @@ class Fitter {
             for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
                 // Sets the parameter
                 minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
-                // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically
-                minuit->GetParameter(iVar, const_cast<char*>(Vars->name(iVar).c_str()), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
+                // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically [DOESN'T WORK]
+                // minuit->GetParameter(iVar, const_cast<char*>(Vars->name(iVar).c_str()), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
             }
         }
         ~Fitter() {}
@@ -104,6 +104,11 @@ class Fitter {
         static TH1D* DataHist();
         static void SetData(TH1D* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
+
+        static double GetCovarianceMatrixElement(int i, int j);
+        static void GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc);
+
+        static void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false);
 };
 
 // Static methods should be defined outside the class.
@@ -281,12 +286,14 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
         total_hist = (TH1D*)(geoNuMod->GetModelEsys()->Clone("Total_Model_Spectrum"));
     }
     total_hist->SetTitle("Total Model Spectrum");
+    total_hist->Reset("ICES");
 
     if (ReactorMod->IsInit()) {
         ReactorMod->compute_spec();
 
         // Add total spectra
         hists.push_back((TH1D*)(ReactorMod->GetModelEsys()->Clone()));
+        hists.at(hists.size()-1)->Reset("ICES");
         hists.at(hists.size()-1)->Add(ReactorMod->GetModelEsys());
 
         // Add to total overall specrtrum
@@ -301,6 +308,7 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 
         // Add total spectra
         hists.push_back((TH1D*)(alphaNMod->GetModelEsys()->Clone()));
+        hists.at(hists.size()-1)->Reset("ICES");
         hists.at(hists.size()-1)->Add(alphaNMod->GetModelEsys());
 
         // Add to total overall specrtrum
@@ -315,6 +323,7 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 
         // Add total spectra
         hists.push_back((TH1D*)(geoNuMod->GetModelEsys()->Clone()));
+        hists.at(hists.size()-1)->Reset("ICES");
         hists.at(hists.size()-1)->Add(geoNuMod->GetModelEsys());
 
         // Add to total overall specrtrum
@@ -349,6 +358,22 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
     #endif
 }
 
+double Fitter::GetCovarianceMatrixElement(int i, int j) {return minuit->GetCovarianceMatrixElement(i, j);}
+void Fitter::GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc) {minuit->GetErrors(ipar, eplus, eminus, eparab, globcc);}
+
+void Fitter::resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant) {
+    FitVars* Vars = FitVars::GetInstance();
+    Vars->val(Parname) = Value;
+    Vars->prior(Parname) = Value;
+    Vars->err(Parname) = Verr;
+    Vars->min(Parname) = Vlow;
+    Vars->max(Parname) = Vhigh;
+    Vars->HoldConstant(Parname, holdConstant);
+
+    if (holdConstant) Vars->err(Parname) = 0.0;
+
+    minuit->SetParameter(Vars->findIdx(Parname), Parname.c_str(), Value, Verr, Vlow, Vhigh);
+}
 
 //end header guard
 #endif
