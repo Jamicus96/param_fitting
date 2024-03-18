@@ -23,11 +23,13 @@ class Fitter {
         static double arglist[2];
 
         static TH1D *data, *tot_fitModel;
+        static TTree* dataTree;
         static unsigned int numBins;
+        static double Emin, dE;
         static bool dataIsSet;
 
         static unsigned int BinMin, BinMax;
-        static bool setLims;
+        static bool setLims, binnedData, init_tot_fitModel;
 
         // For minuit
         static double minfuncOut, edm, errdef;
@@ -103,12 +105,14 @@ class Fitter {
         static void GetAllSpectra(std::vector<TH1D*>& hists);
         static TH1D* DataHist();
         static void SetData(TH1D* Data);
+        static void SetData(TTree* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
 
         static double GetCovarianceMatrixElement(int i, int j);
         static void GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc);
 
         static void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false);
+        static void InitTotFitModHist(TH1D* exampleHist);
 };
 
 // Static methods should be defined outside the class.
@@ -117,12 +121,14 @@ Fitter* Fitter::FitterInstance_{nullptr};
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
 TH1D *Fitter::data, *Fitter::tot_fitModel;
+TTree* Fitter::dataTree;
 unsigned int Fitter::numBins;
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 bool Fitter::dataIsSet = false;
 unsigned int Fitter::BinMin, Fitter::BinMax;
-bool Fitter::setLims = false;
+bool Fitter::setLims = false, Fitter::binnedData = false, Fitter::init_tot_fitModel = false;
+double Fitter::Emin, Fitter::dE;
 
 /**
  * The first time we call GetInstance we will lock the storage location
@@ -187,8 +193,8 @@ Double_t Fitter::fitFunc(Double_t* p) {
     #ifdef SUPER_DEBUG
         std::cout << "[Fitter::fitFunc]: Running fitFunc()." << std::endl;
     #endif
-    // Reset total model spectrum to zero
-    tot_fitModel->Reset("ICES");
+    // Reset total model spectrum to zero [[INITIALISE?]]
+    if (init_tot_fitModel) tot_fitModel->Reset("ICES");
 
     // Compute the total spectrum from all the models, using parameters p
     FitVars* Vars = FitVars::GetInstance();
@@ -205,6 +211,10 @@ Double_t Fitter::fitFunc(Double_t* p) {
 
     if (ReactorMod->IsInit()) {
         ReactorMod->compute_spec();
+        if (!init_tot_fitModel) {
+            InitTotFitModHist(ReactorMod->GetModelEsys());
+            tot_fitModel->Reset("ICES");
+        }
         tot_fitModel->Add(ReactorMod->GetModelEsys());
         #ifdef SUPER_DEBUG
             std::cout << "[Fitter::fitFunc]: Added ReactorMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
@@ -212,6 +222,10 @@ Double_t Fitter::fitFunc(Double_t* p) {
     }
     if (alphaNMod->IsInit()) {
         alphaNMod->compute_spec();
+        if (!init_tot_fitModel) {
+            InitTotFitModHist(alphaNMod->GetModelEsys());
+            tot_fitModel->Reset("ICES");
+        }
         tot_fitModel->Add(alphaNMod->GetModelEsys());
         #ifdef SUPER_DEBUG
             std::cout << "[Fitter::fitFunc]: Added alphaNMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
@@ -219,6 +233,10 @@ Double_t Fitter::fitFunc(Double_t* p) {
     }
     if (geoNuMod->IsInit()) {
         geoNuMod->compute_spec();
+        if (!init_tot_fitModel) {
+            InitTotFitModHist(geoNuMod->GetModelEsys());
+            tot_fitModel->Reset("ICES");
+        }
         tot_fitModel->Add(geoNuMod->GetModelEsys());
         #ifdef SUPER_DEBUG
             std::cout << "[Fitter::fitFunc]: Added geoNuMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
@@ -236,15 +254,33 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
     // Model PDFs have already been scaled by their respective norms, and added together
     // Assume data and models have the same binning (could generalise at some point)
     double logL = 0, binContent;
-    for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
-        if (setLims) {
-            if (ibin >= BinMin && ibin <= BinMax) {
-                binContent = tot_fitModel->GetBinContent(ibin);
-                if (binContent > 0) logL += - binContent + data->GetBinContent(ibin) * log(binContent);
-            }
-        } else {
+
+    if (binnedData) {
+        // Data is a histogram, same binning as model PDFs
+        for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
+            if (setLims && (ibin <= BinMin || ibin >= BinMax)) continue;
             binContent = tot_fitModel->GetBinContent(ibin);
             if (binContent > 0) logL += - binContent + data->GetBinContent(ibin) * log(binContent);
+        }
+
+    } else {
+        // Data is an ntuple TTree
+        for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
+            if (setLims && (ibin <= BinMin || ibin >= BinMax)) continue;
+            binContent = tot_fitModel->GetBinContent(ibin);
+            if (binContent > 0) logL += -binContent;
+        }
+        Double_t reconEnergy;
+        dataTree->SetBranchAddress("energy", &reconEnergy);
+        unsigned int a = 0;
+        int E_bin;
+        // Loop through all data events:
+        while (a < dataTree->GetEntries()) {
+            dataTree->GetEntry(a);
+            E_bin = int((reconEnergy - Emin) / dE) + 1;
+            if (setLims && (E_bin <= BinMin || E_bin >= BinMax)) continue;
+            binContent = tot_fitModel->GetBinContent(E_bin);
+            if (binContent > 0) logL += log(binContent);
         }
     }
     #ifdef SUPER_DEBUG
@@ -338,16 +374,33 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 
 TH1D* Fitter::DataHist() {return data;}
 
-void Fitter::SetData(TH1D* Data) {
-    #ifdef antinuDEBUG
-        std::cout << "[Fitter::SetData]: Setting Data." << std::endl;
-    #endif
-    data = Data;
-    numBins = data->GetXaxis()->GetNbins();
-    tot_fitModel = (TH1D*)(data->Clone());
+void Fitter::InitTotFitModHist(TH1D* exampleHist) {
+    numBins = exampleHist->GetXaxis()->GetNbins();
+    tot_fitModel = (TH1D*)(exampleHist->Clone());
+    tot_fitModel->Reset("ICES");
     tot_fitModel->SetName("tot_fit_model");
     tot_fitModel->SetTitle("Total Fit Spectrum");
+    init_tot_fitModel = true;
+    Emin = tot_fitModel->GetBinCenter(1);
+    dE = tot_fitModel->GetBinCenter(2) - tot_fitModel->GetBinCenter(1);
+}
+
+void Fitter::SetData(TH1D* Data) {
+    #ifdef antinuDEBUG
+        std::cout << "[Fitter::SetData]: Setting TH1D Data." << std::endl;
+    #endif
+    data = Data;
     dataIsSet = true;
+    binnedData = true;
+}
+
+void Fitter::SetData(TTree* Data) {
+    #ifdef antinuDEBUG
+        std::cout << "[Fitter::SetData]: Setting TTree Data." << std::endl;
+    #endif
+    dataTree = Data;
+    dataIsSet = true;
+    binnedData = false;
 }
 
 void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) {

@@ -25,7 +25,7 @@
 #include "model_Reactor.hpp"
 
 
-void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db);
+void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
@@ -33,18 +33,18 @@ std::vector<std::string> SplitString(std::string str);
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
-double N_IBD = 122.0;           // Total number of expected reactor IBDs (un-oscillated)
-// double N_IBD = 122.0 * 0.96;    // Classifier cut number
+// double N_IBD = 122.0;           // Total number of expected reactor IBDs (un-oscillated)
+double N_IBD = 122.0 * 0.96;    // Classifier cut number
 double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
 double IBD_err_tot = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
-double N_alphaN = 50.0;         // Total number of expected alpha-n
-// double N_alphaN = 50.0 * 0.22;  // Classifier cut number
+// double N_alphaN = 50.0;         // Total number of expected alpha-n
+double N_alphaN = 50.0 * 0.22;  // Classifier cut number
 double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR + C12)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
-double N_geoNu = 5.0;           // Total number of expected geo-nu IBDs (un-oscillated)
-// double N_geoNu = 5.0 * 0.89;    // Classifier cut number
+// double N_geoNu = 30.0;           // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
+double N_geoNu = 30.0 * 0.89;    // Classifier cut number
 double geoNu_err = 0.2;         // fractional error in N_geoNu for individual Th and U spectra
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)
@@ -58,6 +58,12 @@ double kB_err_P = 0.004;        // Error in kB_P for proton recoils (not fractio
 // Proton recoil uses the same smearing as the rest
 
 /* ~~~~~~~~ SET UP FITTER ~~~~~~~~ */
+
+void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, TTree* Data) {
+    create_fitter(PDFs_address, Dm21_2, Dm32_2, s_12_2, s_13_2, db, false);
+    Fitter* antinuFitter = Fitter::GetInstance();
+    antinuFitter->SetData(Data);
+}
 
 /**
  * @brief Create a fitter object.
@@ -73,7 +79,7 @@ double kB_err_P = 0.004;        // Error in kB_P for proton recoils (not fractio
  * @param s_13_2 
  * @param db 
  */
-void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db) {
+void create_fitter(std::string PDFs_address, const double Dm21_2, const double Dm32_2, const double s_12_2, const double s_13_2, RAT::DB* db, const bool useAzimovData) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
     std::vector<TH1D*> reactor_hists;
@@ -236,7 +242,7 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
     unsigned int max_bin = 0;
     for (unsigned int i = 1; i < data->GetXaxis()->GetNbins() + 1; ++i) {
         bin_centre = data->GetBinCenter(i);
-        if (bin_centre <= 0.7 || bin_centre >= 8.0) {
+        if (bin_centre <= 0.9 || bin_centre >= 8.0) {
             data->SetBinContent(i, 0.0);
         } else {
             if (i < min_bin) min_bin = i;
@@ -249,7 +255,7 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 
     // Initialise fitter, and add Azimov dataset as data
     Fitter* antinuFitter = Fitter::GetInstance();
-    antinuFitter->SetData(data);
+    if (useAzimovData) antinuFitter->SetData(data);
     antinuFitter->SetBinLims(min_bin, max_bin);
 }
 

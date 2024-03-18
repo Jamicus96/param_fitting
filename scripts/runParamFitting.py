@@ -16,30 +16,35 @@ def argparser():
         description='Run parameter fitting code')
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples/', help='Folder where PDFs (root hists) are saved.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples/', help='Folder where PDFs (root hists) are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples_Gold7.0.8/geoNuTh/ntuples/', help='Folder where PDFs (root hists) are saved.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/Analysis_data/gold/', help='Folder where PDFs (root hists) are saved.')
+    parser.add_argument('--data_repo', '-dr', type=str, dest='data_repo',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/data_Gold7.0.8/geoNuTh/', help='Folder where PDFs (root hists) are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_classCut/', help='Folder to save recombined root files with tracking information in.')
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_Gold7.0.8/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
     parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
 
-    # parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-8.66, help='Classifier cut (remove events below this)')
-    parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
+    parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-8.66, help='Classifier cut (remove events below this)')
+    # parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=500, help='Number of bins in x and y directions.')
-    # parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=30, help='Maximum number of bins looped over in one job.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=30, help='Maximum number of bins looped over in one job.')
+    # parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=False, help='For energy correction: True for data, False for MC.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=100, help='Max number of tasks in an array running at any one time.')
-    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'fit', 'combi'],
+    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'data', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
                         default=True, help='print and save extra info')
@@ -141,6 +146,79 @@ def makePDFs(args):
     # Run job script!
     print('Submitting job...')
     command = 'qsub ' + job_address
+    if args.verbose:
+        print('Running command: ', command)
+    subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
+
+
+### DATA functions ###
+
+def makeDATAjobScript(example_jobScript, overall_folder, commands, args):
+    '''Create job script to run array of rat macros'''
+
+    new_job_address = overall_folder + 'job_scripts/'
+    new_job_address = checkRepo(new_job_address, args.verbose)
+    new_job_address += 'Data_job.job'
+
+    output_logFile_address = overall_folder + 'log_files/'
+    output_logFile_address = checkRepo(output_logFile_address, args.verbose)
+    output_logFile_address +=  'log_Data_cut' + str(args.classCut) + '.txt'
+
+    new_jobScript = []
+    for line in example_jobScript:
+        # Replace placeholders in macro
+        if 'output_log.txt' in line:
+            new_line = line.replace('output_log.txt', output_logFile_address, 1)
+        elif 'your commands' in line:
+            new_line = line.replace('your commands', commands, 1)
+        else:
+            new_line = line
+
+        new_jobScript.append(new_line)
+
+    # Create job file
+    with open(new_job_address, "w") as f:
+        new_jobScript = "".join(new_jobScript)
+        f.write(new_jobScript)
+
+    return new_job_address
+
+def makeDATA(args):
+    '''Turn reactor IBD and alpha-n event ntuples into hist PDFs to be used for fitting'''
+
+    # Check repos are formatted correctly and exist, otherwise make them
+    ntuple_repo = checkRepo(args.ntuple_repo, args.verbose)
+    data_repo = checkRepo(args.data_repo, args.verbose)
+    commandList_address = data_repo + 'commandList.txt'
+
+    # Get full path to this repo
+    path = getRepoAddress()
+
+    # Create command
+    commandBase = path + 'scripts/cut_data.exe '
+    
+    commandList_file = open(commandList_address, 'w')
+    i = 0
+    for filename in os.listdir(ntuple_repo):
+        file_address = os.path.join(ntuple_repo, filename)
+        if os.path.isfile(file_address):
+            if file_address[-12:] == '.ntuple.root':
+                command = commandBase + file_address + ' '
+                command += data_repo + 'data_cut_' + str(i) + '.root '
+                command += str(args.classCut) + ' ' + str(int(args.is_data))
+                commandList_file.write(command + '\n')
+                i += 1
+    commandList_file.close()
+
+    # Create new job file
+    jobScript_address = path + 'job_scripts/fitting_job.job'
+    with open(jobScript_address, "r") as f:
+        example_jobScript = f.readlines()
+    job_address = makeJobArrayScript(example_jobScript, data_repo, commandList_address, args.verbose)
+
+    # Run job script!
+    print('Submitting job...')
+    command = 'qsub -t 1-' + str(i) + ' ' + job_address
     if args.verbose:
         print('Running command: ', command)
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
@@ -352,6 +430,8 @@ def main():
 
     if args.step == 'pdf':
         makePDFs(args)
+    elif args.step == 'data':
+        makeDATA(args)
     elif args.step == 'fit':
         doFitting(args)
     elif args.step == 'combi':
