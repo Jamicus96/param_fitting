@@ -57,12 +57,12 @@ def argparser():
 
 def getRepoAddress():
     '''Returns the full address of the git repo containing with script'''
-    repo_address = __file__[:-len('scripts/runParamFitting.py')]
+    repo_address = __file__[:-len('runParamFitting.py')]
     if repo_address == '':
-        firt_char = None
+        first_char = None
     else:
-        firt_char = repo_address[0]
-    if firt_char != '/':
+        first_char = repo_address[0]
+    if first_char != '/':
         repo_address = os.getcwd() + '/' + repo_address
     return repo_address
 
@@ -129,7 +129,7 @@ def makePDFs(args):
     path = getRepoAddress()
 
     # Create command
-    command = path + 'scripts/make_PDFs.exe '
+    command = path + 'cutting/make_PDFs.exe '
     command += ntuple_repo + 'reactorIBD/ReactorIBD.ntuple.root '
     command += ntuple_repo + 'alphaN/alphaN.ntuple.root '
     command += ntuple_repo + 'geoNuTh/geoNuTh.ntuple.root '
@@ -195,7 +195,7 @@ def makeDATA(args):
     path = getRepoAddress()
 
     # Create command
-    commandBase = path + 'scripts/cut_data.exe '
+    commandBase = path + 'cutting/cut_data.exe '
     
     commandList_file = open(commandList_address, 'w')
     i = 0
@@ -323,7 +323,7 @@ def doFitting(args):
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')
-    command_base = path + 'scripts/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits_'
+    command_base = path + 'fitting/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits_'
 
     # Make list of commands for job array to call
     jobScript_repo = fit_repo + 'job_scripts/'
@@ -400,7 +400,7 @@ def combi_fits(args):
     theta12_end_indices = Dm21_end_indices
 
     # make job command
-    command = path + 'scripts/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ' ' + fit_repo + 'param_fits_all.root'
+    command = path + 'fitting/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ' ' + fit_repo + 'param_fits_all.root'
     k = 0
     for i in range(Dm21_start_indices.size):
         for j in range(theta12_start_indices.size):
