@@ -14,7 +14,7 @@
 #include <RAT/DU/Utility.hh>
 
 
-#define VERBOSE
+// #define VERBOSE
 
 // #define USING_RUN_NUM
 ULong64_t dcAnalysisWord = 36283883733698;  // Converted hex to decimal from 0x2100000042C2
