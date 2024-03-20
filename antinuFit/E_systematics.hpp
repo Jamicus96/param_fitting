@@ -76,8 +76,12 @@ class Esys {
             fEratio.at(idx) = fEmin.at(idx) / fDE.at(idx);
             iNumBins.at(idx) = example_hist->GetXaxis()->GetNbins();
 
+            #ifdef SUPER_DEBUG
+                std::cout << "[Esys::apply_smearing]: fEmin = " << fEmin.at(idx) << ", fDE = " << fDE.at(idx) << ", fEratio = " << fEratio.at(idx) << ", iNumBins = " << iNumBins.at(idx) << std::endl;
+            #endif
+
             // Set up empty histogram
-            tempHist = (TH1D*)(example_hist->Clone());  // temporary hist for internal use
+            tempHist = (TH1D*)(example_hist->Clone("Esys_tempHist"));  // temporary hist for internal use
             bIsInit.at(idx) = true;
         }
         
@@ -139,7 +143,11 @@ class Esys {
         
         void apply_smearing(const unsigned int idx, TH1D* OUThist) {
             FitVars* Vars = FitVars::GetInstance();
-            if (5.0 * Vars->val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinContent(iNumBins.at(idx))) <= fDE.at(idx)) {
+            #ifdef SUPER_DEBUG
+                std::cout << "[Esys::apply_smearing]: SigPerRootE = " << Vars->val(iSigPerRootE.at(idx)) << ", Max E = " << tempHist->GetBinCenter(iNumBins.at(idx)) << std::endl;
+                std::cout << "[Esys::apply_smearing]: Max sigma = " << Vars->val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinCenter(iNumBins.at(idx))) << std::endl;
+            #endif
+            if (5.0 * Vars->val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinCenter(iNumBins.at(idx))) <= fDE.at(idx)) {
                 // 5 sigmas in bin with highest energy is still smaller than bin width -> no smearing (includes sigma=0 case)
                 OUThist->Add(tempHist);
                 #ifdef SUPER_DEBUG
@@ -150,7 +158,7 @@ class Esys {
                 unsigned int num_bins_5sigmas;
                 int j_min, j_max;
                 for (unsigned int i = 1; i < iNumBins.at(idx)+1; ++i) {
-                    sigma = Vars->val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinContent(i));
+                    sigma = Vars->val(iSigPerRootE.at(idx)) * std::sqrt(tempHist->GetBinCenter(i));
                     num_bins_5sigmas = (unsigned int)(5.0 * sigma / fDE.at(idx));
 
                     j_min = i - num_bins_5sigmas;
@@ -163,7 +171,7 @@ class Esys {
                     #endif
 
                     for (unsigned int j = j_min; j < j_max+1; ++j) {
-                        weight = integ_normal(idx, fDE.at(idx) * (j - i - 0.5) / sigma, fDE.at(idx) * (j - i + 0.5) / sigma);
+                        weight = integ_normal(idx, fDE.at(idx) * (j - 0.5 - i) / sigma, fDE.at(idx) * (j + 0.5 - i) / sigma);
                         OUThist->AddBinContent(i, tempHist->GetBinContent(j) * weight);
                     }
                 }
@@ -171,18 +179,15 @@ class Esys {
         }
 
         void apply_systematics(std::string Parname, TH1D* INhist, TH1D* OUThist) {
-            FitVars* Vars = FitVars::GetInstance();
-            apply_systematics(Vars->findIdx(Parname), INhist, OUThist);
+            apply_systematics(findIdx(Parname), INhist, OUThist);
         }
 
         void apply_scaling(std::string Parname, TH1D* INhist) {
-            FitVars* Vars = FitVars::GetInstance();
-            apply_scaling(Vars->findIdx(Parname), INhist);
+            apply_scaling(findIdx(Parname), INhist);
         }
 
         void apply_smearing(std::string Parname, TH1D* OUThist) {
-            FitVars* Vars = FitVars::GetInstance();
-            apply_smearing(Vars->findIdx(Parname), OUThist);
+            apply_smearing(findIdx(Parname), OUThist);
         }
 
         double inv_scaling(const unsigned int idx, const double E) {
@@ -206,13 +211,11 @@ class Esys {
         }
 
         double inv_scaling(std::string Parname, const double E) {
-            FitVars* Vars = FitVars::GetInstance();
-            return inv_scaling(Vars->findIdx(Parname), E);
+            return inv_scaling(findIdx(Parname), E);
         }
 
         double integ_normal(std::string Parname, const double x1, const double x2) {
-            FitVars* Vars = FitVars::GetInstance();
-            return integ_normal(Vars->findIdx(Parname), x1, x2);
+            return integ_normal(findIdx(Parname), x1, x2);
         }
 };
 

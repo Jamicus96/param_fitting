@@ -23,6 +23,7 @@ class geoNu {
         double Th_integral, U_integral;
         double survival_prob;
         bool computed_survival_prob;
+        unsigned int iMinBin, iMaxBin;
     
     protected:
         // Constructors/desctructors
@@ -46,6 +47,7 @@ class geoNu {
         // Initialisers
         void InitGeoNu(const unsigned int NormTh_idx, const unsigned int NormU_idx, const unsigned int vS_12_2_idx, const unsigned int vS_13_2_idx, const unsigned int E_syst_idx, TH1D* Hist_Th, TH1D* Hist_U) {
             iNormTh = NormTh_idx; iNormU = NormU_idx; iS_12_2 = vS_12_2_idx; iS_13_2 = vS_13_2_idx; iE_syst = E_syst_idx;
+            iMinBin = 1; iMaxBin = Hist_Th->GetXaxis()->GetNbins();
             histTh = Hist_Th; histTh->SetName("geoNu::histTh");
             histU = Hist_U; histU->SetName("geoNu::histU");
             Th_integral = histTh->Integral();
@@ -127,6 +129,13 @@ class geoNu {
         TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
+        void SetBinLims(const unsigned int MinBin, const unsigned int MaxBin) {
+            iMinBin = MinBin;
+            iMaxBin = MaxBin;
+
+            Th_integral = histTh->Integral(iMinBin, iMaxBin);
+            U_integral = histU->Integral(iMinBin, iMaxBin);
+        }
 };
 
 // Static methods should be defined outside the class.

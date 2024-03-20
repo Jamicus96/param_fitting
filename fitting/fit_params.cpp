@@ -15,7 +15,6 @@
 #include <TList.h>
 #include <TVectorD.h>
 #include "Math/DistFunc.h"
-#include <map>
 
 #include "fitter.hpp"
 #include "fitVars.hpp"
@@ -23,7 +22,7 @@
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 #include "model_Reactor.hpp"
-#include "utils.hpp"
+#include "fitting_utils.hpp"
 
 
 void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);

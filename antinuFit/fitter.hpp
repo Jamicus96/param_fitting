@@ -35,6 +35,7 @@ class Fitter {
         static double minfuncOut, edm, errdef;
         static int nvpar, nparx;
 
+        // class Reactor* reac;
     
     protected:
         // Constructors/desctructors
@@ -409,6 +410,27 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
     #ifdef antinuDEBUG
         std::cout << "[Fitter::SetBinLims]: BinMin = " << BinMin << ", BinMax = " << BinMax << std::endl;
     #endif
+
+    // Set models to use the same bin limits
+    Reactor* ReactorMod = Reactor::GetInstance();
+    alphaN* alphaNMod = alphaN::GetInstance();
+    geoNu* geoNuMod = geoNu::GetInstance();
+    
+    if (ReactorMod->IsInit()) {
+        ReactorMod->SetBinLims(BinMin, BinMax);
+    } else {
+        std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising Reactor model. Bin limits will not be set there too." << std::endl;
+    }
+    if (alphaNMod->IsInit()) {
+        alphaNMod->SetBinLims(BinMin, BinMax);
+    } else {
+        std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising alphaN model. Bin limits will not be set there too." << std::endl;
+    }
+    if (geoNuMod->IsInit()) {
+        geoNuMod->SetBinLims(BinMin, BinMax);
+    } else {
+        std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising geoNu model. Bin limits will not be set there too." << std::endl;
+    }
 }
 
 double Fitter::GetCovarianceMatrixElement(int i, int j) {return minuit->GetCovarianceMatrixElement(i, j);}

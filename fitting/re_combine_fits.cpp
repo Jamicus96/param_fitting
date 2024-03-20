@@ -27,7 +27,7 @@
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 #include "model_Reactor.hpp"
-#include "utils.hpp"
+#include "fitting_utils.hpp"
 
 
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);

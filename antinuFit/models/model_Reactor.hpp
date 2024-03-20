@@ -57,6 +57,7 @@ class Reactor {
         std::vector<TH1D*> osc_hists;
         std::vector<double> unosc_hist_ints;  // Integral un un-oscillated histograms (computed once)
         bool computed_osc_specs = false;
+        unsigned int iMinBin, iMaxBin;
 
         RAT::DB* db;
     
@@ -104,6 +105,7 @@ class Reactor {
             iNorms = norms_idx;
             iTotNorm = totNorm_idx;
             db = DB;
+            iMinBin = 1; iMaxBin = Reactor_hists.at(0)->GetXaxis()->GetNbins();
 
             #ifdef antinuDEBUG
                 std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iTotNorm = " << iTotNorm << std::endl;
@@ -186,7 +188,7 @@ class Reactor {
                 unosc_hist_ints.at(i) = 0;
             }
             for (unsigned int i = 0; i < num_reactors; ++i) {
-                unosc_hist_ints.at(reactor_idx.at(i)) += reactor_hists.at(i)->Integral();
+                unosc_hist_ints.at(reactor_idx.at(i)) += reactor_hists.at(i)->Integral(iMinBin, iMaxBin);
             }
         }
 
@@ -388,6 +390,12 @@ class Reactor {
         TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
+        void SetBinLims(const unsigned int MinBin, const unsigned int MaxBin) {
+            iMinBin = MinBin;
+            iMaxBin = MaxBin;
+
+            compute_unosc_integrals();
+        }
 };
 
 // Static methods should be defined outside the class.

@@ -23,6 +23,7 @@ class alphaN {
         TH1D* hist_O16Deex;
         double Integral_hist_GS, Integral_hist_ES;
         TH1D* model_Proton;
+        unsigned int iMinBin, iMaxBin;
     
     protected:
         // Constructors/desctructors
@@ -48,6 +49,7 @@ class alphaN {
                const unsigned int E_syst_proton_idx, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
 
             iNormGS = NormGS_idx; iNormES = NormES_idx; iEsys = E_syst_idx; iEsysP = E_syst_proton_idx;
+            iMinBin = 1; iMaxBin = hist_ProtontR->GetXaxis()->GetNbins();
 
             hist_ProtontR = Hist_ProtontR;
             Integral_hist_GS = hist_ProtontR->Integral();
@@ -57,7 +59,6 @@ class alphaN {
             Integral_hist_ES = hist_O16Deex->Integral();
 
             model_Proton = (TH1D*)(hist_ProtontR->Clone("alphaN::temp_model_PR"));
-
             model_noEsys = (TH1D*)(hist_ProtontR->Clone("alphaN::model_noEsys"));
             model_Esys = (TH1D*)(hist_ProtontR->Clone("alphaN::model_Esys"));
 
@@ -92,23 +93,21 @@ class alphaN {
                 std::cout << "[alphaN::compute_spec]: Integral_hist_ES = " << Integral_hist_ES << std::endl;
             #endif
 
+            // Add proton recoil to spectrum, and apply extra proton systematics separately
+            model_Proton->Add(hist_ProtontR, Vars->val(iNormGS) / Integral_hist_GS);
+            Esysts->apply_systematics(iEsysP, model_Proton, model_noEsys);
+
             // Add the non proton-recoil spectra to spectrum
             model_noEsys->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_hist_GS);
             model_noEsys->Add(hist_O16Deex, Vars->val(iNormES) / Integral_hist_ES);
 
-            // Apply Normal (beta) energy systematics (adds stuff to model_spec_sys, doesn't reset it)
-            Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
-
-            // Add proton recoil to spectrum, and its own spectrum, to apply proton systematics separately
-            model_Proton->Add(hist_ProtontR, Vars->val(iNormGS) / Integral_hist_GS);
-            // model_noEsys->Add(model_Proton);
-
-            // Apply Proton energy systematics
-            Esysts->apply_systematics(iEsysP, model_Proton, model_Esys);
+            // Apply Normal (beta) energy systematics to all (adds stuff to model_Esys, doesn't reset it)
+            Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);  
             #ifdef SUPER_DEBUG
-                std::cout << "[alphaN::compute_spec]: 9 model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
+                std::cout << "[alphaN::compute_spec]: model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
             #endif
-        }   
+        }
+
         void Spectra(std::vector<TH1D*>& hists) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
@@ -137,6 +136,14 @@ class alphaN {
         TH1D* GetModelEsys() {return model_Esys;}
 
         bool IsInit() {return isInit;}
+        void SetBinLims(const unsigned int MinBin, const unsigned int MaxBin) {
+            iMinBin = MinBin;
+            iMaxBin = MaxBin;
+
+            Integral_hist_GS = hist_ProtontR->Integral(iMinBin, iMaxBin);
+            Integral_hist_GS += hist_C12Scatter->Integral(iMinBin, iMaxBin);
+            Integral_hist_ES = hist_O16Deex->Integral(iMinBin, iMaxBin);
+        }
 };
 
 // Static methods should be defined outside the class.

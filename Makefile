@@ -1,36 +1,48 @@
 RAT_CONFIG = `root-config --cflags --libs` -I${RATROOT}/include/libpq -I${RATROOT}/include -I${RATROOT}/include/external -L${RATROOT}/lib -lRATEvent_Linux
-VPATH = ./antinuFit/:./antinuFit/models/:./scripts/:./temp_files/
-INCLUDE = ${RAT_CONFIG} -I./antinuFit -I./antinuFit/models -I./scripts
+VPATH = ./antinuFit/:./antinuFit/models/:./fitting/:./cutting/:./testing/
+INCLUDE = ${RAT_CONFIG} -I./antinuFit -I./antinuFit/models -I./fitting -I./cutting
 COMPILE = g++ -g -std=c++1y
 # error: undefined reference to '__dso_handle':
 # "If I’m not mistaken, it is related to a combination of complex C++ object destruction of static objects and the nostdlib compiler option.
 # In an embedded system, you likely don’t need the destruction of static objects. So try this compiler option: -fno-use-cxa-atexit"
 
-all: make_PDFs cut_data re_combine_fits fit_params clean
+all: cutting fitting tests clean
 
 
-# Make PDFs
-make_PDFs: make_PDFs.cpp
-	${COMPILE} scripts/make_PDFs.cpp -o scripts/make_PDFs.exe ${INCLUDE}
+# Cutting and PDF making
+cutting: make_PDFs cut_data clean
 
-# Cut Data
-cut_data: cut_data.cpp
-	${COMPILE} scripts/cut_data.cpp -o scripts/cut_data.exe ${INCLUDE}
+make_PDFs: make_PDFs.o 
+	${COMPILE} make_PDFs.o -o cutting/make_PDFs.exe ${INCLUDE}
+make_PDFs.o: make_PDFs.cpp cut_utils.hpp
+	${COMPILE} cutting/make_PDFs.cpp -c ${INCLUDE}
 
-# re_combine_fits
+cut_data: cut_data.o 
+	${COMPILE} cut_data.o -o cutting/cut_data.exe ${INCLUDE}
+cut_data.o: cut_data.cpp cut_utils.hpp
+	${COMPILE} cutting/cut_data.cpp -c ${INCLUDE}
+
+# Fitting
+fitting: fit_params re_combine_fits clean
+
 re_combine_fits: re_combine_fits.o 
-	${COMPILE} re_combine_fits.o -o scripts/re_combine_fits.exe ${INCLUDE}
+	${COMPILE} re_combine_fits.o -o fitting/re_combine_fits.exe ${INCLUDE}
+re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVars.hpp E_systematics.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp fitting_utils.hpp
+	${COMPILE} fitting/re_combine_fits.cpp -c ${INCLUDE}
 
-re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVars.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
-	${COMPILE} scripts/re_combine_fits.cpp -c ${INCLUDE}
-
-# fit_params
 fit_params: fit_params.o 
-	${COMPILE} fit_params.o -o scripts/fit_params.exe ${INCLUDE}
+	${COMPILE} fit_params.o -o fitting/fit_params.exe ${INCLUDE}
+fit_params.o: fit_params.cpp fitter.hpp fitVars.hpp E_systematics.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp fitting_utils.hpp
+	${COMPILE} fitting/fit_params.cpp -c ${INCLUDE}
 
-fit_params.o: fit_params.cpp fitter.hpp fitVars.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp utils.hpp
-	${COMPILE} scripts/fit_params.cpp -c ${INCLUDE}
 
+# Testing
+tests: test_Esys clean
+
+test_Esys: test_Esys.o 
+	${COMPILE} test_Esys.o -o testing/test_Esys.exe ${INCLUDE}
+test_Esys.o: test_Esys.cpp fitVars.hpp E_systematics.hpp
+	${COMPILE} testing/test_Esys.cpp -c ${INCLUDE}
 
 
 # Cleaning
@@ -38,4 +50,4 @@ clean:
 	rm *.o
 
 delete :
-	rm scripts/*.exe
+	rm fitting/*.exe cutting/*.exe testing/*.exe
