@@ -14,116 +14,18 @@
 #include <RAT/DataCleaningUtility.hh>
 #include <RAT/DU/Utility.hh>
 #include <map>
-#include "cut_utils.hpp"
 
 
 // Define physical constants
-double electron_mass_c2 = 0.510998910;  // MeV
-double proton_mass_c2 = 938.272013;  // MeV
-double neutron_mass_c2 = 939.56536;  // MeV
-double CARBON12_SCATTER_E_MAX = 5.4;  // (MeV)  Could just simulate different process separately?
+double electron_mass_c2 = 0.510998910;  // [MeV]
+double proton_mass_c2 = 938.272013;  // [MeV]
+double neutron_mass_c2 = 939.56536;  // [MeV]
+double CARBON12_SCATTER_E_MAX = 5.4;  // [MeV]  Could just simulate different process separately?
+double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in cut_data.cpp
 
 
-std::map<std::string, TH1D*> CreatePDFs(std::vector<TTree*>& EventInfos, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
-                                        const unsigned int nbins, const std::string data_type) {
-
-    // Define a map of histograms {"hist name", hist}. This is to keep track of reactor IBD origin
-    std::map<std::string, TH1D*> hists_map;
-
-    // Set branch addresses to unpack TTree
-    TString *originReactor = NULL;
-    Double_t parentKE1, reconEnergy, reconX, reconY, reconZ, classResult;
-    ULong64_t eventTime, dcApplied, dcFlagged;
-    Bool_t valid;
-    Int_t mcIndex;
-
-    for (unsigned int iTree = 0; iTree < EventInfos.size(); ++iTree) {
-        EventInfos.at(iTree)->SetBranchAddress("energy", &reconEnergy);
-        EventInfos.at(iTree)->SetBranchAddress("posx", &reconX);
-        EventInfos.at(iTree)->SetBranchAddress("posy", &reconY);
-        EventInfos.at(iTree)->SetBranchAddress("posz", &reconZ);
-        EventInfos.at(iTree)->SetBranchAddress("clockCount50", &eventTime);
-        EventInfos.at(iTree)->SetBranchAddress("fitValid", &valid);
-        EventInfos.at(iTree)->SetBranchAddress("mcIndex", &mcIndex);
-        EventInfos.at(iTree)->SetBranchAddress("alphaNReactorIBD", &classResult);
-        EventInfos.at(iTree)->SetBranchAddress("dcApplied", &dcApplied);
-        EventInfos.at(iTree)->SetBranchAddress("dcFlagged", &dcFlagged);
-        if (data_type == "reactorIBD") {
-            // Want to get incoming antinu's origin core and energy
-            EventInfos.at(iTree)->SetBranchAddress("parentMeta1", &originReactor);
-            EventInfos.at(iTree)->SetBranchAddress("parentKE1", &parentKE1);
-        } else if (data_type == "alphaN") {
-            // Instead, can set all the hists for alphaN, since there aren't many
-            TH1D* temp_hist_1 = new TH1D("alphaN_PR", "alphaN proton recoil", nbins, lowenergybin, maxenergybin);
-            TH1D* temp_hist_2 = new TH1D("alphaN_C12", "alphaN 12C scatter", nbins, lowenergybin, maxenergybin);
-            TH1D* temp_hist_3 = new TH1D("alphaN_O16", "alphaN 16O deexcitation", nbins, lowenergybin, maxenergybin);
-            hists_map.insert({"alphaN_PR", temp_hist_1});
-            hists_map.insert({"alphaN_C12", temp_hist_2});
-            hists_map.insert({"alphaN_O16", temp_hist_3});
-        } else if (data_type == "geoNu_Th") {
-            // Instead, can set the hist for geo-nus, since there's only one
-            TH1D* temp_hist_geoNu_1 = new TH1D("geoNu_Th", "geo-nu Thorium", nbins, lowenergybin, maxenergybin);
-            hists_map.insert({"geoNu_Th", temp_hist_geoNu_1});
-        } else if (data_type == "geoNu_U") {
-            TH1D* temp_hist_geoNu_2 = new TH1D("geoNu_U", "geo-nu Uranium", nbins, lowenergybin, maxenergybin);
-            hists_map.insert({"geoNu_U", temp_hist_geoNu_2});
-        } else {
-            std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
-            exit(1);
-        }
-
-        RAT::DBLinkPtr linkdb;
-        RAT::DB *db = RAT::DB::Get();
-        db->LoadDefaults();
-
-        /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
-
-        unsigned int nentries = EventInfos.at(iTree)->GetEntries();
-        unsigned int a = 0;
-
-        // Loop through all events:
-        // First, find prompt event that pass all cuts.
-        // Then go through next 3 events to try to find a delayed event that also passes all cuts.
-        while (a < nentries) {
-            if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
-
-            EventInfos.at(iTree)->GetEntry(a);
-            const char* hist_name;
-            if (data_type == "reactorIBD") {
-                hist_name = originReactor->Data();  // core name
-
-                if (hists_map.find(hist_name) == hists_map.end()) {
-                    // reactor not added to list yet -> add it
-                    TH1D* temp_hist = new TH1D(hist_name, hist_name, nbins, lowenergybin, maxenergybin);
-                    hists_map.insert({hist_name, temp_hist});
-                }
-
-                // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
-                E_conv->Fill(reconEnergy, parentKE1);
-
-            } else if (data_type == "geoNu_Th" || data_type == "geoNu_U") {
-                hist_name = data_type.c_str();
-            } else {
-                hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
-
-                if (reconEnergy < PROTON_RECOIL_E_MAX) {
-                    hist_name = "alphaN_PR";  // proton recoil
-                } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
-                    hist_name = "alphaN_C12";  // 12C scatter
-                } else {
-                    hist_name = "alphaN_O16";  // 16O deexcitation
-                }
-            }
-
-            // Add event to relevant histogram
-            hists_map.at(hist_name)->Fill(reconEnergy);
-
-            a++;
-        }
-    }
-
-    return hists_map;
-}
+std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
+                                        const unsigned int nbins, const std::string data_type);
 
 
 int main(int argv, char** argc) {
@@ -162,24 +64,13 @@ int main(int argv, char** argc) {
     // Loop through and apply tagging + cuts
     std::vector<TH1D*> recordHists;
     std::cout << "Looping through reactor IBD events..." << std::endl;
-    std::vector<TTree*> reactorEventTrees_cut;
-    recordHists = Apply_tagging_and_cuts(reactorEventTree, reactorEventTrees_cut, classifier_cut, is_data);
-    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTrees_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
-
+    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
     std::cout << "Looping through alpha-n events..." << std::endl;
-    std::vector<TTree*> alphaNEventTrees_cut;
-    recordHists = Apply_tagging_and_cuts(alphaNEventTree, alphaNEventTrees_cut, classifier_cut, is_data);
-    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTrees_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
-
+    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl;
-    std::vector<TTree*> geoNuThEventTrees_cut;
-    recordHists = Apply_tagging_and_cuts(geoNuThEventTree, geoNuThEventTrees_cut, classifier_cut, is_data);
-    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTrees_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th");
-
+    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th");
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl;
-    std::vector<TTree*> geoNuUEventTrees_cut;
-    recordHists = Apply_tagging_and_cuts(geoNuUEventTree, geoNuUEventTrees_cut, classifier_cut, is_data);
-    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTrees_cut, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U");
+    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U");
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;
@@ -209,4 +100,104 @@ int main(int argv, char** argc) {
     outroot->Close();
 
     return 0;
+}
+
+
+std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
+                                        const unsigned int nbins, const std::string data_type) {
+
+    // Define a map of histograms {"hist name", hist}. This is to keep track of reactor IBD origin
+    std::map<std::string, TH1D*> hists_map;
+
+    // Set branch addresses to unpack TTree
+    TString *originReactor = NULL;
+    Double_t parentKE1, reconEnergy, reconX, reconY, reconZ, classResult;
+    ULong64_t eventTime, dcApplied, dcFlagged;
+    Bool_t valid;
+    Int_t mcIndex;
+
+    EventInfo->SetBranchAddress("energy", &reconEnergy);
+    EventInfo->SetBranchAddress("posx", &reconX);
+    EventInfo->SetBranchAddress("posy", &reconY);
+    EventInfo->SetBranchAddress("posz", &reconZ);
+    EventInfo->SetBranchAddress("clockCount50", &eventTime);
+    EventInfo->SetBranchAddress("fitValid", &valid);
+    EventInfo->SetBranchAddress("mcIndex", &mcIndex);
+    EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
+    EventInfo->SetBranchAddress("dcApplied", &dcApplied);
+    EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
+    if (data_type == "reactorIBD") {
+        // Want to get incoming antinu's origin core and energy
+        EventInfo->SetBranchAddress("parentMeta1", &originReactor);
+        EventInfo->SetBranchAddress("parentKE1", &parentKE1);
+    } else if (data_type == "alphaN") {
+        // Instead, can set all the hists for alphaN, since there aren't many
+        TH1D* temp_hist_1 = new TH1D("alphaN_PR", "alphaN proton recoil", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_2 = new TH1D("alphaN_C12", "alphaN 12C scatter", nbins, lowenergybin, maxenergybin);
+        TH1D* temp_hist_3 = new TH1D("alphaN_O16", "alphaN 16O deexcitation", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"alphaN_PR", temp_hist_1});
+        hists_map.insert({"alphaN_C12", temp_hist_2});
+        hists_map.insert({"alphaN_O16", temp_hist_3});
+    } else if (data_type == "geoNu_Th") {
+        // Instead, can set the hist for geo-nus, since there's only one
+        TH1D* temp_hist_geoNu_1 = new TH1D("geoNu_Th", "geo-nu Thorium", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"geoNu_Th", temp_hist_geoNu_1});
+    } else if (data_type == "geoNu_U") {
+        TH1D* temp_hist_geoNu_2 = new TH1D("geoNu_U", "geo-nu Uranium", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"geoNu_U", temp_hist_geoNu_2});
+    } else {
+        std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
+        exit(1);
+    }
+
+    RAT::DBLinkPtr linkdb;
+    RAT::DB *db = RAT::DB::Get();
+    db->LoadDefaults();
+
+    /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
+
+    unsigned int nentries = EventInfo->GetEntries();
+    unsigned int a = 0;
+
+    // Loop through all events:
+    // First, find prompt event that pass all cuts.
+    // Then go through next 3 events to try to find a delayed event that also passes all cuts.
+    while (a < nentries) {
+        if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
+
+        EventInfo->GetEntry(a);
+        const char* hist_name;
+        if (data_type == "reactorIBD") {
+            hist_name = originReactor->Data();  // core name
+
+            if (hists_map.find(hist_name) == hists_map.end()) {
+                // reactor not added to list yet -> add it
+                TH1D* temp_hist = new TH1D(hist_name, hist_name, nbins, lowenergybin, maxenergybin);
+                hists_map.insert({hist_name, temp_hist});
+            }
+
+            // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
+            E_conv->Fill(reconEnergy, parentKE1);
+
+        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U") {
+            hist_name = data_type.c_str();
+        } else {
+            hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
+
+            if (reconEnergy < PROTON_RECOIL_E_MAX) {
+                hist_name = "alphaN_PR";  // proton recoil
+            } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
+                hist_name = "alphaN_C12";  // 12C scatter
+            } else {
+                hist_name = "alphaN_O16";  // 16O deexcitation
+            }
+        }
+
+        // Add event to relevant histogram
+        hists_map.at(hist_name)->Fill(reconEnergy);
+
+        a++;
+    }
+
+    return hists_map;
 }

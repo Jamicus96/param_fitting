@@ -15,36 +15,38 @@ def argparser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description='Run parameter fitting code')
 
-    parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples/', help='Folder where PDFs (root hists) are saved.')
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/ntuples_Gold7.0.8/geoNuTh/ntuples/', help='Folder where PDFs (root hists) are saved.')
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/Analysis_data/gold/', help='Folder where PDFs (root hists) are saved.')
-    parser.add_argument('--data_repo', '-dr', type=str, dest='data_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/data_Gold7.0.8/geoNuTh/', help='Folder where PDFs (root hists) are saved.')
+    parser.add_argument('--ntuple_repo', '-dr', type=str, dest='ntuple_repo',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
+    parser.add_argument('--cut_ntuple_repo', '-nr', type=str, dest='cut_ntuple_repo',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/reactorIBD/', help='Folder where cut ntuples are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_classCut/', help='Folder to save recombined root files with tracking information in.')
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods/', help='Folder to save recombined root files with tracking information in.')
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_Gold7.0.8/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated_classCUT/', help='Folder to save recombined root files with tracking information in.')
+    
+    parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList.txt', help='Text file of runs to include (one run-number per line).')
+    parser.add_argument('---use_rl', '-uRL', type=bool, dest='use_rl',
+                        default=True, help='Bool to restrict only to file names including run-numbers from the run list defined in rl_file.')
     
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
     parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
 
-    parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-8.66, help='Classifier cut (remove events below this)')
-    # parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
+    # parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-8.66, help='Classifier cut (remove events below this)')
+    parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=500, help='Number of bins in x and y directions.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=30, help='Maximum number of bins looped over in one job.')
-    # parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=False, help='For energy correction: True for data, False for MC.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=100, help='Max number of tasks in an array running at any one time.')
-    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['pdf', 'data', 'fit', 'combi'],
+    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['cut', 'pdf', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
                         default=True, help='print and save extra info')
@@ -86,9 +88,116 @@ def checkRepo(repo_address, verbose=False):
     return new_address
 
 
-### PDF functions ###
+### Cutting (dat & PDF) functions ###
 
-def makePDFjobScript(example_jobScript, overall_folder, commands, args):
+def selectNutples(ntuple_repo, args):
+
+    run_numbers = []
+    unused_runs = []
+    if args.use_rl:
+        f = open(args.rl_file, 'r')
+        lines = f.readlines()
+        f.close()
+        for line in lines:
+            line_strp = line.rstrip('\n')
+            if line_strp != '':
+                run_numbers.append(line_strp)
+                unused_runs.append(int(line_strp))
+
+    file_addresses = []
+    for filename in os.listdir(ntuple_repo):
+        file_address = os.path.join(ntuple_repo, filename)
+        if os.path.isfile(file_address):
+            if file_address[-12:] == '.ntuple.root':
+                addFile = True
+                if args.use_rl:
+                    addFile = False
+                    for runNum in run_numbers:
+                        if runNum in filename:
+                            addFile = True
+                            if int(runNum) in unused_runs:
+                                unused_runs.remove(int(runNum))
+                            break
+                if addFile:
+                    file_addresses.append(file_address)
+    
+    if args.use_rl:
+        print('Missing {} out of {} runs'.format(len(unused_runs), len(run_numbers)))
+        print('Missing runs:', np.array(unused_runs))
+
+    return file_addresses
+
+def cutNtuplesJobScript(example_jobScript, overall_folder, commandList_address, verbose):
+    '''Create job script to run array of rat macros'''
+
+    new_job_address = overall_folder + 'job_scripts/'
+    new_job_address = checkRepo(new_job_address, verbose)
+    new_job_address += 'cutting_job.job'
+
+    output_logFile_address = overall_folder + 'log_files/'
+    output_logFile_address = checkRepo(output_logFile_address, verbose)
+    output_logFile_address +=  'log_cutting.txt'
+
+    new_jobScript = []
+    for line in example_jobScript:
+        # Replace placeholders in macro
+        if 'output_log.txt' in line:
+            new_line = line.replace('output_log.txt', output_logFile_address, 1)
+        elif '/Address/CommandList.txt' in line:
+            new_line = line.replace('/Address/CommandList.txt', commandList_address, 1)
+        else:
+            new_line = line
+
+        new_jobScript.append(new_line)
+
+    # Create job file
+    with open(new_job_address, "w") as f:
+        new_jobScript = "".join(new_jobScript)
+        f.write(new_jobScript)
+
+    return new_job_address
+
+def cutNtuples(args):
+    '''Turn reactor IBD and alpha-n event ntuples into hist PDFs to be used for fitting'''
+
+    # Check repos are formatted correctly and exist, otherwise make them
+    ntuple_repo = checkRepo(args.ntuple_repo, args.verbose)
+    cut_ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
+    commandList_address = cut_ntuple_repo + 'commandList.txt'
+
+    # Get full path to this repo
+    path = getRepoAddress()
+
+    # Get ntuple file addresses
+    ntuple_addresses = selectNutples(ntuple_repo, args)
+
+    # Create command
+    commandBase = path + 'cutting/cut_data.exe '
+    
+    commandList_file = open(commandList_address, 'w')
+    for file_address in ntuple_addresses:
+        outNtuple_address = 'CUT_' + file_address.split('/')[-1][:-12] + '.ntuple.root'
+        command = commandBase + file_address + ' '
+        command += cut_ntuple_repo + outNtuple_address + ' '
+        command += str(args.classCut) + ' ' + str(int(args.is_data))
+        commandList_file.write(command + '\n')
+    commandList_file.close()
+
+    # Create new job file
+    jobScript_address = path + 'job_scripts/fitting_job.job'
+    with open(jobScript_address, "r") as f:
+        example_jobScript = f.readlines()
+    job_address = cutNtuplesJobScript(example_jobScript, cut_ntuple_repo, commandList_address, args.verbose)
+
+    # Run job script!
+    print('Submitting job...')
+    command = 'qsub -t 1-' + str(len(ntuple_addresses)) + ' ' + job_address
+    if args.verbose:
+        print('Running command: ', command)
+    subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
+
+
+def makePDFsjobScript(example_jobScript, overall_folder, commands, args):
     '''Create job script to run array of rat macros'''
 
     new_job_address = overall_folder + 'job_scripts/'
@@ -122,7 +231,7 @@ def makePDFs(args):
     '''Turn reactor IBD and alpha-n event ntuples into hist PDFs to be used for fitting'''
 
     # Check repos are formatted correctly and exist, otherwise make them
-    ntuple_repo = checkRepo(args.ntuple_repo, args.verbose)
+    cut_ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
     pdf_repo = checkRepo(args.pdf_repo, args.verbose)
 
     # Get full path to this repo
@@ -130,10 +239,10 @@ def makePDFs(args):
 
     # Create command
     command = path + 'cutting/make_PDFs.exe '
-    command += ntuple_repo + 'reactorIBD/ReactorIBD.ntuple.root '
-    command += ntuple_repo + 'alphaN/alphaN.ntuple.root '
-    command += ntuple_repo + 'geoNuTh/geoNuTh.ntuple.root '
-    command += ntuple_repo + 'geoNuU/geoNuU.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_ReactorIBD.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_alphaN.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_geoNuTh.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_geoNuU.ntuple.root '
     command += pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root '
     command += str(args.classCut) + ' ' + str(int(args.is_data))
 
@@ -141,84 +250,11 @@ def makePDFs(args):
     jobScript_address = path + 'job_scripts/PDF_job.job'
     with open(jobScript_address, "r") as f:
         example_jobScript = f.readlines()
-    job_address = makePDFjobScript(example_jobScript, pdf_repo, command, args)
+    job_address = makePDFsjobScript(example_jobScript, pdf_repo, command, args)
 
     # Run job script!
     print('Submitting job...')
     command = 'qsub ' + job_address
-    if args.verbose:
-        print('Running command: ', command)
-    subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
-
-
-### DATA functions ###
-
-def makeDATAjobScript(example_jobScript, overall_folder, commands, args):
-    '''Create job script to run array of rat macros'''
-
-    new_job_address = overall_folder + 'job_scripts/'
-    new_job_address = checkRepo(new_job_address, args.verbose)
-    new_job_address += 'Data_job.job'
-
-    output_logFile_address = overall_folder + 'log_files/'
-    output_logFile_address = checkRepo(output_logFile_address, args.verbose)
-    output_logFile_address +=  'log_Data_cut' + str(args.classCut) + '.txt'
-
-    new_jobScript = []
-    for line in example_jobScript:
-        # Replace placeholders in macro
-        if 'output_log.txt' in line:
-            new_line = line.replace('output_log.txt', output_logFile_address, 1)
-        elif 'your commands' in line:
-            new_line = line.replace('your commands', commands, 1)
-        else:
-            new_line = line
-
-        new_jobScript.append(new_line)
-
-    # Create job file
-    with open(new_job_address, "w") as f:
-        new_jobScript = "".join(new_jobScript)
-        f.write(new_jobScript)
-
-    return new_job_address
-
-def makeDATA(args):
-    '''Turn reactor IBD and alpha-n event ntuples into hist PDFs to be used for fitting'''
-
-    # Check repos are formatted correctly and exist, otherwise make them
-    ntuple_repo = checkRepo(args.ntuple_repo, args.verbose)
-    data_repo = checkRepo(args.data_repo, args.verbose)
-    commandList_address = data_repo + 'commandList.txt'
-
-    # Get full path to this repo
-    path = getRepoAddress()
-
-    # Create command
-    commandBase = path + 'cutting/cut_data.exe '
-    
-    commandList_file = open(commandList_address, 'w')
-    i = 0
-    for filename in os.listdir(ntuple_repo):
-        file_address = os.path.join(ntuple_repo, filename)
-        if os.path.isfile(file_address):
-            if file_address[-12:] == '.ntuple.root':
-                command = commandBase + file_address + ' '
-                command += data_repo + 'data_cut_' + str(i) + '.root '
-                command += str(args.classCut) + ' ' + str(int(args.is_data))
-                commandList_file.write(command + '\n')
-                i += 1
-    commandList_file.close()
-
-    # Create new job file
-    jobScript_address = path + 'job_scripts/fitting_job.job'
-    with open(jobScript_address, "r") as f:
-        example_jobScript = f.readlines()
-    job_address = makeJobArrayScript(example_jobScript, data_repo, commandList_address, args.verbose)
-
-    # Run job script!
-    print('Submitting job...')
-    command = 'qsub -t 1-' + str(i) + ' ' + job_address
     if args.verbose:
         print('Running command: ', command)
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
@@ -419,7 +455,7 @@ def combi_fits(args):
     command = 'qsub -l m_mem_free=4G ' + job_address
     if args.verbose:
         print('Running command: ', command)
-        subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
+    subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
     
 
 ### MAIN ###
@@ -428,10 +464,10 @@ def main():
     # read in argument
     args = argparser()
 
-    if args.step == 'pdf':
+    if args.step == 'cut':
+        cutNtuples(args)
+    elif args.step == 'pdf':
         makePDFs(args)
-    elif args.step == 'data':
-        makeDATA(args)
     elif args.step == 'fit':
         doFitting(args)
     elif args.step == 'combi':

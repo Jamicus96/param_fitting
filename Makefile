@@ -10,17 +10,13 @@ all: cutting fitting tests clean
 
 
 # Cutting and PDF making
-cutting: make_PDFs cut_data clean
+cutting: make_PDFs cut_data
 
-make_PDFs: make_PDFs.o 
-	${COMPILE} make_PDFs.o -o cutting/make_PDFs.exe ${INCLUDE}
-make_PDFs.o: make_PDFs.cpp cut_utils.hpp
-	${COMPILE} cutting/make_PDFs.cpp -c ${INCLUDE}
+make_PDFs: make_PDFs.cpp 
+	${COMPILE} cutting/make_PDFs.cpp -o cutting/make_PDFs.exe ${INCLUDE}
 
-cut_data: cut_data.o 
-	${COMPILE} cut_data.o -o cutting/cut_data.exe ${INCLUDE}
-cut_data.o: cut_data.cpp cut_utils.hpp
-	${COMPILE} cutting/cut_data.cpp -c ${INCLUDE}
+cut_data: cut_data.cpp 
+	${COMPILE} cutting/cut_data.cpp -o cutting/cut_data.exe ${INCLUDE}
 
 # Fitting
 fitting: fit_params re_combine_fits clean
