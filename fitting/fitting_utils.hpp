@@ -31,8 +31,8 @@
 
 
 void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
-void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx);
-void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs);
+void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin);
+void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin);
 void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
 std::vector<std::string> SplitString(std::string str);
 
@@ -41,8 +41,8 @@ double maxE_binCentre = 8.0;  // Maximum energy (bin centre) to take into accoun
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
-double N_IBD = 53.8;            // Total number of expected reactor IBDs (un-oscillated, 227.6 * (134.4 / 365.25) * (1205475 / 1877816))
-// double N_IBD = 53.8 * 0.96;     // Classifier cut
+double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
+// double N_IBD = 52.2 * 0.96;     // Classifier cut
 double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
 double IBD_err_tot = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
@@ -95,6 +95,18 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<TH1D*> geoNu_hists;
     TH2D E_conv;
     read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, E_conv);
+
+    // Find data bin limits
+    double bin_centre;
+    unsigned int min_bin = reactor_hists.at(0)->GetXaxis()->GetNbins();
+    unsigned int max_bin = 0;
+    for (unsigned int i = 1; i < reactor_hists.at(0)->GetXaxis()->GetNbins() + 1; ++i) {
+        bin_centre = reactor_hists.at(0)->GetBinCenter(i);
+        if (bin_centre > minE_binCentre && bin_centre < maxE_binCentre) {
+            if (i < min_bin) min_bin = i;
+            if (i > max_bin) max_bin = i;
+        }
+    }
 
     /* ~~~~~~~~ INITIALISE ~~~~~~~~ */
 
@@ -155,7 +167,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<std::string> geoNu_names = {"geoNu_Th", "geoNu_U"};
     std::vector<double> geoNu_hist_fracs;
     std::vector<unsigned int> geoNu_hist_idx;
-    compute_hist_fracs(geoNu_hists, geoNu_names, geoNu_hist_fracs, geoNu_hist_idx);
+    compute_hist_fracs(geoNu_hists, geoNu_names, geoNu_hist_fracs, geoNu_hist_idx, min_bin, max_bin);
 
     // Create geo-nu norm variables (allow to vary by ±3 sigma), and model
     double geoNuNorm_frac_min = 1.0 - 3.0 * geoNu_err;
@@ -177,7 +189,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<std::string> alphaN_names = {"alphaN_PR", "alphaN_C12", "alphaN_O16"};
     std::vector<double> alphaN_hist_fracs;
     std::vector<unsigned int> alphaN_hist_idx;
-    compute_hist_fracs(alphaN_hists, alphaN_names, alphaN_hist_fracs, alphaN_hist_idx);
+    compute_hist_fracs(alphaN_hists, alphaN_names, alphaN_hist_fracs, alphaN_hist_idx, min_bin, max_bin);
     double GS_frac = alphaN_hist_fracs.at(0) + alphaN_hist_fracs.at(1);
     double ES_frac = alphaN_hist_fracs.at(2);
 
@@ -192,7 +204,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     for (unsigned int i = 0; i < 3; ++i) {
         std::cout << "alphaN_hists.at(" << i << ")->GetName() = " << alphaN_hists.at(i)->GetName() << std::endl;
-        std::cout << "alphaN_hists.at(" << i << ")->Integral()  = " << alphaN_hists.at(i)->Integral() << std::endl;
+        std::cout << "alphaN_hists.at(" << i << ")->Integral(min_bin, max_bin)  = " << alphaN_hists.at(i)->Integral(min_bin, max_bin) << std::endl;
     }
 
     // Add alpha-n model, linking it to approproate variables and E-systematics defined above
@@ -204,7 +216,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};
 
     std::vector<double> reac_hist_fracs;
-    compute_reac_unosc_fracs(reactor_hists, reactor_names, reac_hist_fracs);
+    compute_reac_unosc_fracs(reactor_hists, reactor_names, reac_hist_fracs, min_bin, max_bin);
     std::vector<std::string> ReactorNorms_VarNames;
     double reacNorm;
     double reacLowLim;
@@ -227,6 +239,12 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
+    /* ~~~~~~~~ INITIALISE FITTER ~~~~~~~~ */
+
+    Fitter* antinuFitter = Fitter::GetInstance();
+    antinuFitter->SetBinLims(min_bin, max_bin);  // should do this before making Azimov data
+
+
     /* ~~~~~~~~ AZIMOV DATASET ~~~~~~~~ */
 
     // Make fake dataset out of PDF hists (same function called to make PDFs)
@@ -240,41 +258,28 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     data->SetTitle("Azimov Dataset");
     data->Reset("ICES");
     
-    std::cout << "data integral = " << data->Integral() << std::endl;
+    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
     data->Add(ReactorMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral() << std::endl;
+    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
     data->Add(alphaNMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral() << std::endl;
+    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
     data->Add(geoNuMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral() << std::endl;
+    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
 
     // Set bins outside "real data" cuts to zero
-    double dE = data->GetBinCenter(2) - data->GetBinCenter(1);
-    double bin_centre, bin_top, bin_bottom;
-    unsigned int min_bin = data->GetXaxis()->GetNbins();
-    unsigned int max_bin = 0;
-    for (unsigned int i = 1; i < data->GetXaxis()->GetNbins() + 1; ++i) {
-        bin_centre = data->GetBinCenter(i);
-        if (bin_centre <= minE_binCentre || bin_centre >= maxE_binCentre) {
-            data->SetBinContent(i, 0.0);
-        } else {
-            if (i < min_bin) min_bin = i;
-            if (i > max_bin) max_bin = i;
-        }
-    }
+    for (unsigned int i = 1; i < min_bin; ++i) data->SetBinContent(i, 0.0);
+    for (unsigned int i = max_bin + 1; i < data->GetXaxis()->GetNbins() + 1; ++i) data->SetBinContent(i, 0.0);
 
-    std::cout << "data integral = " << data->Integral() << std::endl;
+    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
 
-    // Initialise fitter, and add Azimov dataset as data
-    Fitter* antinuFitter = Fitter::GetInstance();
+    // Add Azimov dataset as data
     if (useAzimovData) antinuFitter->SetData(data);
-    antinuFitter->SetBinLims(min_bin, max_bin);
 }
 
 
 /* ~~~~~~~~ OTHER SHARED UTILS ~~~~~~~~ */
 
-void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx) {
+void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin) {
 
     if (hists.size() != hist_names.size()) {
         std::cout << "Error! hists and hist_names are not the same size: " << hists.size() << ", and " << hist_names.size() << std::endl;
@@ -290,7 +295,7 @@ void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::
     std::string name;
     for (unsigned int i = 0; i < hists.size(); ++i) {
         name = hists.at(i)->GetName();
-        integral = hists.at(i)->Integral();
+        integral = hists.at(i)->Integral(min_bin, max_bin);
         // See if hist is in hist_names
         hist_not_found = true;
         for (unsigned int j = 0; j < hist_names.size(); ++j) {
@@ -315,7 +320,7 @@ void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::
     }
 }
 
-void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs) {
+void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin) {
 
     double tot_int;
     for (unsigned int i = 0; i < Reactor_names.size(); ++i) {
@@ -327,7 +332,7 @@ void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std
     double integral;
     for (unsigned int i = 0; i < Reactor_hists.size(); ++i) {
         origin_reactor = SplitString(Reactor_hists.at(i)->GetName())[0];
-        integral = Reactor_hists.at(i)->Integral();
+        integral = Reactor_hists.at(i)->Integral(min_bin, max_bin);
         // See if reactor is in Reactor_names (except last element 'WORLD')
         reactor_not_found = true;
         for (unsigned int j = 0; j < (Reactor_names.size()-1); ++j) {

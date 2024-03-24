@@ -49,14 +49,14 @@ class alphaN {
                const unsigned int E_syst_proton_idx, TH1D* Hist_ProtontR, TH1D* Hist_C12Scatter, TH1D* Hist_O16Deex) {
 
             iNormGS = NormGS_idx; iNormES = NormES_idx; iEsys = E_syst_idx; iEsysP = E_syst_proton_idx;
-            iMinBin = 1; iMaxBin = hist_ProtontR->GetXaxis()->GetNbins();
+            iMinBin = 1; iMaxBin = Hist_ProtontR->GetXaxis()->GetNbins();
 
             hist_ProtontR = Hist_ProtontR;
-            Integral_hist_GS = hist_ProtontR->Integral();
+            Integral_hist_GS = hist_ProtontR->Integral(iMinBin, iMaxBin);
             hist_C12Scatter = Hist_C12Scatter;
-            Integral_hist_GS += hist_C12Scatter->Integral();
+            Integral_hist_GS += hist_C12Scatter->Integral(iMinBin, iMaxBin);
             hist_O16Deex = Hist_O16Deex;
-            Integral_hist_ES = hist_O16Deex->Integral();
+            Integral_hist_ES = hist_O16Deex->Integral(iMinBin, iMaxBin);
 
             model_Proton = (TH1D*)(hist_ProtontR->Clone("alphaN::temp_model_PR"));
             model_noEsys = (TH1D*)(hist_ProtontR->Clone("alphaN::model_noEsys"));
@@ -82,9 +82,9 @@ class alphaN {
             model_Esys->Reset("ICES");  // empty it before re-computing it
 
             #ifdef SUPER_DEBUG
-                std::cout << "[alphaN::compute_spec]: hist_C12Scatter->Integral() = " << hist_C12Scatter->Integral() << std::endl;
-                std::cout << "[alphaN::compute_spec]: hist_O16Deex->Integral() = " << hist_O16Deex->Integral() << std::endl;
-                std::cout << "[alphaN::compute_spec]: hist_ProtontR->Integral() = " << hist_ProtontR->Integral() << std::endl;
+                std::cout << "[alphaN::compute_spec]: hist_C12Scatter->Integral(iMinBin, iMaxBin) = " << hist_C12Scatter->Integral(iMinBin, iMaxBin) << std::endl;
+                std::cout << "[alphaN::compute_spec]: hist_O16Deex->Integral(iMinBin, iMaxBin) = " << hist_O16Deex->Integral(iMinBin, iMaxBin) << std::endl;
+                std::cout << "[alphaN::compute_spec]: hist_ProtontR->Integral(iMinBin, iMaxBin) = " << hist_ProtontR->Integral(iMinBin, iMaxBin) << std::endl;
 
                 std::cout << "[alphaN::compute_spec]: Vars->val(iNormGS) = " << Vars->val(iNormGS) << std::endl;
                 std::cout << "[alphaN::compute_spec]: Vars->val(iNormES) = " << Vars->val(iNormES) << std::endl;
@@ -104,7 +104,7 @@ class alphaN {
             // Apply Normal (beta) energy systematics to all (adds stuff to model_Esys, doesn't reset it)
             Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);  
             #ifdef SUPER_DEBUG
-                std::cout << "[alphaN::compute_spec]: model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
+                std::cout << "[alphaN::compute_spec]: model_Esys->Integral(iMinBin, iMaxBin) = " << model_Esys->Integral(iMinBin, iMaxBin) << std::endl;
             #endif
         }
 

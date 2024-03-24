@@ -10,13 +10,16 @@ all: cutting fitting tests clean
 
 
 # Cutting and PDF making
-cutting: make_PDFs cut_data
+cutting: make_PDFs cut_data reScaleReactorIBD
 
 make_PDFs: make_PDFs.cpp 
 	${COMPILE} cutting/make_PDFs.cpp -o cutting/make_PDFs.exe ${INCLUDE}
 
 cut_data: cut_data.cpp 
 	${COMPILE} cutting/cut_data.cpp -o cutting/cut_data.exe ${INCLUDE}
+
+reScaleReactorIBD: reScaleReactorIBD.cpp 
+	${COMPILE} cutting/reScaleReactorIBD.cpp -o cutting/reScaleReactorIBD.exe ${INCLUDE}
 
 # Fitting
 fitting: fit_params re_combine_fits clean

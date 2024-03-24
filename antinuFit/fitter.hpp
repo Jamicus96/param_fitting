@@ -24,11 +24,10 @@ class Fitter {
 
         static TH1D *data, *tot_fitModel;
         static TTree* dataTree;
-        static unsigned int numBins;
         static double Emin, dE;
         static bool dataIsSet;
 
-        static unsigned int BinMin, BinMax;
+        static unsigned int iBinMin, iBinMax;
         static bool setLims, binnedData, init_tot_fitModel;
 
         // For minuit
@@ -105,6 +104,7 @@ class Fitter {
         // Get info functions
         static void GetAllSpectra(std::vector<TH1D*>& hists);
         static TH1D* DataHist();
+        static TTree* DataTree();
         static void SetData(TH1D* Data);
         static void SetData(TTree* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
@@ -123,11 +123,10 @@ TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
 TH1D *Fitter::data, *Fitter::tot_fitModel;
 TTree* Fitter::dataTree;
-unsigned int Fitter::numBins;
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 bool Fitter::dataIsSet = false;
-unsigned int Fitter::BinMin, Fitter::BinMax;
+unsigned int Fitter::iBinMin, Fitter::iBinMax;
 bool Fitter::setLims = false, Fitter::binnedData = false, Fitter::init_tot_fitModel = false;
 double Fitter::Emin, Fitter::dE;
 
@@ -218,7 +217,7 @@ Double_t Fitter::fitFunc(Double_t* p) {
         }
         tot_fitModel->Add(ReactorMod->GetModelEsys());
         #ifdef SUPER_DEBUG
-            std::cout << "[Fitter::fitFunc]: Added ReactorMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
+            std::cout << "[Fitter::fitFunc]: Added ReactorMod, tot_fitModel integral = " << tot_fitModel->Integral(iBinMin, iBinMax) << std::endl;
         #endif
     }
     if (alphaNMod->IsInit()) {
@@ -229,7 +228,7 @@ Double_t Fitter::fitFunc(Double_t* p) {
         }
         tot_fitModel->Add(alphaNMod->GetModelEsys());
         #ifdef SUPER_DEBUG
-            std::cout << "[Fitter::fitFunc]: Added alphaNMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
+            std::cout << "[Fitter::fitFunc]: Added alphaNMod, tot_fitModel integral = " << tot_fitModel->Integral(iBinMin, iBinMax) << std::endl;
         #endif
     }
     if (geoNuMod->IsInit()) {
@@ -240,7 +239,7 @@ Double_t Fitter::fitFunc(Double_t* p) {
         }
         tot_fitModel->Add(geoNuMod->GetModelEsys());
         #ifdef SUPER_DEBUG
-            std::cout << "[Fitter::fitFunc]: Added geoNuMod, tot_fitModel integral = " << tot_fitModel->Integral() << std::endl;
+            std::cout << "[Fitter::fitFunc]: Added geoNuMod, tot_fitModel integral = " << tot_fitModel->Integral(iBinMin, iBinMax) << std::endl;
         #endif
     }
 
@@ -258,16 +257,14 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
 
     if (binnedData) {
         // Data is a histogram, same binning as model PDFs
-        for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
-            if (setLims && (ibin <= BinMin || ibin >= BinMax)) continue;
+        for (unsigned int ibin = iBinMin; ibin < iBinMax+1; ++ibin) {
             binContent = tot_fitModel->GetBinContent(ibin);
             if (binContent > 0) logL += - binContent + data->GetBinContent(ibin) * log(binContent);
         }
 
     } else {
         // Data is an ntuple TTree
-        for (unsigned int ibin = 1; ibin < numBins+1; ++ibin) {
-            if (setLims && (ibin <= BinMin || ibin >= BinMax)) continue;
+        for (unsigned int ibin = iBinMin; ibin < iBinMax; ++ibin) {
             binContent = tot_fitModel->GetBinContent(ibin);
             if (binContent > 0) logL += -binContent;
         }
@@ -279,7 +276,7 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
         while (a < dataTree->GetEntries()) {
             dataTree->GetEntry(a);
             E_bin = int((reconEnergy - Emin) / dE) + 1;
-            if (setLims && (E_bin <= BinMin || E_bin >= BinMax)) continue;
+            if (E_bin <= iBinMin || E_bin >= iBinMax) continue;
             binContent = tot_fitModel->GetBinContent(E_bin);
             if (binContent > 0) logL += log(binContent);
         }
@@ -374,9 +371,9 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 }
 
 TH1D* Fitter::DataHist() {return data;}
+TTree* Fitter::DataTree() {return dataTree;}
 
 void Fitter::InitTotFitModHist(TH1D* exampleHist) {
-    numBins = exampleHist->GetXaxis()->GetNbins();
     tot_fitModel = (TH1D*)(exampleHist->Clone());
     tot_fitModel->Reset("ICES");
     tot_fitModel->SetName("tot_fit_model");
@@ -384,6 +381,11 @@ void Fitter::InitTotFitModHist(TH1D* exampleHist) {
     init_tot_fitModel = true;
     Emin = tot_fitModel->GetBinCenter(1);
     dE = tot_fitModel->GetBinCenter(2) - tot_fitModel->GetBinCenter(1);
+
+    if (!setLims){
+        iBinMin = 1;
+        iBinMax = exampleHist->GetXaxis()->GetNbins();
+    }
 }
 
 void Fitter::SetData(TH1D* Data) {
@@ -405,10 +407,10 @@ void Fitter::SetData(TTree* Data) {
 }
 
 void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) {
-    BinMin = Bin_min; BinMax = Bin_max;
+    iBinMin = Bin_min; iBinMax = Bin_max;
     setLims = true;
     #ifdef antinuDEBUG
-        std::cout << "[Fitter::SetBinLims]: BinMin = " << BinMin << ", BinMax = " << BinMax << std::endl;
+        std::cout << "[Fitter::SetBinLims]: iBinMin = " << iBinMin << ", iBinMax = " << iBinMax << std::endl;
     #endif
 
     // Set models to use the same bin limits
@@ -417,17 +419,17 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
     geoNu* geoNuMod = geoNu::GetInstance();
     
     if (ReactorMod->IsInit()) {
-        ReactorMod->SetBinLims(BinMin, BinMax);
+        ReactorMod->SetBinLims(iBinMin, iBinMax);
     } else {
         std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising Reactor model. Bin limits will not be set there too." << std::endl;
     }
     if (alphaNMod->IsInit()) {
-        alphaNMod->SetBinLims(BinMin, BinMax);
+        alphaNMod->SetBinLims(iBinMin, iBinMax);
     } else {
         std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising alphaN model. Bin limits will not be set there too." << std::endl;
     }
     if (geoNuMod->IsInit()) {
-        geoNuMod->SetBinLims(BinMin, BinMax);
+        geoNuMod->SetBinLims(iBinMin, iBinMax);
     } else {
         std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising geoNu model. Bin limits will not be set there too." << std::endl;
     }

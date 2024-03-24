@@ -25,6 +25,7 @@ double FV_CUT = 5700;  // Max radius [mm]
 double MIN_DELAY = 400, MAX_DELAY = 0.8E6;  // Delta t cut [ns]
 double MAX_DIST = 1500;  // Delta R cut [mm]
 double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in make_PDF.cpp
+double muonVETO_deltaT = 20;  // [s]
 
 
 void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, const double classiferCut, const bool is_data);
@@ -120,7 +121,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ, classResult;
     ULong64_t eventTime, dcApplied, dcFlagged;
-    Int_t mcIndex;
+    Int_t mcIndex, nHitsCleaned, neckNhits;
     Int_t runNum; //run number associated with MC
     Int_t lastRunNum = -999; //last run number loaded in DB
     Bool_t *valid;
@@ -136,6 +137,8 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     EventInfo->SetBranchAddress("dcApplied", &dcApplied);
     EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
     EventInfo->SetBranchAddress("runID", &runNum);
+    EventInfo->SetBranchAddress("nhitsCleaned", &nHitsCleaned);
+    EventInfo->SetBranchAddress("necknhits", &neckNhits);
 
     RAT::DBLinkPtr linkdb;
     RAT::DB *db = RAT::DB::Get();
@@ -161,7 +164,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0;
-    double delayedTime;
+    double delayedTime, highNhitTime = -99999999999;
     unsigned int delayedMCIndex;
     TVector3 delayedPos;
     TVector3 promptPos;
@@ -184,6 +187,14 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
         #endif
 
         EventInfo->GetEntry(a);
+
+        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = eventTime;
+        if ((eventTime - highNhitTime) / 1E9 > muonVETO_deltaT) {
+            std::cout << "Muon veto cut!" << std::endl;
+            ++a;
+            continue;
+        }
+
         delayedPos = TVector3(reconX, reconY, reconZ);
         delayedTime = eventTime;
         delayedMCIndex = mcIndex;
@@ -230,7 +241,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 }
             }
         }
-        a++;
+        ++a;
     }
     std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
               << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair

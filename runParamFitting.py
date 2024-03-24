@@ -15,16 +15,21 @@ def argparser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description='Run parameter fitting code')
 
-    parser.add_argument('--ntuple_repo', '-dr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
-    parser.add_argument('--cut_ntuple_repo', '-nr', type=str, dest='cut_ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/reactorIBD/', help='Folder where cut ntuples are saved.')
+    parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/Analysis_data/gold/', help='Folder where raw ntuples are saved.')
+    parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/reactorIBD/', help='Folder where cut ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples/', help='Folder where cut ntuples are saved.')
+    parser.add_argument('--scaled_ntuple_repo', '-snr', type=str, dest='scaled_ntuple_repo',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/scaled_reactorIBD/', help='Folder where re-scaled cut reactor IBD ntuples are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated_classCUT/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList.txt', help='Text file of runs to include (one run-number per line).')
@@ -42,11 +47,11 @@ def argparser():
     parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
-                        default=False, help='For energy correction: True for data, False for MC.')
+                        default=True, help='For energy correction: True for data, False for MC.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=100, help='Max number of tasks in an array running at any one time.')
-    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['cut', 'pdf', 'fit', 'combi'],
+    parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['cut', 'scale', 'pdf', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
                         default=True, help='print and save extra info')
@@ -191,7 +196,7 @@ def cutNtuples(args):
 
     # Run job script!
     print('Submitting job...')
-    command = 'qsub -t 1-' + str(len(ntuple_addresses)) + ' ' + job_address
+    command = 'qsub -t 1-' + str(len(ntuple_addresses)) + ' -tc ' + str(args.max_jobs) + ' ' + job_address
     if args.verbose:
         print('Running command: ', command)
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
@@ -239,7 +244,7 @@ def makePDFs(args):
 
     # Create command
     command = path + 'cutting/make_PDFs.exe '
-    command += cut_ntuple_repo + 'CUT_ReactorIBD.ntuple.root '
+    command += cut_ntuple_repo + 'scaled_CUT_ReactorIBD.ntuple.root '
     command += cut_ntuple_repo + 'CUT_alphaN.ntuple.root '
     command += cut_ntuple_repo + 'CUT_geoNuTh.ntuple.root '
     command += cut_ntuple_repo + 'CUT_geoNuU.ntuple.root '
@@ -259,6 +264,44 @@ def makePDFs(args):
         print('Running command: ', command)
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
 
+
+def scale_reactorNtuples(args):
+    '''Re-scale reactor IBD ntuples to true reactor power'''
+
+    # Check repos are formatted correctly and exist, otherwise make them
+    cut_ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
+    scaled_cut_ntuple_repo = checkRepo(args.scaled_ntuple_repo, args.verbose)
+    commandList_address = scaled_cut_ntuple_repo + 'commandList.txt'
+
+    # Get full path to this repo
+    path = getRepoAddress()
+
+    # Get ntuple file addresses
+    ntuple_addresses = selectNutples(cut_ntuple_repo, args)
+
+    # Create command
+    commandBase = path + 'cutting/reScaleReactorIBD.exe '
+    
+    commandList_file = open(commandList_address, 'w')
+    for file_address in ntuple_addresses:
+        outNtuple_address = 'scaled_' + file_address.split('/')[-1][:-12] + '.ntuple.root'
+        command = commandBase + file_address + ' '
+        command += scaled_cut_ntuple_repo + outNtuple_address
+        commandList_file.write(command + '\n')
+    commandList_file.close()
+
+    # Create new job file
+    jobScript_address = path + 'job_scripts/fitting_job.job'
+    with open(jobScript_address, "r") as f:
+        example_jobScript = f.readlines()
+    job_address = cutNtuplesJobScript(example_jobScript, scaled_cut_ntuple_repo, commandList_address, args.verbose)
+
+    # Run job script!
+    print('Submitting job...')
+    command = 'qsub -t 1-' + str(len(ntuple_addresses)) + ' ' + job_address
+    if args.verbose:
+        print('Running command: ', command)
+    subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
 
 ### Fitting functions ###
 
@@ -466,6 +509,8 @@ def main():
 
     if args.step == 'cut':
         cutNtuples(args)
+    elif args.step == 'scale':
+        scale_reactorNtuples(args)
     elif args.step == 'pdf':
         makePDFs(args)
     elif args.step == 'fit':

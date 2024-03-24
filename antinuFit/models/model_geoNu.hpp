@@ -50,8 +50,8 @@ class geoNu {
             iMinBin = 1; iMaxBin = Hist_Th->GetXaxis()->GetNbins();
             histTh = Hist_Th; histTh->SetName("geoNu::histTh");
             histU = Hist_U; histU->SetName("geoNu::histU");
-            Th_integral = histTh->Integral();
-            U_integral = histU->Integral();
+            Th_integral = histTh->Integral(iMinBin, iMaxBin);
+            U_integral = histU->Integral(iMinBin, iMaxBin);
 
             computed_survival_prob = false;
 
