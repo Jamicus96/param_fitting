@@ -119,7 +119,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ, classResult;
-    ULong64_t eventTime, dcApplied, dcFlagged;
+    ULong64_t eventTime, dcApplied, dcFlagged, GTID;
     Int_t mcIndex, nHitsCleaned, neckNhits;
     Int_t runNum; //run number associated with MC
     Int_t lastRunNum = -999; //last run number loaded in DB
@@ -138,6 +138,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     EventInfo->SetBranchAddress("runID", &runNum);
     EventInfo->SetBranchAddress("nhitsCleaned", &nHitsCleaned);
     EventInfo->SetBranchAddress("necknhits", &neckNhits);
+    EventInfo->SetBranchAddress("eventID", &GTID);
 
     RAT::DBLinkPtr linkdb;
     RAT::DB *db = RAT::DB::Get();
@@ -214,9 +215,6 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
         delayedTime = int64_t(eventTime);
 
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
-        // std::cout << "reconEnergy = " << reconEnergy << ", delayedEcorr = " << delayedEcorr << std::endl;
-        // std::cout << "X = " << reconX << ", Y = " << reconY << ", Z = " << reconZ << std::endl;
-        // std::cout << "R = " << delayedPos.Mag() << std::endl;
 
         if (pass_delayed_cuts(delayedEcorr, delayedPos)) {
             nvaliddelayed++;
@@ -261,6 +259,10 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                         // Add to output TTree
                         // reconEnergy = promptEcorr; // apply energy correction before re-writing it
                         CutTtree->Fill();
+                        std::cout << "GTID = " << GTID << std::endl;
+
+                        std::cout << "promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
+                        std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
                         
                         // Add info to hists
                         // hPromptE->Fill(promptEcorr);
