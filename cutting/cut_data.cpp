@@ -16,10 +16,10 @@
 
 #define VERBOSE
 #define USING_RUN_NUM
-ULong64_t dcAnalysisWord = 36283883733698;  // Converted hex to decimal from 0x2100000042C2
+ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
 
 // Define cut values
-double MIN_PROMPT_E = 0.7, MAX_PROMPT_E = 9.0;  // [MeV]
+double MIN_PROMPT_E = 0.9, MAX_PROMPT_E = 8.0;  // [MeV]
 double MIN_DELAYED_E = 1.85, MAX_DELAYED_E = 2.4;  // [MeV]
 double FV_CUT = 5700;  // Max radius [mm]
 double MIN_DELAY = 400, MAX_DELAY = 0.8E6;  // Delta t cut [ns]
@@ -95,8 +95,7 @@ double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::D
 
 bool dcAppliedAndPassed(const bool is_data, ULong64_t dcApplied, ULong64_t dcFlagged) {
     if (!is_data) return true;
-    if (!((dcApplied & dcAnalysisWord) == dcAnalysisWord)) return false;  // DC cut is not compatible
-    if (!((dcFlagged & dcAnalysisWord) == dcFlagged)) return false;  // Did not pass DC cut
+    if (!(((dcApplied & dcAnalysisWord) & dcFlagged ) == (dcApplied & dcAnalysisWord))) return false;  // failed DC cut
     return true;
 }
 
@@ -163,12 +162,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     RAT::DU::ReconCalibrator e_cal = RAT::DU::Utility::Get()->GetReconCalibrator();
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0;
-    double delayedTime, highNhitTime = -99999999999;
-    unsigned int delayedMCIndex;
+    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0;
+    int64_t delayedTime;
+    int64_t highNhitTime = -99999999999;
     TVector3 delayedPos;
     TVector3 promptPos;
-    double delay;
+    double delay, highNhitDelay;
     bool passedDC;
     double promptEcorr, delayedEcorr;
     int a = 0;
@@ -188,21 +187,38 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
         EventInfo->GetEntry(a);
 
-        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = eventTime;
-        if ((eventTime - highNhitTime) / 1E9 > muonVETO_deltaT) {
-            std::cout << "Muon veto cut!" << std::endl;
+        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = int64_t(eventTime);
+        highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+        if (highNhitDelay < muonVETO_deltaT) {
+            ++nMuonCut;
+            ++a;
+            continue;
+        }
+        if (!valid) {
+            ++nValidCut;
+            ++a;
+            continue;
+        }
+        if (reconEnergy < 0) {
+            ++negEcut;
+            ++a;
+            continue;
+        }
+        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {
+            ++nDCcut;
             ++a;
             continue;
         }
 
         delayedPos = TVector3(reconX, reconY, reconZ);
-        delayedTime = eventTime;
-        delayedMCIndex = mcIndex;
+        delayedTime = int64_t(eventTime);
 
-        passedDC = dcAppliedAndPassed(is_data, dcApplied, dcFlagged);
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
+        // std::cout << "reconEnergy = " << reconEnergy << ", delayedEcorr = " << delayedEcorr << std::endl;
+        // std::cout << "X = " << reconX << ", Y = " << reconY << ", Z = " << reconZ << std::endl;
+        // std::cout << "R = " << delayedPos.Mag() << std::endl;
 
-        if (valid and passedDC and pass_delayed_cuts(delayedEcorr, delayedPos)) {
+        if (pass_delayed_cuts(delayedEcorr, delayedPos)) {
             nvaliddelayed++;
 
             // Delayed event is valid, check through the previous 100 events for event that passes prompt + classifier + tagging cuts
@@ -210,14 +226,33 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 if ((a - b) < 0) break;
                 EventInfo->GetEntry(a - b);
 
-                delay = (delayedTime - eventTime) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+                if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = int64_t(eventTime);
+                highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+                if (highNhitDelay < muonVETO_deltaT) {
+                    ++nMuonCut;
+                    continue;
+                }
+                if (!valid) {
+                    ++nValidCut;
+                    continue;
+                }
+                if (reconEnergy < 0) {
+                    ++negEcut;
+                    continue;
+                }
+                if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {
+                    ++nDCcut;
+                    continue;
+                }
+
+                delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
                 passedDC = dcAppliedAndPassed(is_data, dcApplied, dcFlagged);
                 promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
 
-                if (valid and passedDC and pass_prompt_cuts(promptEcorr, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
+                if (pass_prompt_cuts(promptEcorr, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
                     nvalidpair++;
                     if (pass_classifier(promptEcorr, classResult, classiferCut)) {
@@ -246,6 +281,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
               << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair
               << ", number of these event pairs surviving classifier cut: " << nvalid << std::endl;
+    std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 

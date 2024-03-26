@@ -41,18 +41,18 @@ double maxE_binCentre = 8.0;  // Maximum energy (bin centre) to take into accoun
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
-double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
-// double N_IBD = 52.2 * 0.96;     // Classifier cut
+// double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
+double N_IBD = 52.2 * 0.96;     // Classifier cut
 double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
 double IBD_err_tot = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
-double N_alphaN = 18.2;         // Total number of expected alpha-n
-// double N_alphaN = 18.2 * 0.22;  // Classifier cut
+// double N_alphaN = 18.2;         // Total number of expected alpha-n
+double N_alphaN = 18.2 * 0.22;  // Classifier cut
 double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR + C12)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
-double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
-// double N_geoNu = 12.5 * 0.89;   // Classifier cut
+// double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
+double N_geoNu = 12.5 * 0.89;   // Classifier cut
 double geoNu_err = 1.0;         // fractional error in N_geoNu for individual Th and U spectra
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)

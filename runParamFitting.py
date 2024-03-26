@@ -27,9 +27,9 @@ def argparser():
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated_classCUT/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList.txt', help='Text file of runs to include (one run-number per line).')
@@ -50,7 +50,7 @@ def argparser():
                         default=True, help='For energy correction: True for data, False for MC.')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
-                        default=100, help='Max number of tasks in an array running at any one time.')
+                        default=1000, help='Max number of tasks in an array running at any one time.')
     parser.add_argument('---step', '-s', type=str, dest='step', default='all', choices=['cut', 'scale', 'pdf', 'fit', 'combi'],
                         help='which step of the process is it in?')
     parser.add_argument('---verbose', '-v', type=bool, dest='verbose',
