@@ -102,25 +102,20 @@ bool dcAppliedAndPassed(const bool is_data, ULong64_t dcApplied, ULong64_t dcFla
 
 void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, const double classiferCut, const bool is_data) {
 
-    // Create some basic hists to save
-    // TH1D* hPromptE = new TH1D("promptE", "promptE", 200, 0, 10);
-    // TH1D* hDelayedE = new TH1D("delayedE", "delayedE", 200, 0, 10);
-    // TH1D* hPromptR = new TH1D("promptR", "promptR", 200, 0, FV_CUT);
-    // TH1D* hDelayedR = new TH1D("delayedR", "delayedR", 200, 0, FV_CUT);
-    // TH1D* hDeltaT = new TH1D("deltaT", "deltaT", 200, MIN_DELAY, MAX_DELAY);
-    // TH1D* hDeltaR = new TH1D("deltaR", "deltaR", 200, 0, MAX_DIST);
-
     // Read in file and create output file
     TFile* inFile = TFile::Open(inputNtuple.c_str());
     TFile* outroot = new TFile(outputNtuple.c_str(), "RECREATE");
 
     TTree *EventInfo = (TTree *) inFile->Get("output");
-    TTree* CutTtree = EventInfo->CloneTree(0);
+    TTree* CutPromptTree = EventInfo->CloneTree(0);
+    CutPromptTree->SetObject("prompt", "prompt");
+    TTree* CutDelayedTree = EventInfo->CloneTree(0);
+    CutDelayedTree->SetObject("delayed", "delayed");
 
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ, classResult;
-    ULong64_t eventTime, dcApplied, dcFlagged, GTID;
-    Int_t mcIndex, nHitsCleaned, neckNhits;
+    ULong64_t eventTime, dcApplied, dcFlagged;
+    Int_t mcIndex, nHitsCleaned, neckNhits, GTID;
     Int_t runNum; //run number associated with MC
     Int_t lastRunNum = -999; //last run number loaded in DB
     Bool_t *valid;
@@ -171,11 +166,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     double delay, highNhitDelay;
     bool passedDC;
     double promptEcorr, delayedEcorr;
-    int a = 0;
+    std::vector<int> prompt_entries, delayed_entries;
     // Loop through all events:
     // First, find prompt event that pass all cuts.
     // Then go through next 3 events to try to find a delayed event that also passes all cuts.
-    while (a < nentries) {
+    for (int a = 0; a < nentries; ++a) {
         if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
         #ifdef USING_RUN_NUM
@@ -190,26 +185,10 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
         if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = int64_t(eventTime);
         highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-        if (highNhitDelay < muonVETO_deltaT) {
-            ++nMuonCut;
-            ++a;
-            continue;
-        }
-        if (!valid) {
-            ++nValidCut;
-            ++a;
-            continue;
-        }
-        if (reconEnergy < 0) {
-            ++negEcut;
-            ++a;
-            continue;
-        }
-        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {
-            ++nDCcut;
-            ++a;
-            continue;
-        }
+        if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
+        if (!valid) {++nValidCut; continue;}
+        if (reconEnergy < 0) {++negEcut; continue;}
+        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
         delayedPos = TVector3(reconX, reconY, reconZ);
         delayedTime = int64_t(eventTime);
@@ -224,24 +203,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 if ((a - b) < 0) break;
                 EventInfo->GetEntry(a - b);
 
-                if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = int64_t(eventTime);
                 highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-                if (highNhitDelay < muonVETO_deltaT) {
-                    ++nMuonCut;
-                    continue;
-                }
-                if (!valid) {
-                    ++nValidCut;
-                    continue;
-                }
-                if (reconEnergy < 0) {
-                    ++negEcut;
-                    continue;
-                }
-                if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {
-                    ++nDCcut;
-                    continue;
-                }
+                if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
+                if (!valid) {++nValidCut; continue;}
+                if (reconEnergy < 0) {++negEcut; continue;}
+                if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
                 delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
@@ -257,20 +223,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                         // Event pair survived classifier cut
 
                         // Add to output TTree
-                        // reconEnergy = promptEcorr; // apply energy correction before re-writing it
-                        CutTtree->Fill();
-                        std::cout << "GTID = " << GTID << std::endl;
+                        prompt_entries.push_back(a - b);
+                        delayed_entries.push_back(a);
 
-                        std::cout << "promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
-                        std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
-                        
-                        // Add info to hists
-                        // hPromptE->Fill(promptEcorr);
-                        // hDelayedE->Fill(delayedEcorr);
-                        // hPromptR->Fill(promptPos.Mag());
-                        // hDelayedR->Fill(delayedPos.Mag());
-                        // hDeltaT->Fill(delay);
-                        // hDeltaR->Fill((delayedPos - promptPos).Mag());
+                        // std::cout << "GTID = " << GTID << std::endl;
+                        // std::cout << "reconEnergy = " << reconEnergy << ", promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
+                        // std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
 
                         // Update
                         nvalid++;
@@ -278,18 +236,43 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 }
             }
         }
-        ++a;
     }
+
+    // Check for multiplicity
+    bool isUnique;
+    unsigned int nvalidMultiplicity = 0;
+    for (unsigned int i = 0; i < prompt_entries.size(); ++i) {
+        isUnique = true;
+        for (unsigned int j = 0; j < prompt_entries.size(); ++j) {
+            if (i == j) continue;
+            if (prompt_entries.at(i) == prompt_entries.at(j) || delayed_entries.at(i) == delayed_entries.at(j) || prompt_entries.at(i) == delayed_entries.at(j) || delayed_entries.at(i) == prompt_entries.at(j)) {
+                isUnique = false;
+                break;
+            }
+        }
+        if (isUnique) {
+            EventInfo->GetEntry(prompt_entries.at(i));
+            CutPromptTree->Fill();
+            EventInfo->GetEntry(delayed_entries.at(i));
+            CutDelayedTree->Fill();
+
+            ++nvalidMultiplicity;
+        }
+    }
+
+
     std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
               << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair
-              << ", number of these event pairs surviving classifier cut: " << nvalid << std::endl;
+              << ", number of these event pairs surviving classifier cut: " << nvalid
+              << ", number of that survive multiplicity cut: " << nvalidMultiplicity << std::endl;
     std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 
 
     outroot->cd();
-    CutTtree->Write();
+    CutPromptTree->Write();
+    CutDelayedTree->Write();
     outroot->Close();
     delete outroot;
 }
