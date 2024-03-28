@@ -80,9 +80,9 @@ bool pass_classifier(const double energy, const double class_result, const doubl
 }
 
 
-double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::DU::DetectorStateCorrection& stateCorr, RAT::DU::ReconCalibrator& e_cal) {
+double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::DU::DetectorStateCorrection& stateCorr, RAT::DU::ReconCalibrator* e_cal) {
     // Data vs MC energy correction (Tony's)
-    double Ecorr = e_cal.CalibrateEnergyRTF(is_data, E, std::sqrt(pos.X()*pos.X() + pos.Y()*pos.Y()), pos.Z()); // gives the new E
+    double Ecorr = e_cal->CalibrateEnergyRTF(is_data, E, std::sqrt(pos.X()*pos.X() + pos.Y()*pos.Y()), pos.Z()); // gives the new E
 
     // #ifdef USING_RUN_NUM
     //     // Correct for position coverage dependence (Logan's)
@@ -155,7 +155,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
     // Initialise DetectorStateCorrection (assume only one run in each file)
     RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
-    RAT::DU::ReconCalibrator e_cal = RAT::DU::Utility::Get()->GetReconCalibrator();
+    RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0;
