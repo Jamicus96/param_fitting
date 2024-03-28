@@ -37,28 +37,31 @@ int main(int argv, char** argc) {
 
     // file args
     std::string PDFs_address = argc[1];
-    std::string out_address = argc[2];
+    std::string data_ntuple_address = argc[2];
+    std::string out_address = argc[3];
+
+    bool use_Azimov = std::stoi(argc[4]);
 
     // 2d hist limit args
-    double Dm21_lower = std::atof(argc[3]);
-    double Dm21_upper = std::atof(argc[4]);
-    double Theta12_lower = std::atof(argc[5]);  // degrees
-    double Theta12_upper = std::atof(argc[6]);  // degrees
-    unsigned int N_bins = std::atoi(argc[7]);
+    double Dm21_lower = std::atof(argc[5]);
+    double Dm21_upper = std::atof(argc[6]);
+    double Theta12_lower = std::atof(argc[7]);  // degrees
+    double Theta12_upper = std::atof(argc[8]);  // degrees
+    unsigned int N_bins = std::atoi(argc[9]);
 
     // variable paramters limit args
-    double Dm21_min = std::atof(argc[8]);
-    double Dm21_max = std::atof(argc[9]);
-    double Theta12_min = std::atof(argc[10]);  // degrees
-    double Theta12_max = std::atof(argc[11]);  // degrees
+    double Dm21_min = std::atof(argc[10]);
+    double Dm21_max = std::atof(argc[11]);
+    double Theta12_min = std::atof(argc[12]);  // degrees
+    double Theta12_max = std::atof(argc[13]);  // degrees
 
-    unsigned int start_idx_Dm21 = std::atoi(argc[12]);
-    unsigned int start_idx_theta = std::atoi(argc[13]);
+    unsigned int start_idx_Dm21 = std::atoi(argc[14]);
+    unsigned int start_idx_theta = std::atoi(argc[15]);
 
-    unsigned int Dm21_nSteps = std::atoi(argc[14]);
-    unsigned int Theta12_nSteps = std::atoi(argc[15]);
+    unsigned int Dm21_nSteps = std::atoi(argc[16]);
+    unsigned int Theta12_nSteps = std::atoi(argc[17]);
 
-    bool verbose = std::stoi(argc[16]);
+    bool verbose = std::stoi(argc[18]);
 
     if (verbose) {
         std::cout << "N_IBD = " << N_IBD << " ± (" << IBD_err_indiv*100. << "% (individual), " << IBD_err_tot*100. << "% (total))." << std::endl;
@@ -88,7 +91,13 @@ int main(int argv, char** argc) {
     /* ~~~~~~~~ FITTING ~~~~~~~~ */
 
     // Create fitter object
-    create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
+    if (use_Azimov) {
+        create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
+    } else {
+        TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+        TTree *DataInfo = (TTree *) DataFile->Get("output");
+        create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db, DataInfo);
+    }
 
     // Make list of Dm_21^2 and s_12^2 values to iterate over
     std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, Theta12_min, Theta12_max, Theta12_nSteps);

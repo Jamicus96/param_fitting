@@ -48,6 +48,8 @@ def argparser():
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=True, help='For energy correction: True for data, False for MC.')
+    parser.add_argument('---use_Azimov', '-uA', type=bool, dest='use_Azimov',
+                        default=True, help='Use Azimov data set made from PDFs, instead of ntuple data from cut_ntuple_repo')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=1000, help='Max number of tasks in an array running at any one time.')
@@ -393,6 +395,7 @@ def doFitting(args):
     # Check repos are formatted correctly and exist, otherwise make them
     pdf_repo = checkRepo(args.pdf_repo, args.verbose)
     fit_repo = checkRepo(args.fit_repo, args.verbose)
+    ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
 
     # Get full path to this repo
     path = getRepoAddress()
@@ -402,7 +405,7 @@ def doFitting(args):
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')
-    command_base = path + 'fitting/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + fit_repo + 'param_fits_'
+    command_base = path + 'fitting/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_'
 
     # Make list of commands for job array to call
     jobScript_repo = fit_repo + 'job_scripts/'
@@ -411,8 +414,8 @@ def doFitting(args):
     commandList_file = open(commandList_address, 'w')
     for i, job_lim in enumerate(job_lims):
         # Create all the histogram making commands
-        command = command_base + str(i) + '.root ' + hist_lims + ' ' + str(args.Nbins) + ' ' + job_lim  + ' '\
-                               + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1]) + ' ' + str(int(args.verbose))
+        command = command_base + str(i) + '.root ' + str(int(args.use_Azimov)) + ' ' + hist_lims + ' ' + str(args.Nbins) + ' '\
+                               + job_lim  + ' ' + str(nBins_job[i, 0]) + ' ' + str(nBins_job[i, 1]) + ' ' + str(int(args.verbose))
         commandList_file.write(command + '\n')
     commandList_file.close()
 

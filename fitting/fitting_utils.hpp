@@ -247,33 +247,35 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     /* ~~~~~~~~ AZIMOV DATASET ~~~~~~~~ */
 
-    // Make fake dataset out of PDF hists (same function called to make PDFs)
-    std::cout << "Creating fake dataset..." << std::endl;
+    if (useAzimovData) {
+        // Make fake dataset out of PDF hists (same function called to make PDFs)
+        std::cout << "Creating fake dataset..." << std::endl;
 
-    ReactorMod->compute_spec();
-    alphaNMod->compute_spec();
-    geoNuMod->compute_spec();
+        ReactorMod->compute_spec();
+        alphaNMod->compute_spec();
+        geoNuMod->compute_spec();
 
-    TH1D* data = (TH1D*)(ReactorMod->GetModelEsys()->Clone("data"));
-    data->SetTitle("Azimov Dataset");
-    data->Reset("ICES");
-    
-    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
-    data->Add(ReactorMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
-    data->Add(alphaNMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
-    data->Add(geoNuMod->GetModelEsys());
-    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        TH1D* data = (TH1D*)(ReactorMod->GetModelEsys()->Clone("data"));
+        data->SetTitle("Azimov Dataset");
+        data->Reset("ICES");
+        
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        data->Add(ReactorMod->GetModelEsys());
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        data->Add(alphaNMod->GetModelEsys());
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        data->Add(geoNuMod->GetModelEsys());
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
 
-    // Set bins outside "real data" cuts to zero
-    for (unsigned int i = 1; i < min_bin; ++i) data->SetBinContent(i, 0.0);
-    for (unsigned int i = max_bin + 1; i < data->GetXaxis()->GetNbins() + 1; ++i) data->SetBinContent(i, 0.0);
+        // Set bins outside "real data" cuts to zero
+        for (unsigned int i = 1; i < min_bin; ++i) data->SetBinContent(i, 0.0);
+        for (unsigned int i = max_bin + 1; i < data->GetXaxis()->GetNbins() + 1; ++i) data->SetBinContent(i, 0.0);
 
-    std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
 
-    // Add Azimov dataset as data
-    if (useAzimovData) antinuFitter->SetData(data);
+        // Add Azimov dataset as data
+        antinuFitter->SetData(data);
+    }
 }
 
 
