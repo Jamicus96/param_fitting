@@ -171,7 +171,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     // First, find prompt event that pass all cuts.
     // Then go through next 3 events to try to find a delayed event that also passes all cuts.
     for (int a = 0; a < nentries; ++a) {
-        if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
+        if (a % 10000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
         #ifdef USING_RUN_NUM
             if (lastRunNum != runNum) {
@@ -198,8 +198,8 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
         if (pass_delayed_cuts(delayedEcorr, delayedPos)) {
             nvaliddelayed++;
 
-            // Delayed event is valid, check through the previous 100 events for event that passes prompt + classifier + tagging cuts
-            for (int b = 1; b <= 100; ++b) {
+            // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
+            for (int b = 1; b <= 1000; ++b) {
                 if ((a - b) < 0) break;
                 EventInfo->GetEntry(a - b);
 
