@@ -1,15 +1,42 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib.markers as mmark
+import matplotlib.font_manager as fm
 import scipy
+
+def setup_plot_style():
+    plt.style.use('classic')
+    matplotlib.rcParams.update({'font.size': 28})
+    matplotlib.rcParams.update({'font.style': "normal", 'font.family': 'serif'})
+    matplotlib.rcParams['font.family'] = 'serif'
+    matplotlib.rcParams['xtick.major.size'] = 10
+    matplotlib.rcParams['xtick.major.width'] = 2
+    matplotlib.rcParams['xtick.minor.size'] = 5
+    matplotlib.rcParams['xtick.minor.width'] = 1
+    matplotlib.rcParams['ytick.major.size'] = 10
+    matplotlib.rcParams['ytick.major.width'] = 2
+    matplotlib.rcParams['ytick.minor.size'] = 5
+    matplotlib.rcParams['ytick.minor.width'] = 1
+    matplotlib.rcParams['axes.linewidth'] = 2  # set the value globally
+    matplotlib.rcParams['figure.facecolor'] = 'white'
+    matplotlib.rcParams['figure.figsize'] = 18, 10
+    matplotlib.rcParams['xtick.major.pad'] = '12'
+    matplotlib.rcParams['ytick.major.pad'] = '12'
+    matplotlib.rcParams['axes.unicode_minus'] = False
+    font_filepath = 'LiberationSerif-Regular.ttf'
+    return fm.FontProperties(fname=font_filepath, size=28)
 
 
 ### COLLECT DATA ###
 
-# data_address = 'RAT7.0.15/param_fits_all_classCut.txt'
-data_address = 'RAT7.0.15/param_fits_all.txt'
+data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt'
+# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt'
+# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/param_fits_all.txt'
 
+min_E = 0.9
+max_E = 8.0
 
 def read_data():
     Dm21 = []
@@ -62,9 +89,14 @@ def read_data():
     minLL = minLL.transpose()
 
     Ebin_centers = np.asarray(Ebin_centers, dtype=float)
+    print('Ebin_centers =', Ebin_centers)
+    min_idx = np.where(min_E <= Ebin_centers)[0][0]
+    max_idx = np.where(max_E < Ebin_centers)[0][0]
+    print('min_idx =', min_idx, ', max_idx =', max_idx)
+    print('Ebin_centers =', Ebin_centers[min_idx:max_idx])
 
     for spec in spectra:
-        print(spec + ': ' + str(np.sum(spectra[spec])))
+        print(spec + ': ' + str(np.sum(spectra[spec][min_idx:max_idx])))
 
     return Dm21, theta_12, minLL, Ebin_centers, spectra
 
@@ -82,7 +114,7 @@ def inv_ll_diff_per_nSig(nSig):
     nDOF = 2
     return scipy.stats.norm.ppf(0.5*(1 + scipy.stats.chi2.cdf(nSig, nDOF)))
 
-def plot_LL(ax, Dm21, theta_12, minLL):
+def plot_LL(Dm21, theta_12, minLL):
     # Get best fit values
     min_indices = np.where(minLL == np.min(minLL))
     min_theta_idx = min_indices[1][0]
@@ -92,7 +124,8 @@ def plot_LL(ax, Dm21, theta_12, minLL):
     min_Dm21 = Dm21[min_Dm_idx]
 
     # Get uncertainties
-    Chi2Diff = ll_diff_per_nSig(1.0)
+    # Chi2Diff = ll_diff_per_nSig(1.0)
+    Chi2Diff = 1.0
     for i in range(min_Dm_idx, Dm21.size):
         if minLL[i, min_theta_idx] == Chi2Diff:
             min_Dm21_max = Dm21[i] - min_Dm21
@@ -130,23 +163,29 @@ def plot_LL(ax, Dm21, theta_12, minLL):
     print('theta_12 = {} + {} - {} degrees'.format(min_theta_12, min_theta12_max, min_theta12_min))
 
     ### PLOT DATA ###
+    prop_font = setup_plot_style()
+
     def fmt(x):
         nSig = inv_ll_diff_per_nSig(x)
         return ('%i' % round(nSig)) + r'$\sigma$'
+    
+    # temp change
+    matplotlib.rcParams['figure.figsize'] = 14, 10
 
     # Background heat map
-    im = ax.imshow(np.sqrt(minLL), cmap=plt.cm.viridis, interpolation='none', extent=[theta_12[0], theta_12[-1], Dm21[0], Dm21[-1]], aspect='auto', origin="lower")
+    im = plt.imshow(np.sqrt(minLL), cmap=plt.cm.viridis, interpolation='none', extent=[theta_12[0], theta_12[-1], Dm21[0], Dm21[-1]], aspect='auto', origin="lower")
     colbar = plt.colorbar(im)
-    colbar.ax.set_ylabel(r'               $\sqrt{-2\Delta log(L)}$', rotation=0)
+    colbar.ax.set_ylabel(r'$\sqrt{-2\Delta \mathrm{log}(L)}$', rotation=90, fontproperties=prop_font)
 
     # Best fit point
-    ax.scatter(min_theta_12, min_Dm21, marker='+', color='w')
+    plt.scatter(min_theta_12, min_Dm21, marker='+', s=100, linewidths=2, color='w')
 
     # Contours
     X, Y = np.meshgrid(theta_12, Dm21)
     contour_vals = [1, 2, 3, 4, 5]
     contour_cols = ['peachpuff', 'sandybrown', 'darkorange', 'orangered', 'red']
-    contour_styles = ['-', '--', ':', ':', ':', ':']
+    # contour_styles = ['-', '--', ':', ':', ':', ':']
+    contour_styles = ['-', '--', '-.', '-.', '-.', '-.']
     contour_labels = [r'$1 \sigma$ contour', r'$2 \sigma$ contour', r'$3 \sigma$ contour', r'$4 \sigma$ contour', r'$5 \sigma$ contour']
 
     # plot = ax.contour(X, Y, np.sqrt(minLL), levels=contour_vals, colors=contour_cols, linestyles=contour_styles)
@@ -155,24 +194,27 @@ def plot_LL(ax, Dm21, theta_12, minLL):
     Chi2_contours = []
     for i in range(len(contour_vals)):
         Chi2_contours.append(ll_diff_per_nSig(contour_vals[i]))
-    plot = ax.contour(X, Y, minLL, levels=Chi2_contours, colors=contour_cols, linestyles=contour_styles)
-    ax.clabel(plot, inline=True, fmt=fmt, fontsize=10)
+    plot = plt.contour(X, Y, minLL, levels=Chi2_contours, colors=contour_cols, linestyles=contour_styles, linewidths=2)
+    # plt.clabel(plot, inline=True, fmt=fmt, fontsize=18)
 
     # Legend
     legend_elems = [Line2D([0], [0],  color='w', lw=0, label='Best fit', marker='+', linestyle=None, markersize=8)]
     for i in range(len(contour_vals)):
-        legend_elems.append(Line2D([0], [0],  color=contour_cols[i], linestyle=contour_styles[i], lw=1.5, label=contour_labels[i]))
-    leg = ax.legend(handles=legend_elems, loc='best')
-    leg.get_frame().set_color('darkturquoise')
+        legend_elems.append(Line2D([0], [0],  color=contour_cols[i], linestyle=contour_styles[i], lw=1.5, label=contour_labels[i]))#, fontproperties=prop_font))
+    leg = plt.legend(handles=legend_elems, loc='best', markerscale=2, prop={'size': 28})
+    for i in range(1, len(leg.legend_handles)):
+        leg.legend_handles[i].set_linewidth(3.0)
+    leg.get_frame().set_color('cornflowerblue')
     leg.get_frame().set_alpha(1)
 
     # Labels
-    ax.set_xlabel(r'$\theta_{12}^{\degree}$')
-    ax.set_ylabel(r'$\Delta m_{12}^2$ / $10^{-5}$ eV${}^2$')
-    ax.set_title('Reactor Antineutrino Oscillation Parameter Fitting')
-    # ax.legend(loc='best')
+    plt.xlabel(r'$\theta_{12}$ $\left[{}^{\degree}\right]$', fontproperties=prop_font)
+    plt.ylabel(r'$\Delta m_{12}^2$ $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font)
+    plt.title(r'Reactor-$\nu$ Sensitivity, from Azimov Dataset (134.4 days)', fontproperties=prop_font)
+    plt.text(1, Dm21[5], "SNO+ Preliminary", fontproperties=prop_font)
+    plt.show()
 
-def plot_spectra(ax, Ebin_centers, spectra):
+def plot_spectra(Ebin_centers, spectra):
 
     dE = Ebin_centers[1] - Ebin_centers[0]
     bin_edges = np.zeros(len(Ebin_centers)+1)
@@ -187,17 +229,22 @@ def plot_spectra(ax, Ebin_centers, spectra):
     #                      r'geo-$\nu$ Th', r'geo-$\nu$ U',
     #                      r'($\alpha$,n) PR', r'($\alpha$,n) ${}^{12}$C', r'($\alpha$,n) ${}^{16}$O'])
 
-    ax.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['geoNu::model_Esys'], spectra['alphaN::model_Esys'],
-                 step='post', labels=[r'reactor-$\nu$', r'geo-$\nu$', r'($\alpha$,n)'])
+    prop_font = setup_plot_style()
 
-    ax.stairs(spectra['Total_Model_Spectrum'], edges=bin_edges, color='blue', linestyle='dashed', label='total model')
-    ax.scatter(Ebin_centers, spectra['data'], marker='+', color='k', label='data')
+    plt.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['geoNu::model_Esys'], spectra['alphaN::model_Esys'],
+                 step='post', labels=[r'reactor-$\nu$', r'geo-$\nu$', r'($\alpha$,n)'], colors=['red', 'green', 'blue'], linewidth=0)
 
-    ax.set_xlabel('E [MeV]')
-    ax.set_ylabel('Number of events')
-    ax.set_xlim(0.7, 8)
-    ax.set_ylim(0, 4.7)
-    ax.legend(loc='best')#, ncol=2)
+    # plt.stairs(spectra['Total_Model_Spectrum'], edges=bin_edges, color='k', linestyle='dashed', label='total model')
+    plt.scatter(Ebin_centers, spectra['data'], marker='+', linewidths=2.5, s=180, color='k', label='Azimov data')
+
+    plt.xlabel('E [MeV]', fontproperties=prop_font)
+    plt.ylabel('arbitrary', fontproperties=prop_font)
+    plt.xlim(min_E, max_E)
+    plt.ylim(0, 2.8)
+    plt.legend(loc='best', markerscale=1, prop={'size': 28})
+    plt.title(r'Reactor-$\nu$ IBD Fit Spectrum, from Azimov Dataset', fontproperties=prop_font)
+    plt.text(3, 2, "SNO+ Preliminary", fontproperties=prop_font)
+    plt.show()
 
 def testReduceLivetime(minLL):
 
@@ -221,7 +268,7 @@ def testReduceLivetime(minLL):
 Dm21, theta_12, minLL, Ebin_centers, spectra = read_data()
 # minLL = testReduceLivetime(minLL)
 
-fig, ax = plt.subplots(ncols=2)
-plot_LL(ax[0], Dm21, theta_12, minLL)
-plot_spectra(ax[1], Ebin_centers, spectra)
+# fig, ax = plt.subplots(ncols=2)
+plot_LL(Dm21, theta_12, minLL)
+plot_spectra(Ebin_centers, spectra)
 plt.show()
