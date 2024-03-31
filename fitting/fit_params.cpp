@@ -225,12 +225,12 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
         std::cout << "ERROR: Cannot have zero steps! (Theta12_nSteps = 0)" <<std::endl;
         exit(1);
     } else if (Theta12_nSteps == 1) {
-        sinTheta12.push_back(0.5 * (Theta12_max + Theta12_min));
+        sinTheta12.push_back(pow(sin(0.5 * (Theta12_max + Theta12_min) * TMath::Pi() / 180.), 2));
         std::cout << "sinTheta12.at(0) = " << sinTheta12.at(0) << std::endl;
     } else {
         double Theta12_step = (Theta12_max - Theta12_min) / (double)(Theta12_nSteps - 1);
         for (unsigned int n = 0; n < Theta12_nSteps; ++n) {
-            sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
+            sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step) * TMath::Pi() / 180.), 2));
             std::cout << "sinTheta12.at(" << n << ") = " << sinTheta12.at(n) << std::endl;
         }
     }

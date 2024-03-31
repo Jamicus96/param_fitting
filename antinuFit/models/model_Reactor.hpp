@@ -190,6 +190,11 @@ class Reactor {
             for (unsigned int i = 0; i < num_reactors; ++i) {
                 unosc_hist_ints.at(reactor_idx.at(i)) += reactor_hists.at(i)->Integral(iMinBin, iMaxBin);
             }
+            #ifdef antinuDEBUG
+                for (unsigned int i = 0; i < unosc_hist_ints.size(); ++i) {
+                    std::cout << "[Reactor::compute_unosc_integrals]: unosc_hist_ints.at(i) = " << unosc_hist_ints.at(i) << std::endl;
+                }
+            #endif
         }
 
         void compute_osc_specs() {
@@ -238,6 +243,12 @@ class Reactor {
                     }
                 }
             }
+
+            #ifdef antinuDEBUG
+                for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+                    std::cout << "[Reactor::compute_osc_specs]: osc_hists.at(i)->Integral() = " << osc_hists.at(i)->Integral() << std::endl;
+                }
+            #endif
         }
 
         void compute_oscillation_constants() {
@@ -356,14 +367,19 @@ class Reactor {
             }
             
             for (unsigned int i = 0; i < osc_hists.size(); ++i) {
+                model_noEsys->Add(osc_hists.at(i), Vars->val(iTotNorm) * Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
                 #ifdef SUPER_DEBUG
                     std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
+                    std::cout << "[Reactor::compute_spec]: osc_hists.at(i)->Integral(iMinBin, iMaxBin) = " << osc_hists.at(i)->Integral(iMinBin, iMaxBin) << std::endl;
+                    std::cout << "[Reactor::compute_spec]: Vars->val(iTotNorm) = " << Vars->val(iTotNorm) << ", Vars->val(iNorms.at(i)) = " << Vars->val(iNorms.at(i)) << ", unosc_hist_ints.at(i) = " << unosc_hist_ints.at(i) << std::endl;
+                    std::cout << "[Reactor::compute_spec]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
                 #endif
-                model_noEsys->Add(osc_hists.at(i), Vars->val(iTotNorm) * Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
             }
+            std::cout << "model_noEsys->Integral() = " << model_noEsys->Integral() << std::endl;
 
             // Apply energy systematics
             Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
+            std::cout << "model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
         }
 
         std::vector<std::string>& GetReactorNames() {return reactor_names;}
