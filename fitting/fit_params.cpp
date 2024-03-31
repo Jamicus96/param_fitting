@@ -25,7 +25,7 @@
 #include "fitting_utils.hpp"
 
 
-void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose);
+void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, std::vector<TH2D*>& par_hists, const std::vector<unsigned int>& start_idx, const bool verbose);
 std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min,
                                                      const double Theta12_max, const unsigned int Theta12_nSteps);
 
@@ -110,9 +110,13 @@ int main(int argv, char** argc) {
     minllHist->GetYaxis()->SetTitleOffset(1);  // Move x-axis label further away from the axis (0 is default)
     minllHist->SetStats(0);  // Remove stats box
 
+    // Set up the same 2d hist for each parameter in the fit
+    std::vector<TH2D*> par_hists;
+    setup_param_hists(minllHist, par_hists);
+
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
-    Fit_spectra(var_params, minllHist, start_idx, verbose);
+    Fit_spectra(var_params, minllHist, par_hists, start_idx, verbose);
 
 
     /* ~~~~~~~~ OUTPUT ~~~~~~~~ */
@@ -120,6 +124,7 @@ int main(int argv, char** argc) {
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
     minllHist->Write();
+    for (unsigned int i = 0; i < par_hists.size(); ++i) par_hists.at(i)->Write();
     outroot->Write();
     outroot->Close();
     delete(outroot);
@@ -142,7 +147,7 @@ int main(int argv, char** argc) {
  * @param var_params  Dm21^2 and s12^2 values to iterate over
  * @param minllHist  2D histogram that min log-likelihood values are dumped in
  */
-void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, const std::vector<unsigned int>& start_idx, const bool verbose) {
+void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, std::vector<TH2D*>& par_hists, const std::vector<unsigned int>& start_idx, const bool verbose) {
 
     Fitter* antinuFitter = Fitter::GetInstance();
     FitVars* Vars = FitVars::GetInstance();
@@ -156,6 +161,7 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
     std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
+    double value;
     std::cout << "Looping over oscillation parameters..." << std::endl;
     for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
         // Set sinTheta12 value
@@ -167,7 +173,18 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
             Vars->val("deltamsqr21") = Dm21.at(j);
             if (verbose) std::cout << "Dm_21^2 = " << Vars->val("deltamsqr21") << std::endl;
             ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
-            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, antinuFitter->fit_models());
+
+            // Perform fit and record log-likelihood
+            value = antinuFitter->fit_models();
+            minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, value);
+            std::cout << "minLL = " << value << std::endl;
+
+            // Also record best fit values of all parameters
+            for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
+                value = antinuFitter->GetFitParameter(iVar);
+                par_hists.at(iVar)->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, value);
+                std::cout << par_hists.at(iVar)->GetName() << " = " << value << std::endl;
+            }
         }
     }
 }
@@ -187,19 +204,35 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
 
     // Dm21^2
     std::vector<double> Dm21;
-    double Dm21_step = (Dm21_max - Dm21_min) / (double)(Dm21_nSteps - 1);
-    for (unsigned int n = 0; n < Dm21_nSteps; ++n) {
-        Dm21.push_back(Dm21_min + (double)n * Dm21_step);
-        std::cout << "Dm21.at(" << n << ") = " << Dm21.at(n) << std::endl;
+    if (Dm21_nSteps == 0) {
+        std::cout << "ERROR: Cannot have zero steps! (Dm21_nSteps = 0)" <<std::endl;
+        exit(1);
+    } else if (Dm21_nSteps == 1) {
+        Dm21.push_back(0.5 * (Dm21_max + Dm21_min));
+        std::cout << "Dm21.at(0) = " << Dm21.at(0) << std::endl;
+    } else {
+        double Dm21_step = (Dm21_max - Dm21_min) / (double)(Dm21_nSteps - 1);
+        for (unsigned int n = 0; n < Dm21_nSteps; ++n) {
+            Dm21.push_back(Dm21_min + (double)n * Dm21_step);
+            std::cout << "Dm21.at(" << n << ") = " << Dm21.at(n) << std::endl;
+        }
     }
     std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     // s_12^2
     std::vector<double> sinTheta12;
-    double Theta12_step = (Theta12_max - Theta12_min) / (double)(Theta12_nSteps - 1);
-    for (unsigned int n = 0; n < Theta12_nSteps; ++n) {
-        sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
-        std::cout << "sinTheta12.at(" << n << ") = " << sinTheta12.at(n) << std::endl;
+    if (Theta12_nSteps == 0) {
+        std::cout << "ERROR: Cannot have zero steps! (Theta12_nSteps = 0)" <<std::endl;
+        exit(1);
+    } else if (Theta12_nSteps == 1) {
+        sinTheta12.push_back(0.5 * (Theta12_max + Theta12_min));
+        std::cout << "sinTheta12.at(0) = " << sinTheta12.at(0) << std::endl;
+    } else {
+        double Theta12_step = (Theta12_max - Theta12_min) / (double)(Theta12_nSteps - 1);
+        for (unsigned int n = 0; n < Theta12_nSteps; ++n) {
+            sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step)  * TMath::Pi() / 180.), 2));
+            std::cout << "sinTheta12.at(" << n << ") = " << sinTheta12.at(n) << std::endl;
+        }
     }
     std::cout << "sinTheta12.size() = " << sinTheta12.size() << std::endl;
 

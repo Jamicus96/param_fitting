@@ -417,6 +417,15 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
     }
 }
 
+void setup_param_hists(TH2D* minllHist, std::vector<TH2D*>& par_hists) {
+    FitVars* Vars = FitVars::GetInstance();
+
+    for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
+        par_hists.push_back((TH2D*)minllHist->Clone((Vars->name(iVar)).c_str()));
+        par_hists.at(iVar)->SetTitle((Vars->name(iVar)).c_str());
+        par_hists.at(iVar)->Reset("ICES");
+    }
+}
 
 //end header guard
 #endif
