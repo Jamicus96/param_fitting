@@ -26,6 +26,7 @@ double MIN_DELAY = 400, MAX_DELAY = 0.8E6;  // Delta t cut [ns]
 double MAX_DIST = 1500;  // Delta R cut [mm]
 double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in make_PDF.cpp
 double muonVETO_deltaT = 20;  // [s]
+double AV_offset = 186.;  // [mm] average value from https://snopl.us/monitoring/scint_level
 
 
 void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, const double classiferCut, const bool is_data);
@@ -47,7 +48,7 @@ int main(int argv, char** argc) {
 bool pass_prompt_cuts(const double energy, const TVector3& position) {
     if (energy < MIN_PROMPT_E) return false;  // min energy cut (MeV)
     if (energy > MAX_PROMPT_E) return false;  // max energy cut (MeV)
-    if (position.Mag() > FV_CUT) return false;  // FV cut (mm)
+    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
 
     return true;
 }
@@ -55,7 +56,7 @@ bool pass_prompt_cuts(const double energy, const TVector3& position) {
 bool pass_delayed_cuts(const double energy, const TVector3& position) {
     if (energy < MIN_DELAYED_E) return false;  // min energy cut (MeV)
     if (energy > MAX_DELAYED_E) return false;  // max energy cut (MeV)
-    if (position.Mag() > FV_CUT) return false;  // FV cut (mm)
+    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
 
     return true;
 }
@@ -158,13 +159,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0;
-    int64_t delayedTime;
+    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0, nvalidMultiplicity = 0;
+    int64_t delayedTime, promptTime;
     int64_t highNhitTime = -99999999999;
-    TVector3 delayedPos;
-    TVector3 promptPos;
+    TVector3 delayedPos, promptPos, multiplicityPos;
     double delay, highNhitDelay;
-    bool passedDC;
+    bool passedDC, passMultiplicity;
     double promptEcorr, delayedEcorr;
     std::vector<int> prompt_entries, delayed_entries;
     // Loop through all events:
@@ -183,16 +183,15 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
 
         EventInfo->GetEntry(a);
 
-        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = int64_t(eventTime);
-        highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+        delayedTime = int64_t(eventTime);
+        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = delayedTime;
+        highNhitDelay = ((highNhitTime - delayedTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
         if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
         if (!valid) {++nValidCut; continue;}
         if (reconEnergy < 0) {++negEcut; continue;}
         if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
         delayedPos = TVector3(reconX, reconY, reconZ);
-        delayedTime = int64_t(eventTime);
-
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
 
         if (pass_delayed_cuts(delayedEcorr, delayedPos)) {
@@ -203,13 +202,14 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 if ((a - b) < 0) break;
                 EventInfo->GetEntry(a - b);
 
-                highNhitDelay = ((highNhitTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+                promptTime = int64_t(eventTime);
+                highNhitDelay = ((highNhitTime - promptTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
                 if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
                 if (!valid) {++nValidCut; continue;}
                 if (reconEnergy < 0) {++negEcut; continue;}
                 if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
-                delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+                delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
@@ -221,42 +221,82 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                     nvalidpair++;
                     if (pass_classifier(promptEcorr, classResult, classiferCut)) {
                         // Event pair survived classifier cut
-
-                        // Add to output TTree
-                        prompt_entries.push_back(a - b);
-                        delayed_entries.push_back(a);
-
-                        // std::cout << "GTID = " << GTID << std::endl;
-                        // std::cout << "reconEnergy = " << reconEnergy << ", promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
-                        // std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
-
-                        // Update
                         nvalid++;
+
+                        // check for multiplicity (any events around the event pairs that have E>0.4MeV and dr<2m)
+                        passMultiplicity = true;
+                        for (unsigned int c = 1; c < 1000; ++c) {
+                            // before prompt
+                            if ((a - b - c) < 0) break;
+                            EventInfo->GetEntry(a - b - c);
+
+                            delay = ((promptTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                            if (delay > 1.) break;
+
+                            if (reconEnergy > 0.4) {
+                                multiplicityPos = TVector3(reconX, reconY, reconZ);
+                                if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                                    passMultiplicity = false;
+                                    break;
+                                }
+                            }
+                        }
+                        // after prompt is covered by before delayed
+                        if (passMultiplicity) {
+                            for (unsigned int c = 1; c < 1000; ++c) {
+                                // before delayed
+                                if (c >= b) break;
+                                EventInfo->GetEntry(a - c);
+
+                                delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                                if (delay > 1.) break;
+
+                                if (reconEnergy > 0.4) {
+                                    multiplicityPos = TVector3(reconX, reconY, reconZ);
+                                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                                        passMultiplicity = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (passMultiplicity) {
+                            for (unsigned int c = 1; c < 1000; ++c) {
+                                // after delayed
+                                if ((a + c) > nentries) break;
+                                EventInfo->GetEntry(a + c);
+
+                                delay = ((int64_t(eventTime) - delayedTime) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                                if (delay > 1.) break;
+
+                                if (reconEnergy > 0.4) {
+                                    multiplicityPos = TVector3(reconX, reconY, reconZ);
+                                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                                        passMultiplicity = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (passMultiplicity) {
+                            // Add to output TTrees
+                            EventInfo->GetEntry(a - b);
+                            reconEnergy = promptEcorr;
+                            CutPromptTree->Fill();
+                            EventInfo->GetEntry(a);
+                            reconEnergy = delayedEcorr;
+                            CutDelayedTree->Fill();
+
+                            ++nvalidMultiplicity;
+
+                            // std::cout << "GTID = " << GTID << std::endl;
+                            // std::cout << "reconEnergy = " << reconEnergy << ", promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
+                            // std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
+                        }
                     }
                 }
             }
-        }
-    }
-
-    // Check for multiplicity
-    bool isUnique;
-    unsigned int nvalidMultiplicity = 0;
-    for (unsigned int i = 0; i < prompt_entries.size(); ++i) {
-        isUnique = true;
-        for (unsigned int j = 0; j < prompt_entries.size(); ++j) {
-            if (i == j) continue;
-            if (prompt_entries.at(i) == prompt_entries.at(j) || delayed_entries.at(i) == delayed_entries.at(j) || prompt_entries.at(i) == delayed_entries.at(j) || delayed_entries.at(i) == prompt_entries.at(j)) {
-                isUnique = false;
-                break;
-            }
-        }
-        if (isUnique) {
-            EventInfo->GetEntry(prompt_entries.at(i));
-            CutPromptTree->Fill();
-            EventInfo->GetEntry(delayed_entries.at(i));
-            CutDelayedTree->Fill();
-
-            ++nvalidMultiplicity;
         }
     }
 
@@ -266,6 +306,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
               << ", number of these event pairs surviving classifier cut: " << nvalid
               << ", number of that survive multiplicity cut: " << nvalidMultiplicity << std::endl;
     std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
+    std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 

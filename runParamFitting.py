@@ -17,7 +17,7 @@ def argparser():
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/Analysis_data/gold/', help='Folder where raw ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_ntuples/', help='Folder where raw ntuples are saved.')
     parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/reactorIBD/', help='Folder where cut ntuples are saved.')
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples/', help='Folder where cut ntuples are saved.')
