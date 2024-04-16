@@ -12,6 +12,7 @@
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
 
+#define antinuDEBUG
 
 std::vector<std::string> SplitString(std::string str);
 TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude);
@@ -243,7 +244,7 @@ class Reactor {
                         tot_weight += weight;
                     }
                 }
-                #ifdef antinuDEBUG
+                #ifdef SUPER_DEBUG
                     std::cout << "[Reactor::compute_osc_specs]: iBin = " << iBin << ", Ee = " << Ee << ", tot_weight = " << tot_weight << std::endl;
                 #endif
             }
@@ -278,7 +279,7 @@ class Reactor {
             H_ee_vac = fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31 * (fSSqrTheta13 - (1.0/3.0));
             a0_vac = (fDmSqr21*fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31*fDmSqr31) / 27.0
                      - (fDmSqr21*fDmSqr21 * fDmSqr31 + fDmSqr21 * fDmSqr31*fDmSqr31) / 18.0;
-            a1_vac = (fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31 - fDmSqr21 * fDmSqr31) / 6.0;
+            a1_vac = (fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31 - fDmSqr21 * fDmSqr31) / 9.0;
             Y_ee_vac = (fDmSqr21*fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31*fDmSqr31 * (fSSqrTheta13 - (1.0/3.0))
                         + 2.0 * fDmSqr21 * fDmSqr31 * ((1 - fSSqrTheta12) * (1 - fSSqrTheta13) - (1.0/3.0))) / 3.0;
             
@@ -304,10 +305,10 @@ class Reactor {
 
             for (int i = 0; i < 3; ++i) {
                 eigen.at(i) = 2.0 * sqrt_a1 * cos(arcCos - (2.0/3.0) * M_PI * i);
-                X_mat.at(i) = (1.0 + (eigen.at(i) * H_ee + Y_ee) / (eigen.at(i)*eigen.at(i) + a1)) / 3.0;
+                X_mat.at(i) = (1.0 + (eigen.at(i) * H_ee + Y_ee) / (eigen.at(i)*eigen.at(i) - a1)) / 3.0;
             }
 
-            #ifdef antinuDEBUG
+            #ifdef SUPER_DEBUG
                 std::cout << "[Reactor::re_compute_consts]: A_CC = " << A_CC << ", H_ee = " << H_ee << ", a0 = " << a0 << ", a1 = " << a1 << ", Y_ee = " << Y_ee << std::endl;
                 std::cout << "[Reactor::re_compute_consts]: eigen.at(0) = " << eigen.at(0) << ", eigen.at(1) = " << eigen.at(1) << ", eigen.at(2) = " << eigen.at(2) << ", X_mat.at(0) = "
                           << X_mat.at(0) << ", X_mat.at(1) = " << X_mat.at(1) << ", X_mat.at(2) = " << X_mat.at(2) << std::endl;
@@ -325,7 +326,7 @@ class Reactor {
             // Compute probability
             double prob = 1.0 - 4.0 * (X_mat.at(1)*X_mat.at(0)*s_10*s_10 + X_mat.at(2)*X_mat.at(0)*s_20*s_20 + X_mat.at(2)*X_mat.at(1)*s_21*s_21);
 
-            #ifdef antinuDEBUG
+            #ifdef SUPER_DEBUG
                 std::cout << "[Reactor::survival_prob]: E = " << E << ", L = " << L << ", s_10 = " << s_10 << ", s_20 = " << s_20 << ", s_21 = " << s_21 << ", prob = " << prob << std::endl;
             #endif
 
