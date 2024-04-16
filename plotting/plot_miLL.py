@@ -52,9 +52,9 @@ def setup_plot_style():
 
 ### COLLECT DATA ###
 
-data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt'
+# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt'
 # data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt'
-# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/param_fits_all.txt'
+data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/param_fits_all.txt'
 
 min_E = 0.9
 max_E = 8.0
@@ -229,7 +229,7 @@ def plot_LL(Dm21, theta_12, minLL):
 
     # Labels
     ax1.set_xlabel(r'$\theta_{12}$ $\left[{}^{\degree}\right]$', fontproperties=prop_font, x=1, ha='right')
-    ax1.set_ylabel(r'$\Delta m_{12}^2$ $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font, y=1, ha='right')
+    ax1.set_ylabel(r'$\Delta m_{21}^2$ $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font, y=1, ha='right')
 
     for label in ax1.get_xticklabels():
         label.set_fontproperties(prop_font)
@@ -242,7 +242,7 @@ def plot_LL(Dm21, theta_12, minLL):
     ax1.xaxis.set_ticks_position('both')
 
     ax1.set_title(r'Reactor-$\nu$ Sensitivity, from Asimov Dataset', fontproperties=prop_font)
-    ax1.text(1.5, 0.3, "SNO+ Preliminary", fontproperties=prop_font)
+    ax1.text(29, 5.73, "SNO+ Preliminary", fontproperties=prop_font, color='tan')
     plt.show()
 
 def plot_spectra(Ebin_centers, spectra):
@@ -314,16 +314,16 @@ def testReduceLivetime(minLL):
 
 
 #####################
-def fit_log(x, y):
-    '''y = a * ln(x) + b'''
+def fit_inv_sqrt(x, y):
+    '''y = a / sqrt(x) + b'''
     err2 = (0.1 * y)**2
-    lnx = np.log(x)
+    sqrt_x = np.sqrt(x)
 
-    S1 = np.sum(1 / err2)
-    Sx = np.sum(lnx / err2)
+    S1 = np.sum(1. / err2)
+    Sx = np.sum(1. / (err2 * sqrt_x))
     Sy = np.sum(y / err2)
-    Sxx = np.sum(lnx**2 / err2)
-    Sxy = np.sum(lnx*y / err2)
+    Sxx = np.sum(1. / (err2 * x))
+    Sxy = np.sum(y / (err2 * sqrt_x))
 
     Delta = S1 * Sxx - Sx**2
 
@@ -417,7 +417,7 @@ def sensitivity_over_time():
     ax1.hlines(0.19, livetimes[0], livetimes[-1], linewidths=4, linestyles='dashed', colors='k', label='KamLand')
     
     ax1.set_xlabel('live-time [years]', fontproperties=prop_font, size = 32, x=1, ha='right')
-    ax1.set_ylabel(r'mean $\Delta m_{12}^2$ uncertainty $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font, size = 32, y=1, ha='right')
+    ax1.set_ylabel(r'mean $\Delta m_{21}^2$ uncertainty $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font, size = 32, y=1, ha='right')
 
     for label in ax1.get_xticklabels():
         label.set_fontproperties(prop_font)
