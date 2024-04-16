@@ -5,28 +5,6 @@ from matplotlib.lines import Line2D
 import matplotlib.font_manager as fm
 import scipy
 
-def setup_plot_style_Daniel():
-    plt.style.use('classic')
-    matplotlib.rcParams.update({'font.size': 28})
-    matplotlib.rcParams.update({'font.style': "normal", 'font.family': 'serif'})
-    matplotlib.rcParams['font.family'] = 'serif'
-    matplotlib.rcParams['xtick.major.size'] = 10
-    matplotlib.rcParams['xtick.major.width'] = 2
-    matplotlib.rcParams['xtick.minor.size'] = 5
-    matplotlib.rcParams['xtick.minor.width'] = 1
-    matplotlib.rcParams['ytick.major.size'] = 10
-    matplotlib.rcParams['ytick.major.width'] = 2
-    matplotlib.rcParams['ytick.minor.size'] = 5
-    matplotlib.rcParams['ytick.minor.width'] = 1
-    matplotlib.rcParams['axes.linewidth'] = 2  # set the value globally
-    matplotlib.rcParams['figure.facecolor'] = 'white'
-    matplotlib.rcParams['figure.figsize'] = 18, 10
-    matplotlib.rcParams['xtick.major.pad'] = '12'
-    matplotlib.rcParams['ytick.major.pad'] = '12'
-    matplotlib.rcParams['axes.unicode_minus'] = False
-    font_filepath = 'LiberationSerif-Regular.ttf'
-    return fm.FontProperties(fname=font_filepath, size=28)
-
 def setup_plot_style():
     prop_font = fm.FontProperties(fname='Times_New_Roman_Normal.ttf',size = 28)
 
