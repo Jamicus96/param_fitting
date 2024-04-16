@@ -27,8 +27,8 @@ def argparser():
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
-                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/Azimov_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
                         # default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/RAT7.0.15/likelihoods_updated_classCUT/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
@@ -49,7 +49,7 @@ def argparser():
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=True, help='For energy correction: True for data, False for MC.')
     parser.add_argument('---use_Azimov', '-uA', type=bool, dest='use_Azimov',
-                        default=True, help='Use Azimov data set made from PDFs, instead of ntuple data from cut_ntuple_repo')
+                        default=False, help='Use Azimov data set made from PDFs, instead of ntuple data from cut_ntuple_repo')
 
     parser.add_argument('--max_jobs', '-m', type=int, dest='max_jobs',
                         default=1000, help='Max number of tasks in an array running at any one time.')
@@ -99,7 +99,7 @@ def checkRepo(repo_address, verbose=False):
 
 def selectNutples(ntuple_repo, args):
 
-    run_numbers = []
+    run_numbers_str = []
     unused_runs = []
     if args.use_rl:
         f = open(args.rl_file, 'r')
@@ -108,10 +108,11 @@ def selectNutples(ntuple_repo, args):
         for line in lines:
             line_strp = line.rstrip('\n')
             if line_strp != '':
-                run_numbers.append(line_strp)
+                run_numbers_str.append(line_strp)
                 unused_runs.append(int(line_strp))
 
     file_addresses = []
+    runs = []
     for filename in os.listdir(ntuple_repo):
         file_address = os.path.join(ntuple_repo, filename)
         if os.path.isfile(file_address):
@@ -119,17 +120,21 @@ def selectNutples(ntuple_repo, args):
                 addFile = True
                 if args.use_rl:
                     addFile = False
-                    for runNum in run_numbers:
+                    for runNum in run_numbers_str:
                         if runNum in filename:
                             addFile = True
                             if int(runNum) in unused_runs:
                                 unused_runs.remove(int(runNum))
+                                runs.append(int(runNum))
                             break
                 if addFile:
                     file_addresses.append(file_address)
     
     if args.use_rl:
-        print('Missing {} out of {} runs'.format(len(unused_runs), len(run_numbers)))
+        # re-order
+        file_addresses = [x for _,x in sorted(zip(runs, file_addresses))]
+
+        print('Missing {} out of {} runs'.format(len(unused_runs), len(run_numbers_str)))
         print('Missing runs:', np.array(unused_runs))
 
     return file_addresses
@@ -182,9 +187,12 @@ def cutNtuples(args):
     commandBase = path + 'cutting/cut_data.exe '
     
     commandList_file = open(commandList_address, 'w')
-    for file_address in ntuple_addresses:
+    for i, file_address in enumerate(ntuple_addresses):
         outNtuple_address = 'CUT_' + file_address.split('/')[-1][:-12] + '.ntuple.root'
-        command = commandBase + file_address + ' '
+        if i != 0 and args.use_rl:
+            command = commandBase + file_address + ' ' + ntuple_addresses[i-1] + ' '
+        else:
+            command = commandBase + file_address + ' 0 '
         command += cut_ntuple_repo + outNtuple_address + ' '
         command += str(args.classCut) + ' ' + str(int(args.is_data))
         commandList_file.write(command + '\n')
@@ -468,6 +476,7 @@ def combi_fits(args):
     # Check fitting repo
     pdf_repo = checkRepo(args.pdf_repo, args.verbose)
     fit_repo = checkRepo(args.fit_repo, args.verbose)
+    ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
 
     # Get full path to this repo
     path = getRepoAddress()
@@ -482,7 +491,7 @@ def combi_fits(args):
     theta12_end_indices = Dm21_end_indices
 
     # make job command
-    command = path + 'fitting/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ' ' + fit_repo + 'param_fits_all.root'
+    command = path + 'fitting/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_all.root ' + str(int(args.use_Azimov))
     k = 0
     for i in range(Dm21_start_indices.size):
         for j in range(theta12_start_indices.size):

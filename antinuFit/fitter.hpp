@@ -23,7 +23,7 @@ class Fitter {
         static double arglist[2];
 
         static TH1D *data, *tot_fitModel;
-        static TTree* dataTree;
+        static std::vector<double> data_E;
         static double Emin, dE;
         static bool dataIsSet;
 
@@ -104,7 +104,7 @@ class Fitter {
         // Get info functions
         static void GetAllSpectra(std::vector<TH1D*>& hists);
         static TH1D* DataHist();
-        static TTree* DataTree();
+        static std::vector<double> DataNtuple();
         static void SetData(TH1D* Data);
         static void SetData(TTree* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
@@ -122,7 +122,7 @@ Fitter* Fitter::FitterInstance_{nullptr};
 TVirtualFitter* Fitter::minuit;
 double Fitter::arglist[2];
 TH1D *Fitter::data, *Fitter::tot_fitModel;
-TTree* Fitter::dataTree;
+std::vector<double> Fitter::data_E;
 double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 bool Fitter::dataIsSet = false;
@@ -268,17 +268,18 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
             binContent = tot_fitModel->GetBinContent(ibin);
             if (binContent > 0) logL += -binContent;
         }
-        Double_t reconEnergy;
-        dataTree->SetBranchAddress("energy", &reconEnergy);
-        unsigned int a = 0;
         int E_bin;
         // Loop through all data events:
-        while (a < dataTree->GetEntries()) {
-            dataTree->GetEntry(a);
-            E_bin = int((reconEnergy - Emin) / dE) + 1;
+        for (unsigned int a = 0; a < data_E.size(); ++a) {
+            E_bin = int((data_E.at(a) - Emin) / dE + 0.5) + 1;
             if (E_bin <= iBinMin || E_bin >= iBinMax) continue;
             binContent = tot_fitModel->GetBinContent(E_bin);
             if (binContent > 0) logL += log(binContent);
+            #ifdef SUPER_DEBUG
+                std::cout << "[Fitter::ExtendedConstrainedLogLikelihood]: data_E.at(" << a << ") = " << data_E.at(a) << ", E_bin = " << E_bin
+                          << ", tot_fitModel->GetBinCenter(E_bin) = " << tot_fitModel->GetBinCenter(E_bin) << ", dE = " << dE << ", Emin = " << Emin
+                          << ", tot_fitModel->GetBinContent(E_bin) = " << tot_fitModel->GetBinContent(E_bin) << std::endl;
+            #endif
         }
     }
     #ifdef SUPER_DEBUG
@@ -371,7 +372,7 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 }
 
 TH1D* Fitter::DataHist() {return data;}
-TTree* Fitter::DataTree() {return dataTree;}
+std::vector<double> Fitter::DataNtuple() {return data_E;}
 
 void Fitter::InitTotFitModHist(TH1D* exampleHist) {
     tot_fitModel = (TH1D*)(exampleHist->Clone());
@@ -401,7 +402,20 @@ void Fitter::SetData(TTree* Data) {
     #ifdef antinuDEBUG
         std::cout << "[Fitter::SetData]: Setting TTree Data." << std::endl;
     #endif
-    dataTree = Data;
+    data_E.clear();
+    Double_t reconEnergy;
+    Data->SetBranchAddress("energy", &reconEnergy);
+    for (unsigned int a = 0; a < Data->GetEntries(); ++a) {
+        Data->GetEntry(a);
+        data_E.push_back(reconEnergy);
+    }
+    #ifdef antinuDEBUG
+        std::cout << "[Fitter::SetData]: data_E = [" << data_E.at(0);
+        for (unsigned int i = 1; i < data_E.size(); ++i) {
+            std::cout << ", " << data_E.at(i);
+        }
+        std::cout << "]" << std::endl;
+    #endif
     dataIsSet = true;
     binnedData = false;
 }

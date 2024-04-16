@@ -95,7 +95,7 @@ int main(int argv, char** argc) {
         create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
     } else {
         TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
-        TTree *DataInfo = (TTree *) DataFile->Get("output");
+        TTree* DataInfo = (TTree*) DataFile->Get("prompt");
         create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db, DataInfo);
     }
 

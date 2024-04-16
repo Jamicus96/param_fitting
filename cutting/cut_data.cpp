@@ -25,21 +25,23 @@ double FV_CUT = 5700;  // Max radius [mm]
 double MIN_DELAY = 400, MAX_DELAY = 0.8E6;  // Delta t cut [ns]
 double MAX_DIST = 1500;  // Delta R cut [mm]
 double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in make_PDF.cpp
-double muonVETO_deltaT = 20;  // [s]
-double AV_offset = 186.;  // [mm] average value from https://snopl.us/monitoring/scint_level
+double highNhit_deltaT = 20;  // [s]
+double owlNhit_deltaT = 10;  // [us]
+double AV_offset = 186;  // [mm] average value from https://snopl.us/monitoring/scint_level
 
 
-void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, const double classiferCut, const bool is_data);
+void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, const double classifier_cut, const bool is_data);
 
 
 int main(int argv, char** argc) {
     std::string inputNtuple = argc[1];
-    std::string outputNtuple = argc[2];
-    double classifier_cut = std::stod(argc[3]);
-    bool is_data = std::stoi(argc[4]);
+    std::string previousRunNtuple = argc[2];
+    std::string outputNtuple = argc[3];
+    double classifier_cut = std::stod(argc[4]);
+    bool is_data = std::stoi(argc[5]);
 
     std::cout << "Looping through events..." << std::endl;
-    Apply_tagging_and_cuts(inputNtuple, outputNtuple, classifier_cut, is_data);
+    Apply_tagging_and_cuts(inputNtuple, previousRunNtuple, outputNtuple, classifier_cut, is_data);
 
     return 0;
 }
@@ -100,26 +102,93 @@ bool dcAppliedAndPassed(const bool is_data, ULong64_t dcApplied, ULong64_t dcFla
     return true;
 }
 
-
-void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, const double classiferCut, const bool is_data) {
+void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, const double classifier_cut, const bool is_data) {
 
     // Read in file and create output file
     TFile* inFile = TFile::Open(inputNtuple.c_str());
     TFile* outroot = new TFile(outputNtuple.c_str(), "RECREATE");
 
-    TTree *EventInfo = (TTree *) inFile->Get("output");
+    TTree* EventInfo = (TTree*) inFile->Get("output");
     TTree* CutPromptTree = EventInfo->CloneTree(0);
     CutPromptTree->SetObject("prompt", "prompt");
     TTree* CutDelayedTree = EventInfo->CloneTree(0);
     CutDelayedTree->SetObject("delayed", "delayed");
 
+    // Set up db access
+    RAT::DB *db = RAT::DB::Get();
+    RAT::DS::Run run;
+
+    #ifndef USING_RUN_NUM
+        db->SetAirplaneModeStatus(true);
+        db->LoadDefaults();
+    #endif
+    #ifdef USING_RUN_NUM
+        db->LoadDefaults();
+        db->SetServer("postgres://snoplus@pgsql.snopl.us:5400/ratdb");
+        std::cout << "RAT DB tag: " << db->GetDBTag() << std::endl;
+    #endif
+
+    /* ~~~~~~~~~~~~~ If looking at end of previous ntuple (like previous run) ~~~~~~~~~~~~~ */
+
+    Int_t lastRunNum = -999; //last run number loaded in DB
+    int64_t highNhitTime = -99999999999;
+    int64_t owlNhitTime = -99999999999;
+    bool found_highNhit = false, found_owlNhit = false;
+    
+    // Read in file and find last high nhit event
+    if (previousRunNtuple != "0" && previousRunNtuple != "false" && previousRunNtuple != "False") {
+        TFile* previousFile = TFile::Open(previousRunNtuple.c_str());
+        TTree* previousEventInfo = (TTree*) previousFile->Get("output");
+
+        // Set branch addresses to unpack TTree
+        ULong64_t prev_eventTime;
+        Int_t prev_nHits, prev_owlnhits;
+        Int_t prev_runNum; // run number associated with MC
+
+        previousEventInfo->SetBranchAddress("clockCount50", &prev_eventTime);
+        previousEventInfo->SetBranchAddress("runID", &prev_runNum);
+        previousEventInfo->SetBranchAddress("nhits", &prev_nHits);
+        previousEventInfo->SetBranchAddress("owlnhits", &prev_owlnhits);
+
+        std::cout << "Check previous run for high nhit and owl nhit events..." << std::endl;
+        int prev_nentries = previousEventInfo->GetEntries();
+        for (int a = (prev_nentries-1); a >= 0; --a) {
+            previousEventInfo->GetEntry(a);
+
+            #ifdef USING_RUN_NUM
+                if (lastRunNum != prev_runNum) {
+                    run.SetRunID(prev_runNum);
+                    db->BeginOfRun(run);
+                    lastRunNum = prev_runNum;
+                }
+            #endif
+
+            if (prev_nHits > 3000 && !found_highNhit) {
+                highNhitTime = int64_t(prev_eventTime);
+                found_highNhit = true;
+                std::cout << "found!" << std::endl;
+                break;
+            }
+            if (prev_owlnhits > 3 && !found_owlNhit) {
+                owlNhitTime = int64_t(prev_eventTime);
+                found_owlNhit = true;
+            }
+            if (found_highNhit && found_owlNhit) {
+                std::cout << "found!" << std::endl;
+                break;
+            }
+        }
+
+    }
+
+    /* ~~~~~~~~~~~~~ Look at main ntuple ~~~~~~~~~~~~~ */
+
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ, classResult;
     ULong64_t eventTime, dcApplied, dcFlagged;
-    Int_t mcIndex, nHitsCleaned, neckNhits, GTID;
+    Int_t mcIndex, nHits, GTID, owlnhits;
     Int_t runNum; //run number associated with MC
-    Int_t lastRunNum = -999; //last run number loaded in DB
-    Bool_t *valid;
+    Bool_t* valid;
 
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
@@ -132,25 +201,9 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     EventInfo->SetBranchAddress("dcApplied", &dcApplied);
     EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
     EventInfo->SetBranchAddress("runID", &runNum);
-    EventInfo->SetBranchAddress("nhitsCleaned", &nHitsCleaned);
-    EventInfo->SetBranchAddress("necknhits", &neckNhits);
+    EventInfo->SetBranchAddress("nhits", &nHits);
+    EventInfo->SetBranchAddress("owlnhits", &owlnhits);
     EventInfo->SetBranchAddress("eventID", &GTID);
-
-    RAT::DBLinkPtr linkdb;
-    RAT::DB *db = RAT::DB::Get();
-    RAT::DS::Run run;
-
-    #ifndef USING_RUN_NUM
-        db->SetAirplaneModeStatus(true);
-        db->LoadDefaults();
-    #endif
-    #ifdef USING_RUN_NUM
-        db->LoadDefaults();
-        db->SetServer("postgres://snoplus@pgsql.snopl.us:5400/ratdb");
-        run.SetRunID(runNum);
-        db->BeginOfRun(run);
-        std::cout << "RAT DB tag: " << db->GetDBTag() << std::endl;
-    #endif
 
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
@@ -161,17 +214,15 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0, nvalidMultiplicity = 0;
     int64_t delayedTime, promptTime;
-    int64_t highNhitTime = -99999999999;
     TVector3 delayedPos, promptPos, multiplicityPos;
-    double delay, highNhitDelay;
-    bool passedDC, passMultiplicity;
+    double delay, highNhitDelay, owlNhitDelay;
+    bool passMultiplicity;
     double promptEcorr, delayedEcorr;
-    std::vector<int> prompt_entries, delayed_entries;
     // Loop through all events:
-    // First, find prompt event that pass all cuts.
-    // Then go through next 3 events to try to find a delayed event that also passes all cuts.
     for (int a = 0; a < nentries; ++a) {
         if (a % 10000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
+
+        EventInfo->GetEntry(a);
 
         #ifdef USING_RUN_NUM
             if (lastRunNum != runNum) {
@@ -181,12 +232,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
             }
         #endif
 
-        EventInfo->GetEntry(a);
-
         delayedTime = int64_t(eventTime);
-        if (nHitsCleaned > 3000 || neckNhits > 3) highNhitTime = delayedTime;
-        highNhitDelay = ((highNhitTime - delayedTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-        if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
+        if (nHits > 3000) highNhitTime = delayedTime;
+        if (owlnhits > 3) owlNhitTime = delayedTime;
+        highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+        owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+        if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
         if (!valid) {++nValidCut; continue;}
         if (reconEnergy < 0) {++negEcut; continue;}
         if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
@@ -203,8 +254,10 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 EventInfo->GetEntry(a - b);
 
                 promptTime = int64_t(eventTime);
-                highNhitDelay = ((highNhitTime - promptTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-                if (highNhitDelay < muonVETO_deltaT) {++nMuonCut; continue;}
+                highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+                owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+                if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
+                if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
                 if (!valid) {++nValidCut; continue;}
                 if (reconEnergy < 0) {++negEcut; continue;}
                 if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
@@ -213,13 +266,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                 if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
-                passedDC = dcAppliedAndPassed(is_data, dcApplied, dcFlagged);
                 promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
 
                 if (pass_prompt_cuts(promptEcorr, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
                     nvalidpair++;
-                    if (pass_classifier(promptEcorr, classResult, classiferCut)) {
+                    if (pass_classifier(promptEcorr, classResult, classifier_cut)) {
                         // Event pair survived classifier cut
                         nvalid++;
 
@@ -289,10 +341,6 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string outputNtuple, c
                             CutDelayedTree->Fill();
 
                             ++nvalidMultiplicity;
-
-                            // std::cout << "GTID = " << GTID << std::endl;
-                            // std::cout << "reconEnergy = " << reconEnergy << ", promptEcorr = " << promptEcorr << ", delayedEcorr = " << delayedEcorr << std::endl;
-                            // std::cout << "prompt_R = " << promptPos.Mag() << ", delayed_R = " << delayedPos.Mag() << ", delay = " << delay << std::endl;
                         }
                     }
                 }

@@ -38,7 +38,7 @@ class Reactor {
         double Y_ee_vac;
 
         // Define electron density Ne of the crust, based on 2.7g/cm3 mass density, and <N/A> = 0.5
-        static constexpr double alpha = - 2.535e-31 * 8.13e23;  // conversion factor in eV2/MeV * Ne = 8.13e23
+        static constexpr double alpha = - 2.535e-31 * 8.13e23;  // -2*sqrt(2)*G_F*Ne [eV2/MeV], for Ne = 8.13e23 [cm^-3]
 
         // Computed oscillation paramters depending only on E [MeV], but not on L [km]
         std::vector<double> eigen;  // Antinu propagation Hamiltonian eigenvalues
@@ -211,7 +211,7 @@ class Reactor {
 
             // Assume all the histograms have the same E binning
             double Ee, Enu;
-            double weighted_av_P;
+            double tot_weight;
             double weight;
             std::string origin_reactor;
             #ifdef antinuDEBUG
@@ -225,7 +225,7 @@ class Reactor {
                 Ee = reactor_hists.at(0)->GetXaxis()->GetBinCenter(iBin);
 
                 // Integrate survival prob over E_nu, weigthed by E_nu(E_e) distribution -> weigthed average survival prob
-                weighted_av_P = 0.0;
+                tot_weight = 0.0;
                 for (unsigned int k = 1; k <= E_conv->GetYaxis()->GetNbins(); ++k) {
                     weight = E_conv->GetBinContent(iBin, k);
 
@@ -240,8 +240,12 @@ class Reactor {
                             // Add value of bin from reactor core to appropriate hist, scaled by survival probability
                             osc_hists.at(reactor_idx.at(iReac))->AddBinContent(iBin, weight * survival_prob(Enu, baselines.at(iReac)) * reactor_hists.at(iReac)->GetBinContent(iBin));
                         }
+                        tot_weight += weight;
                     }
                 }
+                #ifdef antinuDEBUG
+                    std::cout << "[Reactor::compute_osc_specs]: iBin = " << iBin << ", Ee = " << Ee << ", tot_weight = " << tot_weight << std::endl;
+                #endif
             }
 
             #ifdef antinuDEBUG
@@ -272,44 +276,60 @@ class Reactor {
             double fDmSqr31 = fDmSqr32 + fDmSqr21;
 
             H_ee_vac = fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31 * (fSSqrTheta13 - (1.0/3.0));
-            a0_vac = - (2.0/27.0) * (fDmSqr21*fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31*fDmSqr31)
-                                + (1.0/9.0) * (fDmSqr21*fDmSqr21 * fDmSqr31 + fDmSqr21 * fDmSqr31*fDmSqr31);
-            a1_vac = (1.0/3.0) * (fDmSqr21 * fDmSqr31 - fDmSqr21*fDmSqr21 - fDmSqr31*fDmSqr31);
-            Y_ee_vac = (2.0/3.0) * a1_vac + H_ee_vac*H_ee_vac + (1 - fSSqrTheta13) * (fDmSqr21*fDmSqr21 * fSSqrTheta12 * (1 + fSSqrTheta12 * (fSSqrTheta13 - 1))
-                                + fDmSqr31*fDmSqr31 * fSSqrTheta13 - 2.0 * fDmSqr21 * fDmSqr31 * fSSqrTheta12 * fSSqrTheta13);;
+            a0_vac = (fDmSqr21*fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31*fDmSqr31) / 27.0
+                     - (fDmSqr21*fDmSqr21 * fDmSqr31 + fDmSqr21 * fDmSqr31*fDmSqr31) / 18.0;
+            a1_vac = (fDmSqr21*fDmSqr21 + fDmSqr31*fDmSqr31 - fDmSqr21 * fDmSqr31) / 6.0;
+            Y_ee_vac = (fDmSqr21*fDmSqr21 * (fSSqrTheta12 * (1 - fSSqrTheta13) - (1.0/3.0)) + fDmSqr31*fDmSqr31 * (fSSqrTheta13 - (1.0/3.0))
+                        + 2.0 * fDmSqr21 * fDmSqr31 * ((1 - fSSqrTheta12) * (1 - fSSqrTheta13) - (1.0/3.0))) / 3.0;
+            
+            #ifdef antinuDEBUG
+                std::cout << "[Reactor::compute_oscillation_constants]: H_ee_vac = " << H_ee_vac << ", a0_vac = " << a0_vac << ", a1_vac = " << a1_vac << ", Y_ee_vac = " << Y_ee_vac << std::endl;
+            #endif
         }
 
         void re_compute_consts(const double& E) {
-            const double A_CC = alpha * E; // for A_CC in [eV^2] and nuE in [MeV]
+            double A_CC = alpha * E; // for A_CC in [eV^2] and nuE in [MeV]
             
             // Compute new values for H_ee, Y, a0 and a1
-            const double alpha_1 = H_ee_vac * A_CC + (1.0/3.0) * A_CC*A_CC;
+            double alpha_1 = H_ee_vac * A_CC / 3.0 + A_CC*A_CC / 9.0;
 
-            const double a0 = a0_vac - Y_ee_vac * A_CC - (1.0/3.0) * H_ee_vac * A_CC*A_CC - (2.0/27.0) * A_CC*A_CC*A_CC;
-            const double a1 = a1_vac - alpha_1;
-            const double Y_ee = Y_ee_vac + (2.0/3.0) * alpha_1;
-            const double H_ee = H_ee_vac + (2.0/3.0) * A_CC;
+            double a0 = a0_vac + 0.5 * Y_ee_vac * A_CC + H_ee_vac * A_CC*A_CC / 6.0 + A_CC*A_CC*A_CC / 27.0;
+            double a1 = a1_vac + alpha_1;
+            double Y_ee = Y_ee_vac + 2.0 * alpha_1;
+            double H_ee = H_ee_vac + (2.0/3.0) * A_CC;
 
             // Get eigenvalues of H, and constants X and theta
-            const double arcCos = (1.0/3.0) * acos(1.5 * (a0/a1) * sqrt(- 3.0 / a1));
-            const double preFact = 2.0 * sqrt(- a1 / 3.0);
+            double sqrt_a1 = sqrt(a1);
+            double arcCos = (1.0/3.0) * acos(a0 / (a1 * sqrt_a1));
 
             for (int i = 0; i < 3; ++i) {
-                eigen.at(i) = preFact * cos(arcCos - (2.0/3.0) * M_PI * i);
-                X_mat.at(i) = (1.0/3.0) + (eigen.at(i) * H_ee + Y_ee) / (3.0 * eigen.at(i)*eigen.at(i) + a1);
+                eigen.at(i) = 2.0 * sqrt_a1 * cos(arcCos - (2.0/3.0) * M_PI * i);
+                X_mat.at(i) = (1.0 + (eigen.at(i) * H_ee + Y_ee) / (eigen.at(i)*eigen.at(i) + a1)) / 3.0;
             }
+
+            #ifdef antinuDEBUG
+                std::cout << "[Reactor::re_compute_consts]: A_CC = " << A_CC << ", H_ee = " << H_ee << ", a0 = " << a0 << ", a1 = " << a1 << ", Y_ee = " << Y_ee << std::endl;
+                std::cout << "[Reactor::re_compute_consts]: eigen.at(0) = " << eigen.at(0) << ", eigen.at(1) = " << eigen.at(1) << ", eigen.at(2) = " << eigen.at(2) << ", X_mat.at(0) = "
+                          << X_mat.at(0) << ", X_mat.at(1) = " << X_mat.at(1) << ", X_mat.at(2) = " << X_mat.at(2) << std::endl;
+            #endif
         }
 
         double survival_prob(const double& E, const double& L) {
 
-            const double scale = 1.267e3 * L / E; // for E in [MeV] and L in [km]
+            const double scale = 1.267E3 * L / E; // for E in [MeV] and L in [km]
 
             const double s_10 = sin(scale * (eigen.at(1) - eigen.at(0)));
             const double s_20 = sin(scale * (eigen.at(2) - eigen.at(0)));
             const double s_21 = sin(scale * (eigen.at(2) - eigen.at(1)));
 
             // Compute probability
-            return 4.0 * (X_mat.at(1)*X_mat.at(0)*s_10*s_10 + X_mat.at(2)*X_mat.at(0)*s_20*s_20 + X_mat.at(2)*X_mat.at(1)*s_21*s_21);
+            double prob = 1.0 - 4.0 * (X_mat.at(1)*X_mat.at(0)*s_10*s_10 + X_mat.at(2)*X_mat.at(0)*s_20*s_20 + X_mat.at(2)*X_mat.at(1)*s_21*s_21);
+
+            #ifdef antinuDEBUG
+                std::cout << "[Reactor::survival_prob]: E = " << E << ", L = " << L << ", s_10 = " << s_10 << ", s_20 = " << s_20 << ", s_21 = " << s_21 << ", prob = " << prob << std::endl;
+            #endif
+
+            return prob;
         }
 
         void compute_baselines() {
@@ -375,11 +395,8 @@ class Reactor {
                     std::cout << "[Reactor::compute_spec]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
                 #endif
             }
-            std::cout << "model_noEsys->Integral() = " << model_noEsys->Integral() << std::endl;
-
             // Apply energy systematics
             Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
-            std::cout << "model_Esys->Integral() = " << model_Esys->Integral() << std::endl;
         }
 
         std::vector<std::string>& GetReactorNames() {return reactor_names;}
