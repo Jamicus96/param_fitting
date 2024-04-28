@@ -21,16 +21,28 @@
 #include <TGraphErrors.h>
 #include <TLatex.h>
 
+#include "fitter.hpp"
+#include "fitVars.hpp"
+#include "E_systematics.hpp"
+#include "model_alphaN.hpp"
+#include "model_geoNu.hpp"
+#include "model_Reactor.hpp"
+#include "fitting_utils.hpp"
+
 
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
-std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist);
-void print_to_txt(std::string txt_fileName, TH2D* minllHist);
+std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikelihood);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists);
+void GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov);
 
 
 int main(int argv, char** argc) {
     // file args
-    std::string out_address = argc[1];
+    std::string PDFs_address = argc[1];
+    std::string data_ntuple_address = argc[2];
+    std::string out_address = argc[3];
+    bool use_Azimov = std::stoi(argc[4]);
 
     // Rest args come as: hist_address_1 start_Dm_idx_1 end_Dm_idx_1 start_th_idx_1 end_th_idx_1 hist_address_2 start_Dm_idx_2 end_Dm_idx_2 start_th_idx_2 end_th_idx_2 ...
     // These give the histogram and the index limits that it covers
@@ -40,8 +52,8 @@ int main(int argv, char** argc) {
     std::vector<unsigned int> start_th_idx;
     std::vector<unsigned int> end_th_idx;
     unsigned int option;
-    for (unsigned int i = 2; i < argv; ++i) {
-        option = (i - 2) % 5;
+    for (unsigned int i = 5; i < argv; ++i) {
+        option = (i - 5) % 5;
         if      (option == 0) hists_addresses.push_back(argc[i]);
         else if (option == 1) start_Dm_idx.push_back(atoi(argc[i]));
         else if (option == 2) end_Dm_idx.push_back(atoi(argc[i]));
@@ -64,17 +76,23 @@ int main(int argv, char** argc) {
 
     std::cout << "min_ll = " << min_vals.at(0) << ", at Dm_21^2 = " << min_vals.at(1) << " and theta_12 = " << min_vals.at(2) << std::endl;
 
-    std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist);
+    std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist, min_vals.at(0));
+
+    std::vector<TH1D*> spectra;
+    GetFitSpectra(spectra, PDFs_address, data_ntuple_address, min_vals.at(1), min_vals.at(2), use_Azimov);
 
     // Print hist to text file too
     std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
-    print_to_txt(txt_fileName, new_hists.at(0));
+    print_to_txt(txt_fileName, new_hists.at(0), spectra);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
     minllHist->Write();
     new_hists.at(0)->Write();
     new_hists.at(1)->Write();
+    for (unsigned int i = 0; i < spectra.size(); ++i) {
+        spectra.at(i)->Write();
+    }
     outroot->Write();
     outroot->Close();
     delete(outroot);
@@ -90,22 +108,30 @@ std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& his
     double min_Theta12;
     double content;
 
+    unsigned int min_hist;
+    bool foudZero;
+
     std::cout << "Looping over hists..." << std::endl;
     for (unsigned int n = 0; n < hists.size(); ++n) {
         std::cout << "Looping over bins in hist " << n << "..." << std::endl;
+        foudZero = false;
         for (unsigned int i = start_th_idx.at(n); i <= end_th_idx.at(n); ++i) {
             for (unsigned int j = start_Dm_idx.at(n); j <= end_Dm_idx.at(n); ++j) {
                 content = hists.at(n)->GetBinContent(i + 1, j + 1);
                 minllHist->SetBinContent(i + 1, j + 1, content);
 
-                if (content < min_ll) {
+                if ((content < min_ll) && (content != 0.0)) {
                     min_ll = content;
+                    min_hist = n;
                     min_Theta12 = minllHist->GetXaxis()->GetBinCenter(i + 1);
                     min_Dm21 = minllHist->GetYaxis()->GetBinCenter(j + 1);
                 }
+                if (content == 0.0) foudZero = true;
             }
         }
+        if (foudZero) std::cout << "min_ll is zero found in hist " << n << std::endl;
     }
+    std::cout << "minimum found in hist " << min_hist << std::endl;
 
     return {min_ll, min_Dm21, min_Theta12};
 }
@@ -133,14 +159,14 @@ void read_hists_from_files(const std::vector<std::string>& hists_addresses, std:
 }
 
 
-std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
+std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikelihood) {
     // now do likelihood ratio test on maximal likelihood
 
     std::cout << "Performing ratio test" << std::endl;
 
     // int deltaM21BestFitBin, theta12BestFitBin, minimisedLikelihoodBin;
     // minllHist->GetBinXYZ(minllHist->GetMinimumBin(), deltaM21BestFitBin, theta12BestFitBin, minimisedLikelihoodBin);
-    double minimisedLikelihood = minllHist->GetBinContent(minllHist->GetMinimumBin());
+    // double minimisedLikelihood = minllHist->GetBinContent(minllHist->GetMinimumBin());
     double maximisedLikelihood = minllHist->GetBinContent(minllHist->GetMaximumBin());
 
     TH2D* sigmaMinHist = (TH2D*)minllHist->Clone();
@@ -183,9 +209,11 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist) {
  * @param txt_fileName 
  * @param minllHist 
  */
-void print_to_txt(std::string txt_fileName, TH2D* minllHist) {
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists) {
     std::ofstream datafile;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
+
+    datafile << "# Delta log-likelihood:" << std::endl;
 
     double Dm21;
     double theta12;
@@ -201,11 +229,140 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist) {
         theta12 = minllHist->GetXaxis()->GetBinCenter(i);
         datafile << theta12;
         for (unsigned int j = 1; j < minllHist->GetNbinsY() + 1; ++j) {
-            minLL = minllHist->GetBinContent(i + 1, j + 1);
+            minLL = minllHist->GetBinContent(i, j);  // was: GetBinContent(i + 1, j + 1)
             datafile << " " << minLL;
         }
         datafile << std::endl;
     }
+
+    datafile << "# Spectra:" << std::endl;
+
+    datafile << "NA";
+    for (unsigned int j = 1; j < hists.at(0)->GetNbinsX() + 1; ++j) {
+        datafile << " " << hists.at(0)->GetBinCenter(j);
+    }
+    datafile << std::endl;
+    for (unsigned int i = 0; i < hists.size(); ++i) {
+        datafile << hists.at(i)->GetName();
+        for (unsigned int j = 1; j < hists.at(i)->GetNbinsX() + 1; ++j) {
+            datafile << " " << hists.at(i)->GetBinContent(j);
+        }
+        datafile << std::endl;
+    }
+}
+
+
+void GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov) {
+
+    // Get DB
+    RAT::DB::Get()->SetAirplaneModeStatus(true);
+    RAT::DB* db = RAT::DB::Get();
+    db->LoadDefaults();
+
+    // Get oscillation constants
+    std::cout << "Getting oscillation parameters..." << std::endl;
+    RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
+    const double fDmSqr32 = linkdb->GetD("deltamsqr32");
+    const double fSSqrTheta13 = linkdb->GetD("sinsqrtheta13");
+
+    // Create fitter object
+    if (use_Azimov) {
+        create_fitter(PDFs_address, Dm21_2, fDmSqr32, pow(sin(S_12_2  * TMath::Pi() / 180.), 2), fSSqrTheta13, db);
+    } else {
+        TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+        TTree* DataInfo = (TTree *) DataFile->Get("prompt");
+        create_fitter(PDFs_address, Dm21_2, fDmSqr32, pow(sin(S_12_2  * TMath::Pi() / 180.), 2), fSSqrTheta13, db, DataInfo);
+    }
+    Fitter* antinuFitter = Fitter::GetInstance();
+    FitVars* Vars = FitVars::GetInstance();
+
+    // Do fitting for a range of values, summarised in 2-D hist
+    std::cout << "Fitting spectra to dataset..." << std::endl;
+
+    double ll = antinuFitter->fit_models();
+    std::cout << "ll = " << ll <<std::endl;
+
+    // Add spectra to list
+    antinuFitter->GetAllSpectra(spectra);
+
+    // Add data hist to list
+    if (use_Azimov) spectra.push_back(antinuFitter->DataHist());
+
+    // Print some extra things
+    std::cout << "Covariance matrix:" << std::endl;
+    std::cout << "NA";
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        if (Vars->isConstant(i)) continue;
+        std::cout << "\t" << Vars->name(i);
+    }
+    std::cout << std::endl;
+    unsigned int k = 0, l = 0;
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        if (Vars->isConstant(i)) continue;
+        std::cout << Vars->name(i) << "\t" << antinuFitter->GetCovarianceMatrixElement(k, 0);
+        l = 0;
+        for (unsigned int j = 1; j < Vars->GetNumVars(); ++j) {
+            if (Vars->isConstant(j)) continue;
+            std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(k, l);
+            ++l;
+        }
+        std::cout << std::endl;
+        ++k;
+    }
+    Double_t eplus, eminus, eparab, globcc;
+    std::cout << "GetErrors:" << std::endl;
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        antinuFitter->GetErrors(i, eplus, eminus, eparab, globcc);
+        std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
+                  << eparab << ", globcc = " << globcc << std::endl;
+    }
+
+    // /* ~~~~~~~~~~~~~ Try an overall fit ~~~~~~~~~~~~~ */
+
+    // const double fDmSqr21 = linkdb->GetD("deltamsqr21");
+    // const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
+
+    // double Dm212err = 0.2E-5;
+    // double s122err = 0.013;
+    // double min_s122 = fSSqrTheta12 - 3.*s122err;
+    // double max_s122 = fSSqrTheta12 + 3.*s122err;
+    // if (min_s122 < 0.0) min_s122 = 0.0;
+    // if (max_s122 > 1.0) max_s122 = 1.0;
+    // antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, fDmSqr21 - 3.*Dm212err, fDmSqr21 + 3.*Dm212err, false);
+    // antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, min_s122, max_s122, false);
+
+    // Reactor* ReactorMod = Reactor::GetInstance();
+    // geoNu* geoNuMod = geoNu::GetInstance();
+    // ReactorMod->hold_osc_params_const(false);
+    // geoNuMod->hold_osc_params_const(false);
+
+    // // Do fitting for a range of values, summarised in 2-D hist
+    // std::cout << "Doing full fit..." << std::endl;
+
+    // ll = antinuFitter->fit_models();
+    // std::cout << "ll = " << ll <<std::endl;
+
+    // // Add spectra to list
+    // antinuFitter->GetAllSpectra(spectra);
+
+    // // Add data hist to list
+    // spectra.push_back(antinuFitter->DataHist());
+
+    // // Print some extra things
+    // std::cout << "Covariance matrix:" << std::endl;
+    // for (unsigned int i = 0; i < Vars->GetNumVars()-4; ++i) {
+    //     std::cout << antinuFitter->GetCovarianceMatrixElement(i, 0);
+    //     for (unsigned int j = 1; j < Vars->GetNumVars()-4; ++j) {
+    //         std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(i, j);
+    //     }
+    //     std::cout << std::endl;
+    // }
+    // std::cout << "GetErrors:" << std::endl;
+    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+    //     antinuFitter->GetErrors(i, eplus, eminus, eparab, globcc);
+    //     std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
+    //               << eparab << ", globcc = " << globcc << std::endl;
+    // }
 }
 
 
@@ -366,3 +523,4 @@ TCanvas* ContourList(TH2D* minllHist){
     gStyle->SetTitleH(0.);
     return c1;
 }
+
