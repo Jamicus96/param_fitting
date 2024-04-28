@@ -18,7 +18,7 @@ class geoNu {
         TH1D* model_Esys;
         bool isInit;
 
-        unsigned int iNormTh, iNormU, iS_12_2, iS_13_2, iE_syst;
+        unsigned int iNorm, iUThRatio, iS_12_2, iS_13_2, iE_syst;
         TH1D *histTh, *histU;
         double Th_integral, U_integral;
         double survival_prob;
@@ -45,8 +45,8 @@ class geoNu {
         static geoNu *GetInstance();
 
         // Initialisers
-        void InitGeoNu(const unsigned int NormTh_idx, const unsigned int NormU_idx, const unsigned int vS_12_2_idx, const unsigned int vS_13_2_idx, const unsigned int E_syst_idx, TH1D* Hist_Th, TH1D* Hist_U) {
-            iNormTh = NormTh_idx; iNormU = NormU_idx; iS_12_2 = vS_12_2_idx; iS_13_2 = vS_13_2_idx; iE_syst = E_syst_idx;
+        void InitGeoNu(const unsigned int Norm_idx, const unsigned int UThRatio_idx, const unsigned int vS_12_2_idx, const unsigned int vS_13_2_idx, const unsigned int E_syst_idx, TH1D* Hist_Th, TH1D* Hist_U) {
+            iNorm = Norm_idx; iUThRatio = UThRatio_idx; iS_12_2 = vS_12_2_idx; iS_13_2 = vS_13_2_idx; iE_syst = E_syst_idx;
             iMinBin = 1; iMaxBin = Hist_Th->GetXaxis()->GetNbins();
             histTh = Hist_Th; histTh->SetName("geoNu::histTh");
             histU = Hist_U; histU->SetName("geoNu::histU");
@@ -61,10 +61,10 @@ class geoNu {
             isInit = true;
         }
         
-        void InitGeoNu(const std::string NormTh_name, const std::string NormU_name, const std::string vS_12_2_name, const std::string vS_13_2_name, const std::string E_syst_name, TH1D* Hist_Th, TH1D* Hist_U) {
+        void InitGeoNu(const std::string Norm_name, const std::string UThRatio_name, const std::string vS_12_2_name, const std::string vS_13_2_name, const std::string E_syst_name, TH1D* Hist_Th, TH1D* Hist_U) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
-            InitGeoNu(Vars->findIdx(NormTh_name), Vars->findIdx(NormU_name), Vars->findIdx(vS_12_2_name), Vars->findIdx(vS_13_2_name), Esysts->findIdx(E_syst_name), Hist_Th, Hist_U);
+            InitGeoNu(Vars->findIdx(Norm_name), Vars->findIdx(UThRatio_name), Vars->findIdx(vS_12_2_name), Vars->findIdx(vS_13_2_name), Esysts->findIdx(E_syst_name), Hist_Th, Hist_U);
         }
 
         // Member functions
@@ -99,9 +99,11 @@ class geoNu {
             if (!(Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2) && computed_survival_prob)) {
                 geoNu_survival_prob();
             }
+            double N_Th = Vars->val(iNorm) / (1.0 + Vars->val(iUThRatio));
+            double N_U = Vars->val(iNorm) * Vars->val(iUThRatio) / (1.0 + Vars->val(iUThRatio));
 
-            model_noEsys->Add(histTh, survival_prob * Vars->val(iNormTh) / Th_integral);
-            model_noEsys->Add(histU, survival_prob * Vars->val(iNormU) / U_integral);
+            model_noEsys->Add(histTh, survival_prob * N_Th / Th_integral);
+            model_noEsys->Add(histU, survival_prob * N_U / U_integral);
 
             // Apply energy systematics
             Esysts->apply_systematics(iE_syst, model_noEsys, model_Esys);
@@ -111,15 +113,18 @@ class geoNu {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
             TH1D* temp_hist = (TH1D*)(histTh->Clone("temp_hist"));
+
+            double N_Th = Vars->val(iNorm) / (1.0 + Vars->val(iUThRatio));
+            double N_U = Vars->val(iNorm) * Vars->val(iUThRatio) / (1.0 + Vars->val(iUThRatio));
             
             temp_hist->Reset("ICES");
-            temp_hist->Add(histTh, survival_prob * Vars->val(iNormTh) / Th_integral);
+            temp_hist->Add(histTh, survival_prob * N_Th / Th_integral);
             hists.push_back((TH1D*)(histTh->Clone("model_geoNu_Th")));
             hists.at(hists.size()-1)->Reset("ICES");
             Esysts->apply_systematics(iE_syst, temp_hist, hists.at(hists.size()-1));
 
             temp_hist->Reset("ICES");
-            temp_hist->Add(histU, survival_prob * Vars->val(iNormU) / U_integral);
+            temp_hist->Add(histU, survival_prob * N_U / U_integral);
             hists.push_back((TH1D*)(histU->Clone("model_geoNu_U")));
             hists.at(hists.size()-1)->Reset("ICES");
             Esysts->apply_systematics(iE_syst, temp_hist, hists.at(hists.size()-1));

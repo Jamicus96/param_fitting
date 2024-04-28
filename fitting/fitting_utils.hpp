@@ -43,17 +43,21 @@ double maxE_binCentre = 8.0;  // Maximum energy (bin centre) to take into accoun
 
 double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
 // double N_IBD = 52.2 * 0.96;     // Classifier cut
-double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
+// double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
+double IBD_err_indiv = 0;
 double IBD_err_tot = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
 double N_alphaN = 18.2;         // Total number of expected alpha-n
 // double N_alphaN = 18.2 * 0.22;  // Classifier cut
-double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR + C12)
+double alphaN_err_PR = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR)
+double alphaN_err_C12 = 0.3;     // fractional error in N_alphaN for ground state neutrons (C12)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
 double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
 // double N_geoNu = 12.5 * 0.89;   // Classifier cut
-double geoNu_err = 1.0;         // fractional error in N_geoNu for individual Th and U spectra
+// double geoNu_err = 1.0;         // fractional error in N_geoNu for individual Th and U spectra
+double geoNuUThRatio = 3.7;
+double geoNuRatio_err = 0.35;  // fractional error
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)
 double kB = 0.074;              // Birk's constant for betas
@@ -170,16 +174,13 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     compute_hist_fracs(geoNu_hists, geoNu_names, geoNu_hist_fracs, geoNu_hist_idx, min_bin, max_bin);
 
     // Create geo-nu norm variables (allow to vary by ±3 sigma), and model
-    double geoNuNorm_frac_min = 1.0 - 3.0 * geoNu_err;
-    if (geoNuNorm_frac_min < 0.0) geoNuNorm_frac_min = 0.0;
-    
-    Vars->AddVar("geoNuNorm_Th", N_geoNu * geoNu_hist_fracs.at(0), geoNu_err * N_geoNu * geoNu_hist_fracs.at(0),
-                                  geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(0), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(0));
-    Vars->AddVar("geoNuNorm_U", N_geoNu * geoNu_hist_fracs.at(1), geoNu_err * N_geoNu * geoNu_hist_fracs.at(1),
-                                  geoNuNorm_frac_min * N_geoNu * geoNu_hist_fracs.at(1), (1.0 + 3.0 * geoNu_err) * N_geoNu * geoNu_hist_fracs.at(1));
+    double geoNuUThRatio_min = (1.0 - 3.0 * geoNuRatio_err) * geoNuUThRatio;
+    if (geoNuUThRatio_min < 0) geoNuUThRatio_min = 0;
+    Vars->AddVar("geoNuUThRatio", N_geoNu, geoNuRatio_err * geoNuUThRatio, geoNuUThRatio_min, (1.0 + 3.0 * geoNuRatio_err) * geoNuUThRatio);
+    Vars->AddVar_unconstrained("geoNuNorm", N_geoNu, 0.0, 3.0 * N_geoNu);
 
     // Add geo-nu model, linking it to approproate variables and E-systematics defined above
-    geoNuMod->InitGeoNu("geoNuNorm_Th", "geoNuNorm_U", "sinsqrtheta12", "sinsqrtheta13", "EsysBeta", geoNu_hists.at(geoNu_hist_idx.at(0)), geoNu_hists.at(geoNu_hist_idx.at(1)));
+    geoNuMod->InitGeoNu("geoNuNorm", "geoNuUThRatio", "sinsqrtheta12", "sinsqrtheta13", "EsysBeta", geoNu_hists.at(geoNu_hist_idx.at(0)), geoNu_hists.at(geoNu_hist_idx.at(1)));
     geoNuMod->hold_osc_params_const(true);  // This will also pre-compute the survival prob ahead of time
 
 
@@ -190,16 +191,20 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<double> alphaN_hist_fracs;
     std::vector<unsigned int> alphaN_hist_idx;
     compute_hist_fracs(alphaN_hists, alphaN_names, alphaN_hist_fracs, alphaN_hist_idx, min_bin, max_bin);
-    double GS_frac = alphaN_hist_fracs.at(0) + alphaN_hist_fracs.at(1);
+    double PR_frac = alphaN_hist_fracs.at(0);
+    double C12_frac = alphaN_hist_fracs.at(1);
     double ES_frac = alphaN_hist_fracs.at(2);
 
     // Create alpha-n norm variables (allow to vary by ±3 sigma), and model
-    double GS_Norm_min = (1.0 - 3.0 * alphaN_err_GS) * N_alphaN * GS_frac;
-    if (GS_Norm_min < 0.0) GS_Norm_min = 0.0;
+    double PR_Norm_min = (1.0 - 3.0 * alphaN_err_PR) * N_alphaN * PR_frac;
+    if (PR_Norm_min < 0.0) PR_Norm_min = 0.0;
+    double C12_Norm_min = (1.0 - 3.0 * alphaN_err_C12) * N_alphaN * C12_frac;
+    if (C12_Norm_min < 0.0) C12_Norm_min = 0.0;
     double ES_Norm_min = (1.0 - 3.0 * alphaN_err_ES) * N_alphaN * ES_frac;
     if (ES_Norm_min < 0.0) ES_Norm_min = 0.0;
 
-    Vars->AddVar("alphaNNorm_GS", N_alphaN * GS_frac, alphaN_err_GS * N_alphaN * GS_frac, GS_Norm_min, (1.0 + 3.0 * alphaN_err_GS) * N_alphaN * GS_frac);
+    Vars->AddVar("alphaNNorm_PR", N_alphaN * PR_frac, alphaN_err_PR * N_alphaN * PR_frac, PR_Norm_min, (1.0 + 3.0 * alphaN_err_PR) * N_alphaN * PR_frac);
+    Vars->AddVar("alphaNNorm_C12", N_alphaN * C12_frac, alphaN_err_C12 * N_alphaN * C12_frac, C12_Norm_min, (1.0 + 3.0 * alphaN_err_C12) * N_alphaN * C12_frac);
     Vars->AddVar("alphaNNorm_ES", N_alphaN * ES_frac, alphaN_err_ES * N_alphaN * ES_frac, ES_Norm_min, (1.0 + 3.0 * alphaN_err_ES) * N_alphaN * ES_frac);
 
     for (unsigned int i = 0; i < 3; ++i) {
@@ -208,7 +213,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     }
 
     // Add alpha-n model, linking it to approproate variables and E-systematics defined above
-    alphaNMod->InitAlphaN("alphaNNorm_GS", "alphaNNorm_ES", "EsysBeta", "EsysProton", alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
+    alphaNMod->InitAlphaN("alphaNNorm_PR", "alphaNNorm_C12", "alphaNNorm_ES", "EsysBeta", "EsysProton", alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
 
     /* ~~~~~~~~ REACTOR-NU ~~~~~~~~ */
 
@@ -225,7 +230,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         reacNorm = reac_hist_fracs.at(i) * N_IBD;
         reacLowLim = (1.0 - 3.0 * IBD_err_indiv) * reacNorm;
         if (reacLowLim < 0.0) reacLowLim = 0.0;
-        Vars->AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm);
+        Vars->AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm, true);
         ReactorNorms_VarNames.push_back("reactorNorm_" + reactor_names.at(i));
     }
     // Extra overall normalisation (= 1), to add shared unceetainties 
