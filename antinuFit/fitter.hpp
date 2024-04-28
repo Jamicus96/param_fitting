@@ -42,35 +42,7 @@ class Fitter {
             #ifdef antinuDEBUG
                 std::cout << "[Fitter::Fitter]: Creating singleton." << std::endl;
             #endif
-
-            FitVars* Vars = FitVars::GetInstance();
-            if (Vars->GetNumVars() == 0) {
-                std::cout << "Initialising miniut with zero variables! Must set up all variables first." << std::endl;
-                exit(1);
-            }
-
-            //The default minimizer is Minuit, you can also try Minuit2
-            // TVirtualFitter::SetDefaultFitter("Minuit2");
-            TVirtualFitter::SetDefaultFitter("Minuit");
-            minuit = TVirtualFitter::Fitter(0, Vars->GetNumVars());
-            
-            arglist[0] = 0;
-            // set print level
-            minuit->ExecuteCommand("SET PRINT", arglist, 2);
-
-            // minimiser settings
-            arglist[0] = 5000; // number of function calls
-            arglist[1] = 0.01; // tolerance
-
-            // (void (*fcn)(Int_t&, Double_t*, Double_t& f, Double_t*, Int_t))
-            SetFunc();
-
-            for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
-                // Sets the parameter
-                minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
-                // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically [DOESN'T WORK]
-                // minuit->GetParameter(iVar, const_cast<char*>(Vars->name(iVar).c_str()), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
-            }
+            Initialise();
         }
         ~Fitter() {}
 
@@ -80,6 +52,7 @@ class Fitter {
 
         // Should not be assignable.
         void operator=(const Fitter&) = delete;
+
         /**
          * This is the method that controls the access to the Fitter
          * instance. On the first run, it creates a Fitter object and places it
@@ -87,6 +60,10 @@ class Fitter {
          * object stored in the field.
          */
         static Fitter *GetInstance();
+
+        // Takes care of initialising everything for the fitter.
+        // Should only be run once, unless it needs to be re-initialised
+        static void Initialise();
 
         // Fitting functions
         static double fit_models();
@@ -145,6 +122,41 @@ Fitter* Fitter::GetInstance() {
     return FitterInstance_;
 }
 
+void Fitter::Initialise() {
+    #ifdef antinuDEBUG
+        std::cout << "[Fitter::Initialise]: Initialising Minuit." << std::endl;
+    #endif
+
+    FitVars* Vars = FitVars::GetInstance();
+    if (Vars->GetNumVars() == 0) {
+        std::cout << "Initialising miniut with zero variables! Must set up all variables first." << std::endl;
+        exit(1);
+    }
+
+    //The default minimizer is Minuit, you can also try Minuit2
+    // TVirtualFitter::SetDefaultFitter("Minuit2");
+    TVirtualFitter::SetDefaultFitter("Minuit");
+    minuit = TVirtualFitter::Fitter(0, Vars->GetNumVars());
+    
+    arglist[0] = 0;
+    // set print level
+    minuit->ExecuteCommand("SET PRINT", arglist, 2);
+
+    // minimiser settings
+    arglist[0] = 5000; // number of function calls
+    arglist[1] = 0.01; // tolerance
+
+    // (void (*fcn)(Int_t&, Double_t*, Double_t& f, Double_t*, Int_t))
+    SetFunc();
+
+    for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
+        // Sets the parameter
+        minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
+        // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically [DOESN'T WORK]
+        // minuit->GetParameter(iVar, const_cast<char*>(Vars->name(iVar).c_str()), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
+    }
+}
+
 void Fitter::fitFunc_minuit_format(Int_t&, Double_t*, Double_t& fval, Double_t* p, Int_t) {
     #ifdef SUPER_DEBUG
         std::cout << "[Fitter::fitFunc_minuit_format]: Running fitFunc_minuit_format()." << std::endl;
@@ -182,8 +194,10 @@ double Fitter::fit_models() {
     }
 
     //get result
-    if (iErr == 0) minuit->GetStats(minfuncOut, edm, errdef, nvpar, nparx);
-    else minfuncOut = 0;
+    minuit->GetStats(minfuncOut, edm, errdef, nvpar, nparx);
+
+    if (iErr != 0) minfuncOut = 0;
+    if (std::isnan(edm)) Initialise(); // Re-initialise fitter for next use, otherwise it always fails
 
     std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << ", edm = " << edm << ", errdef = " << errdef << ", iErr = " << iErr << ", num_attempts = " << num_attempts << std::endl;
     return minfuncOut;
@@ -290,7 +304,7 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
     FitVars* Vars = FitVars::GetInstance();
     for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
-        if (!Vars->isConstant(iVar)) {
+        if (!Vars->isConstant(iVar) && Vars->isConstrained(iVar)) {
             // Add gaussian constraint
             logL -= 0.5 * (Vars->val(iVar) - Vars->prior(iVar))*(Vars->val(iVar) - Vars->prior(iVar)) / (Vars->err(iVar)*Vars->err(iVar));
         }

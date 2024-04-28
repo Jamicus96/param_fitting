@@ -12,7 +12,6 @@
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
 
-#define antinuDEBUG
 
 std::vector<std::string> SplitString(std::string str);
 TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude);

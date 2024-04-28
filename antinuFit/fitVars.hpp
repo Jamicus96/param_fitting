@@ -20,6 +20,7 @@ class FitVars {
         std::vector<double> vlows;
         std::vector<double> vhighs;
         std::vector<bool> holdConstants;
+        std::vector<bool> constraineds;
     
     protected:
         // Constructors/desctructors
@@ -51,8 +52,22 @@ class FitVars {
             vlows.push_back(Vlow);
             vhighs.push_back(Vhigh);
             holdConstants.push_back(holdConstant);
+            constraineds.push_back(true);
 
             if (holdConstant) verrs.at(numVars-1) = 0.0;
+        }
+
+        void AddVar_unconstrained(std::string Parname, double Value, double Vlow, double Vhigh) {
+            ++numVars;
+            parnames.push_back(Parname);
+            values.push_back(Value);
+            vpriors.push_back(Value);
+            verrs.push_back(0.25 * (Vhigh - Vlow));
+            verr_copies.push_back(0.25 * (Vhigh - Vlow));
+            vlows.push_back(Vlow);
+            vhighs.push_back(Vhigh);
+            holdConstants.push_back(false);
+            constraineds.push_back(false);
         }
 
         unsigned int findIdx(const std::string Parname) {
@@ -81,6 +96,7 @@ class FitVars {
         double& min(unsigned int idx) {return vlows.at(idx);}
         double& max(unsigned int idx) {return vhighs.at(idx);}
         bool isConstant(unsigned int idx) {return holdConstants.at(idx);}
+        bool isConstrained(unsigned int idx) {return constraineds.at(idx);}
 
         void HoldConstant(const std::string Parname, const bool isTrue) {HoldConstant(findIdx(Parname), isTrue);}
         double& val(std::string Parname) {return val(findIdx(Parname));}
@@ -89,6 +105,7 @@ class FitVars {
         double& min(std::string Parname) {return min(findIdx(Parname));}
         double& max(std::string Parname) {return max(findIdx(Parname));}
         bool isConstant(std::string Parname) {return isConstant(findIdx(Parname));}
+        bool isConstrained(std::string Parname) {return constraineds.at(findIdx(Parname));}
 
         void GetVarValues(Double_t* p) {
             #ifdef SUPER_DEBUG
