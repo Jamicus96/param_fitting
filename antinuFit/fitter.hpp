@@ -13,6 +13,7 @@
 #include "model_Reactor.hpp"
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
+#include "model.hpp"
 
 
 class Fitter {
@@ -215,8 +216,9 @@ Double_t Fitter::fitFunc(Double_t* p) {
     Reactor* ReactorMod = Reactor::GetInstance();
     alphaN* alphaNMod = alphaN::GetInstance();
     geoNu* geoNuMod = geoNu::GetInstance();
+    Model* AccMod = Model::GetInstance();
 
-    if (!(ReactorMod->IsInit() || alphaNMod->IsInit() || geoNuMod->IsInit())) {
+    if (!(ReactorMod->IsInit() || alphaNMod->IsInit() || geoNuMod->IsInit() || AccMod->IsInit())) {
         std::cout << "Attempting to perform fit with no models!" << std::endl;
         exit(1);
     }
@@ -254,6 +256,17 @@ Double_t Fitter::fitFunc(Double_t* p) {
         tot_fitModel->Add(geoNuMod->GetModelEsys());
         #ifdef SUPER_DEBUG
             std::cout << "[Fitter::fitFunc]: Added geoNuMod, tot_fitModel integral = " << tot_fitModel->Integral(iBinMin, iBinMax) << std::endl;
+        #endif
+    }
+    if (AccMod->IsInit()) {
+        AccMod->compute_spec();
+        if (!init_tot_fitModel) {
+            InitTotFitModHist(AccMod->GetModelEsys());
+            tot_fitModel->Reset("ICES");
+        }
+        tot_fitModel->Add(AccMod->GetModelEsys());
+        #ifdef SUPER_DEBUG
+            std::cout << "[Fitter::fitFunc]: Added AccMod, tot_fitModel integral = " << tot_fitModel->Integral(iBinMin, iBinMax) << std::endl;
         #endif
     }
 
@@ -323,16 +336,19 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
     Reactor* ReactorMod = Reactor::GetInstance();
     alphaN* alphaNMod = alphaN::GetInstance();
     geoNu* geoNuMod = geoNu::GetInstance();
+    Model* AccMod = Model::GetInstance();
 
-    if (!(ReactorMod->IsInit() || alphaNMod->IsInit() || geoNuMod->IsInit())) {
+    if (!(ReactorMod->IsInit() || alphaNMod->IsInit() || geoNuMod->IsInit() || AccMod->IsInit())) {
         std::cout << "Attempting to perform fit with no models!" << std::endl;
         exit(1);
     } else if (ReactorMod->IsInit()) {
         total_hist = (TH1D*)(ReactorMod->GetModelEsys()->Clone("Total_Model_Spectrum"));
     } else if (alphaNMod->IsInit()) {
         total_hist = (TH1D*)(alphaNMod->GetModelEsys()->Clone("Total_Model_Spectrum"));
-    } else {
+    } else if (geoNuMod->IsInit()) {
         total_hist = (TH1D*)(geoNuMod->GetModelEsys()->Clone("Total_Model_Spectrum"));
+    } else {
+        total_hist = (TH1D*)(AccMod->GetModelEsys()->Clone("Total_Model_Spectrum"));
     }
     total_hist->SetTitle("Total Model Spectrum");
     total_hist->Reset("ICES");
@@ -380,6 +396,21 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 
         // Add constituent spectra
         geoNuMod->Spectra(hists);
+    }
+
+    if (AccMod->IsInit()) {
+        AccMod->compute_spec();
+
+        // Add total spectra
+        hists.push_back((TH1D*)(AccMod->GetModelEsys()->Clone()));
+        hists.at(hists.size()-1)->Reset("ICES");
+        hists.at(hists.size()-1)->Add(AccMod->GetModelEsys());
+
+        // Add to total overall specrtrum
+        total_hist->Add(hists.at(hists.size()-1));
+
+        // Add constituent spectra
+        AccMod->Spectra(hists);
     }
 
     hists.push_back(total_hist);
@@ -445,6 +476,7 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
     Reactor* ReactorMod = Reactor::GetInstance();
     alphaN* alphaNMod = alphaN::GetInstance();
     geoNu* geoNuMod = geoNu::GetInstance();
+    Model* AccMod = Model::GetInstance();
     
     if (ReactorMod->IsInit()) {
         ReactorMod->SetBinLims(iBinMin, iBinMax);
@@ -460,6 +492,11 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
         geoNuMod->SetBinLims(iBinMin, iBinMax);
     } else {
         std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising geoNu model. Bin limits will not be set there too." << std::endl;
+    }
+    if (AccMod->IsInit()) {
+        AccMod->SetBinLims(iBinMin, iBinMax);
+    } else {
+        std::cout << "[Fitter::SetBinLims]: WARNING! Setting fitter bin limits before initialising accidentals model. Bin limits will not be set there too." << std::endl;
     }
 }
 
