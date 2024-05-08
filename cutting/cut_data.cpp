@@ -11,24 +11,8 @@
 #include <TRandom3.h>
 #include <TMath.h>
 #include <RAT/DU/Point3D.hh>
-#include <RAT/DataCleaningUtility.hh>
 #include <RAT/DU/Utility.hh>
-
-#define VERBOSE
-#define USING_RUN_NUM
-ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
-
-// Define cut values
-double MIN_PROMPT_E = 0.9, MAX_PROMPT_E = 8.0;  // [MeV]
-double MIN_DELAYED_E = 1.85, MAX_DELAYED_E = 2.4;  // [MeV]
-double FV_CUT = 5700;  // Max radius [mm]
-double MIN_DELAY = 400, MAX_DELAY = 0.8E6;  // Delta t cut [ns]
-double MAX_DIST = 1500;  // Delta R cut [mm]
-double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in make_PDF.cpp
-double highNhit_deltaT = 20;  // [s]
-double owlNhit_deltaT = 10;  // [us]
-double AV_offset = 186;  // [mm] average value from https://snopl.us/monitoring/scint_level
-
+#include "cutting_utils.hpp"
 
 void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, const double classifier_cut, const bool is_data);
 
@@ -44,62 +28,6 @@ int main(int argv, char** argc) {
     Apply_tagging_and_cuts(inputNtuple, previousRunNtuple, outputNtuple, classifier_cut, is_data);
 
     return 0;
-}
-
-
-bool pass_prompt_cuts(const double energy, const TVector3& position) {
-    if (energy < MIN_PROMPT_E) return false;  // min energy cut (MeV)
-    if (energy > MAX_PROMPT_E) return false;  // max energy cut (MeV)
-    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
-
-    return true;
-}
-
-bool pass_delayed_cuts(const double energy, const TVector3& position) {
-    if (energy < MIN_DELAYED_E) return false;  // min energy cut (MeV)
-    if (energy > MAX_DELAYED_E) return false;  // max energy cut (MeV)
-    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
-
-    return true;
-}
-
-bool pass_coincidence_cuts(const double delay, const TVector3& prompt_pos, const TVector3& delayed_pos) {
-    // double delay = (delayed_time - prompt_time) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
-    double distance = (delayed_pos - prompt_pos).Mag();
-
-    if (delay < MIN_DELAY) return false;  // min delay cut (ns)
-    if (delay > MAX_DELAY) return false;  // max delay cut (ns)
-    if (distance > MAX_DIST) return false;  // max distance cut (mm)
-
-    return true;
-}
-
-bool pass_classifier(const double energy, const double class_result, const double class_cut) {
-    // Only check classifier result for events in PDF1 (proton recoil, E < 3MeV)
-    if (energy > PROTON_RECOIL_E_MAX) return true;
-    if (class_result > class_cut) return true;
-
-    return false;
-}
-
-
-double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::DU::DetectorStateCorrection& stateCorr, RAT::DU::ReconCalibrator* e_cal) {
-    // Data vs MC energy correction (Tony's)
-    double Ecorr = e_cal->CalibrateEnergyRTF(is_data, E, std::sqrt(pos.X()*pos.X() + pos.Y()*pos.Y()), pos.Z()); // gives the new E
-
-    // #ifdef USING_RUN_NUM
-    //     // Correct for position coverage dependence (Logan's)
-    //     RAT::DU::Point3D position(0, pos);  // position of event [mm] (as Point3D in PSUP coordinates, see system_id in POINT3D_SHIFTS tables)
-    //     Ecorr /= stateCorr.GetCorrectionPos(position, 0, 0) / stateCorr.GetCorrection(9394, 0.75058); // a correction factor (divide E by it)
-    // #endif
-
-    return Ecorr;
-}
-
-bool dcAppliedAndPassed(const bool is_data, ULong64_t dcApplied, ULong64_t dcFlagged) {
-    if (!is_data) return true;
-    if (!(((dcApplied & dcAnalysisWord) & dcFlagged ) == (dcApplied & dcAnalysisWord))) return false;  // failed DC cut
-    return true;
 }
 
 void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, const double classifier_cut, const bool is_data) {
@@ -245,7 +173,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         delayedPos = TVector3(reconX, reconY, reconZ);
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
 
-        if (pass_delayed_cuts(delayedEcorr, delayedPos)) {
+        if (pass_delayed_cuts_IBD(delayedEcorr, delayedPos)) {
             nvaliddelayed++;
 
             // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
@@ -263,12 +191,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
                 if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
                 delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
-                if (delay > MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
+                if (delay > IBD_MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
                 promptPos = TVector3(reconX, reconY, reconZ);
                 promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
 
-                if (pass_prompt_cuts(promptEcorr, promptPos) and pass_coincidence_cuts(delay, promptPos, delayedPos)) {
+                if (pass_prompt_cuts_IBD(promptEcorr, promptPos) and pass_coincidence_cuts_IBD(delay, promptPos, delayedPos)) {
                     // Event pair survived analysis cuts
                     nvalidpair++;
                     if (pass_classifier(promptEcorr, classResult, classifier_cut)) {

@@ -28,16 +28,15 @@
 #include "model_alphaN.hpp"
 #include "model_geoNu.hpp"
 #include "model_Reactor.hpp"
+#include "model.hpp"
+#include "cutting_utils.hpp"
 
 
 void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin);
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv);
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv);
 std::vector<std::string> SplitString(std::string str);
-
-double minE_binCentre = 0.9;  // Minimum energy (bin centre) to take into account in fitting [MeV]
-double maxE_binCentre = 8.0;  // Maximum energy (bin centre) to take into account in fitting [MeV]
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
@@ -58,6 +57,8 @@ double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-osci
 // double geoNu_err = 1.0;         // fractional error in N_geoNu for individual Th and U spectra
 double geoNuUThRatio = 3.7;
 double geoNuRatio_err = 0.35;  // fractional error
+
+double N_acc = 0.3;               // Total number of expected accidentals coincidence events (no err)
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)
 double kB = 0.074;              // Birk's constant for betas
@@ -97,8 +98,9 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<TH1D*> reactor_hists;
     std::vector<TH1D*> alphaN_hists;
     std::vector<TH1D*> geoNu_hists;
+    std::vector<TH1D*> Accidental_hists;
     TH2D E_conv;
-    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, E_conv);
+    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, E_conv);
 
     // Find data bin limits
     double bin_centre;
@@ -106,7 +108,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     unsigned int max_bin = 0;
     for (unsigned int i = 1; i < reactor_hists.at(0)->GetXaxis()->GetNbins() + 1; ++i) {
         bin_centre = reactor_hists.at(0)->GetBinCenter(i);
-        if (bin_centre > minE_binCentre && bin_centre < maxE_binCentre) {
+        if (bin_centre > IBD_MIN_PROMPT_E && bin_centre < IBD_MAX_PROMPT_E) {
             if (i < min_bin) min_bin = i;
             if (i > max_bin) max_bin = i;
         }
@@ -119,6 +121,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     Reactor* ReactorMod = Reactor::GetInstance();
     alphaN* alphaNMod = alphaN::GetInstance();
     geoNu* geoNuMod = geoNu::GetInstance();
+    Model* AccMod = Model::GetInstance();
 
     /* ~~~~~~~~ OSCILLATION CONSTANTS ~~~~~~~~ */
 
@@ -152,13 +155,6 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     // Add smearing variable (same for all, allow to be negative, absolute value taken in calculations)
     Vars->AddVar("sigPerSqrtE", 0.0, sigPerSqrtE, -3.0 * sigPerSqrtE, 3.0 * sigPerSqrtE);
-
-
-    // Vars->AddVar("linScale", 1, 0, 1, 1, true);
-    // Vars->AddVar("kBp", kB, 0, kB, kB, true);
-    // Vars->AddVar("linScale_P", 1, 0, 1, 1, true);
-    // Vars->AddVar("kBp_P", kB_P, 0, kB_P, kB_P, true);
-    // Vars->AddVar("sigPerSqrtE", 0, 0, 0, 0, true);
 
     // Add energy systamtics objects (beta and proton), and link them to variables above
     Esysts->AddEsys("EsysBeta", kB, "linScale", "kBp", "sigPerSqrtE");
@@ -244,6 +240,13 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
+    /* ~~~~~~~~ ACCIDENTALS ~~~~~~~~ */
+    
+    Vars->AddVar("AccidentalsNorm", N_acc, 0, N_acc, N_acc, true); // no normalisation error, since it is data driven
+    Esysts->AddEsys_trivial("trivial");  // no energy systematics either, for the same reason
+    // Add accidentals model, linking it to approproate variables and E-systematics defined above
+    AccMod->InitModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");
+
     /* ~~~~~~~~ INITIALISE FITTER ~~~~~~~~ */
 
     Fitter* antinuFitter = Fitter::GetInstance();
@@ -259,6 +262,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         ReactorMod->compute_spec();
         alphaNMod->compute_spec();
         geoNuMod->compute_spec();
+        AccMod->compute_spec();
 
         TH1D* data = (TH1D*)(ReactorMod->GetModelEsys()->Clone("data"));
         data->SetTitle("Azimov Dataset");
@@ -270,6 +274,8 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         data->Add(alphaNMod->GetModelEsys());
         std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
         data->Add(geoNuMod->GetModelEsys());
+        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        data->Add(AccMod->GetModelEsys());
         std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
 
         // Set bins outside "real data" cuts to zero
@@ -370,7 +376,7 @@ void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std
  * @param geoNu_hists
  * @param E_conv
  */
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, TH2D& E_conv) {
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv) {
 
     TFile *fin = TFile::Open(file_address.c_str());
     if (!fin->IsOpen()) {
@@ -396,6 +402,8 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
                 geoNu_hists.push_back((TH1D*)obj);
             } else if (name == "alphaN_PR" || name == "alphaN_C12" || name == "alphaN_O16") {
                 alphaN_hists.push_back((TH1D*)obj);
+            } else if (name == "Accidental") {
+                Accidental_hists.push_back((TH1D*)obj);
             } else if (name == "E_conversion") {
                 continue;
             } else {
@@ -412,12 +420,16 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
         std::cout << "ERROR: No reactor IBD histograms!" << std::endl;
         exit(1);
     }
-    if (alphaN_hists.size() < 3) {
+    if (alphaN_hists.size() != 3) {
         std::cout << "ERROR: Not enough alpha-n histograms! Only " << alphaN_hists.size() << std::endl;
         exit(1);
     }
-    if (geoNu_hists.size() < 2) {
+    if (geoNu_hists.size() != 2) {
         std::cout << "ERROR: No geo-nu histograms! Only " << geoNu_hists.size() << std::endl;
+        exit(1);
+    }
+    if (Accidental_hists.size() != 1) {
+        std::cout << "ERROR: No accidentals histogram!" << std::endl;
         exit(1);
     }
 }

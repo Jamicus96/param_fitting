@@ -24,7 +24,7 @@ class Esys {
         std::vector<double> fEmin, fDE, fEratio;
         std::vector<unsigned int> iNumBins;
         TH1D* tempHist;
-        std::vector<bool> bIsInit;
+        std::vector<bool> bIsInit, isTrivial;
     
     protected:
         Esys(): numEsysts(0) {}
@@ -53,10 +53,24 @@ class Esys {
             fEmin.push_back(0.0); fDE.push_back(0.0);
             fEratio.push_back(0.0); iNumBins.push_back(0);
             bIsInit.push_back(false);
+            isTrivial.push_back(false);
         }
         void AddEsys(const std::string name, const double kB, const std::string linScale_name, const std::string kBp_name, const std::string sigPerRootE_name) {
             FitVars* Vars = FitVars::GetInstance();
             AddEsys(name, kB, Vars->findIdx(linScale_name), Vars->findIdx(kBp_name), Vars->findIdx(sigPerRootE_name));
+        }
+
+        void AddEsys_trivial(const std::string name) {
+            ++numEsysts;
+
+            names.push_back(name);
+            fKB.push_back(0); iC.push_back(0);
+            iKBp.push_back(0); iSigPerRootE.push_back(0);
+
+            fEmin.push_back(0); fDE.push_back(0);
+            fEratio.push_back(0); iNumBins.push_back(0);
+            bIsInit.push_back(true);
+            isTrivial.push_back(true);
         }
 
         // Member functions
@@ -93,11 +107,15 @@ class Esys {
         unsigned int GetNumEsysts() {return numEsysts;}
 
         void apply_systematics(const unsigned int idx, TH1D* INhist, TH1D* OUThist) {
-            if (!bIsInit.at(idx)) initialise(idx, INhist);
-            tempHist->Reset("ICES");
+            if (isTrivial.at(idx)) {
+                OUThist->Add(INhist);
+            } else {
+                if (!bIsInit.at(idx)) initialise(idx, INhist);
+                tempHist->Reset("ICES");
 
-            Esys::apply_scaling(idx, INhist);
-            Esys::apply_smearing(idx, OUThist);
+                Esys::apply_scaling(idx, INhist);
+                Esys::apply_smearing(idx, OUThist);
+            }
         }
         
         void apply_scaling(const unsigned int idx, TH1D* INhist) {

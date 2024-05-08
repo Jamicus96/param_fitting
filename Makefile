@@ -10,13 +10,20 @@ all: cutting fitting tests clean
 
 
 # Cutting and PDF making
-cutting: make_PDFs cut_data reScaleReactorIBD
+cutting: make_PDFs cut_data get_accidentals_and_BiPos reScaleReactorIBD
 
 make_PDFs: make_PDFs.cpp 
 	${COMPILE} cutting/make_PDFs.cpp -o cutting/make_PDFs.exe ${INCLUDE}
 
-cut_data: cut_data.cpp 
-	${COMPILE} cutting/cut_data.cpp -o cutting/cut_data.exe ${INCLUDE}
+cut_data: cut_data.o 
+	${COMPILE} cut_data.o -o cutting/cut_data.exe ${INCLUDE}
+cut_data.o: cut_data.cpp cutting_utils.hpp
+	${COMPILE} cutting/cut_data.cpp -c ${INCLUDE}
+
+get_accidentals_and_BiPos: get_accidentals_and_BiPos.o 
+	${COMPILE} get_accidentals_and_BiPos.o -o cutting/get_accidentals_and_BiPos.exe ${INCLUDE}
+get_accidentals_and_BiPos.o: get_accidentals_and_BiPos.cpp cutting_utils.hpp
+	${COMPILE} cutting/get_accidentals_and_BiPos.cpp -c ${INCLUDE}
 
 reScaleReactorIBD: reScaleReactorIBD.cpp 
 	${COMPILE} cutting/reScaleReactorIBD.cpp -o cutting/reScaleReactorIBD.exe ${INCLUDE}
@@ -31,7 +38,7 @@ re_combine_fits.o: re_combine_fits.cpp fitter.hpp fitVars.hpp E_systematics.hpp 
 
 fit_params: fit_params.o 
 	${COMPILE} fit_params.o -o fitting/fit_params.exe ${INCLUDE}
-fit_params.o: fit_params.cpp fitter.hpp fitVars.hpp E_systematics.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp fitting_utils.hpp
+fit_params.o: fit_params.cpp fitter.hpp fitVars.hpp E_systematics.hpp model_alphaN.hpp model_geoNu.hpp model_Reactor.hpp fitting_utils.hpp cutting_utils.hpp
 	${COMPILE} fitting/fit_params.cpp -c ${INCLUDE}
 
 

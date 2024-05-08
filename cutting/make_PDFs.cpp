@@ -11,21 +11,19 @@
 #include <TRandom3.h>
 #include <TMath.h>
 #include <RAT/DU/Point3D.hh>
-#include <RAT/DataCleaningUtility.hh>
 #include <RAT/DU/Utility.hh>
 #include <map>
+#include "cutting_utils.hpp"
 
 
 // Define physical constants
 double electron_mass_c2 = 0.510998910;  // [MeV]
 double proton_mass_c2 = 938.272013;  // [MeV]
 double neutron_mass_c2 = 939.56536;  // [MeV]
-double CARBON12_SCATTER_E_MAX = 5.4;  // [MeV]  Could just simulate different process separately?
-double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in cut_data.cpp
 
 
 std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
-                                        const unsigned int nbins, const std::string data_type);
+                                        const unsigned int nbins, const std::string data_type, const double classifier_cut);
 
 
 int main(int argv, char** argc) {
@@ -33,20 +31,22 @@ int main(int argv, char** argc) {
     std::string alphaN_events_address = argc[2];
     std::string geoNuTh_events_address = argc[3];
     std::string geoNuU_events_address = argc[4];
-    std::string output_file = argc[5];
-    double classifier_cut = std::stod(argc[6]);
-    bool is_data = std::stoi(argc[7]);
+    std::string accidentals_address = argc[5];
+    std::string output_file = argc[6];
+    double classifier_cut = std::stod(argc[7]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
     TFile *alphaNFile = TFile::Open(alphaN_events_address.c_str());
     TFile *geoNuThFile = TFile::Open(geoNuTh_events_address.c_str());
     TFile *geoNuUFile = TFile::Open(geoNuU_events_address.c_str());
+    TFile *AccUFile = TFile::Open(accidentals_address.c_str());
 
-    TTree *reactorEventTree = (TTree *) reactorFile->Get("output");
-    TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");
-    TTree *geoNuThEventTree = (TTree *) geoNuThFile->Get("output");
-    TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("output");
+    TTree *reactorEventTree = (TTree *) reactorFile->Get("output");  // change to "prompt"?
+    TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");  // change to "prompt"?
+    TTree *geoNuThEventTree = (TTree *) geoNuThFile->Get("output");  // change to "prompt"?
+    TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("output");  // change to "prompt"?
+    TTree *AccEventTree = (TTree *) AccUFile->Get("promptAccidental");
 
     // Create recon E_e vs true E_nu 2-D hist (MeV)
     // Keep binning the same, for consistency, even though cuts may change
@@ -64,13 +64,15 @@ int main(int argv, char** argc) {
     // Loop through and apply tagging + cuts
     std::vector<TH1D*> recordHists;
     std::cout << "Looping through reactor IBD events..." << std::endl;
-    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD");
+    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD", classifier_cut);
     std::cout << "Looping through alpha-n events..." << std::endl;
-    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN");
+    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN", classifier_cut);
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl;
-    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th");
+    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th", classifier_cut);
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl;
-    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U");
+    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U", classifier_cut);
+    std::cout << "Looping through Accidental events..." << std::endl;
+    std::map<std::string, TH1D*> Acc_hist_map = CreatePDFs(AccEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "Accidental", classifier_cut);
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;
@@ -95,6 +97,9 @@ int main(int argv, char** argc) {
     for (auto& x : geoNuU_hist_map) {  
         x.second->Write();
     }
+    for (auto& x : Acc_hist_map) {  
+        x.second->Write();
+    }
     E_conv->Write();
     outroot->Write();
     outroot->Close();
@@ -104,28 +109,17 @@ int main(int argv, char** argc) {
 
 
 std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const double lowenergybin, const double maxenergybin,
-                                        const unsigned int nbins, const std::string data_type) {
+                                        const unsigned int nbins, const std::string data_type, const double classifier_cut) {
 
     // Define a map of histograms {"hist name", hist}. This is to keep track of reactor IBD origin
     std::map<std::string, TH1D*> hists_map;
 
     // Set branch addresses to unpack TTree
     TString *originReactor = NULL;
-    Double_t parentKE1, reconEnergy, reconX, reconY, reconZ, classResult;
-    ULong64_t eventTime, dcApplied, dcFlagged;
-    Bool_t valid;
-    Int_t mcIndex;
+    Double_t parentKE1, reconEnergy, classResult;
 
     EventInfo->SetBranchAddress("energy", &reconEnergy);
-    EventInfo->SetBranchAddress("posx", &reconX);
-    EventInfo->SetBranchAddress("posy", &reconY);
-    EventInfo->SetBranchAddress("posz", &reconZ);
-    EventInfo->SetBranchAddress("clockCount50", &eventTime);
-    EventInfo->SetBranchAddress("fitValid", &valid);
-    EventInfo->SetBranchAddress("mcIndex", &mcIndex);
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
-    EventInfo->SetBranchAddress("dcApplied", &dcApplied);
-    EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
     if (data_type == "reactorIBD") {
         // Want to get incoming antinu's origin core and energy
         EventInfo->SetBranchAddress("parentMeta1", &originReactor);
@@ -145,6 +139,9 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
     } else if (data_type == "geoNu_U") {
         TH1D* temp_hist_geoNu_2 = new TH1D("geoNu_U", "geo-nu Uranium", nbins, lowenergybin, maxenergybin);
         hists_map.insert({"geoNu_U", temp_hist_geoNu_2});
+    } else if (data_type == "Accidental") {
+        TH1D* temp_hist_Acc = new TH1D("Accidental", "Accidental", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"Accidental", temp_hist_Acc});
     } else {
         std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
         exit(1);
@@ -157,15 +154,17 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int a = 0;
-
+    
     // Loop through all events:
     // First, find prompt event that pass all cuts.
     // Then go through next 3 events to try to find a delayed event that also passes all cuts.
-    while (a < nentries) {
+    for (unsigned int a = 0; a < nentries; ++a) {
         if (a % 1000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
         EventInfo->GetEntry(a);
+
+        if (!pass_classifier(reconEnergy, classResult, classifier_cut)) continue;
+
         const char* hist_name;
         if (data_type == "reactorIBD") {
             hist_name = originReactor->Data();  // core name
@@ -179,11 +178,9 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
             // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
             E_conv->Fill(reconEnergy, parentKE1);
 
-        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U") {
+        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U" || data_type == "Accidental") {
             hist_name = data_type.c_str();
         } else {
-            hist_name = "ERROR"; // To make any errors obvious, just in case (alpha-n names set later)
-
             if (reconEnergy < PROTON_RECOIL_E_MAX) {
                 hist_name = "alphaN_PR";  // proton recoil
             } else if (reconEnergy < CARBON12_SCATTER_E_MAX) {
@@ -195,8 +192,6 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
 
         // Add event to relevant histogram
         hists_map.at(hist_name)->Fill(reconEnergy);
-
-        a++;
     }
 
     return hists_map;
