@@ -33,8 +33,8 @@
 std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& hists, const std::vector<unsigned int>& start_Dm_idx, const std::vector<unsigned int>& end_Dm_idx, const std::vector<unsigned int>& start_th_idx, const std::vector<unsigned int>& end_th_idx);
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikelihood);
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists);
-void GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov);
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::vector<double>& data);
+std::vector<double> GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov);
 
 
 int main(int argv, char** argc) {
@@ -79,11 +79,11 @@ int main(int argv, char** argc) {
     std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist, min_vals.at(0));
 
     std::vector<TH1D*> spectra;
-    GetFitSpectra(spectra, PDFs_address, data_ntuple_address, min_vals.at(1), min_vals.at(2), use_Azimov);
+    std::vector<double> data = GetFitSpectra(spectra, PDFs_address, data_ntuple_address, min_vals.at(1), min_vals.at(2), use_Azimov);
 
     // Print hist to text file too
     std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
-    print_to_txt(txt_fileName, new_hists.at(0), spectra);
+    print_to_txt(txt_fileName, new_hists.at(0), spectra, data);
 
     // Write hist to file and close
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
@@ -209,7 +209,7 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikel
  * @param txt_fileName 
  * @param minllHist 
  */
-void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists) {
+void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::vector<double>& data) {
     std::ofstream datafile;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
 
@@ -249,10 +249,19 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<T
         }
         datafile << std::endl;
     }
+
+    if (data.size() > 0) {
+        datafile << "# Data:" << std::endl;
+        datafile << data.at(0);
+        for (unsigned int i = 1; i < data.size(); ++i) {
+            datafile << " " << data.at(i);
+        }
+        datafile << std::endl;
+    }
 }
 
 
-void GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov) {
+std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov) {
 
     // Get DB
     RAT::DB::Get()->SetAirplaneModeStatus(true);
@@ -286,7 +295,9 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::s
     antinuFitter->GetAllSpectra(spectra);
 
     // Add data hist to list
+    std::vector<double> data;
     if (use_Azimov) spectra.push_back(antinuFitter->DataHist());
+    else data = antinuFitter->DataNtuple();
 
     // Print some extra things
     std::cout << "Covariance matrix:" << std::endl;
@@ -363,6 +374,8 @@ void GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::s
     //     std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
     //               << eparab << ", globcc = " << globcc << std::endl;
     // }
+
+    return data;
 }
 
 
