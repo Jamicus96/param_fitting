@@ -10,7 +10,7 @@ all: cutting fitting tests clean
 
 
 # Cutting and PDF making
-cutting: make_PDFs cut_data get_accidentals_and_BiPos reScaleReactorIBD
+cutting: make_PDFs cut_data get_accidentals_and_BiPos reScaleReactorIBD clean
 
 make_PDFs: make_PDFs.cpp 
 	${COMPILE} cutting/make_PDFs.cpp -o cutting/make_PDFs.exe ${INCLUDE}
