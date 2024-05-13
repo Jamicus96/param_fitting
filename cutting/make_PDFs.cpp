@@ -52,11 +52,11 @@ int main(int argv, char** argc) {
     // Keep binning the same, for consistency, even though cuts may change
     double Ee_min = 0.0;
     double Ee_max = 10.0;
-    unsigned int N_bins_Ee = 100;
+    unsigned int N_bins_Ee = 200;
 
     double Enu_min = ((neutron_mass_c2 + electron_mass_c2) * (neutron_mass_c2 + electron_mass_c2) - proton_mass_c2 * proton_mass_c2) / (2.0 * proton_mass_c2);  // minimum antinu energy for IBD
     double Enu_max = Ee_max + (neutron_mass_c2 - proton_mass_c2) + (5.0 / neutron_mass_c2); // convert from zeroth order Ee, then add 5/M to include 1st order (1/M) effects
-    unsigned int N_bins_Enu = 100;
+    unsigned int N_bins_Enu = 200;
     std::cout << "E_nu_min = " << Enu_min << ", E_nu_max = " << Enu_max << std::endl;
 
     TH2D* E_conv = new TH2D("E_conversion", "E_conversion", N_bins_Ee, Ee_min, Ee_max, N_bins_Enu, Enu_min, Enu_max);
@@ -78,8 +78,10 @@ int main(int argv, char** argc) {
     double integ;
     for (unsigned int i = 1; i <= E_conv->GetXaxis()->GetNbins(); ++i) {
         integ = E_conv->Integral(i, i, 1, N_bins_Enu);
-        for (unsigned int j = 1; j <= E_conv->GetYaxis()->GetNbins(); ++j) {
-            if (integ != 0.0) E_conv->SetBinContent(i, j, E_conv->GetBinContent(i, j) / integ);
+        if (integ != 0.0) {
+            for (unsigned int j = 1; j <= E_conv->GetYaxis()->GetNbins(); ++j) {
+                E_conv->SetBinContent(i, j, E_conv->GetBinContent(i, j) / integ);
+            }
         }
     }
 
