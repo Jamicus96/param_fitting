@@ -172,7 +172,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     // Create geo-nu norm variables (allow to vary by ±3 sigma), and model
     double geoNuUThRatio_min = (1.0 - 3.0 * geoNuRatio_err) * geoNuUThRatio;
     if (geoNuUThRatio_min < 0) geoNuUThRatio_min = 0;
-    Vars->AddVar("geoNuUThRatio", N_geoNu, geoNuRatio_err * geoNuUThRatio, geoNuUThRatio_min, (1.0 + 3.0 * geoNuRatio_err) * geoNuUThRatio);
+    Vars->AddVar("geoNuUThRatio", geoNuUThRatio, geoNuRatio_err * geoNuUThRatio, geoNuUThRatio_min, (1.0 + 3.0 * geoNuRatio_err) * geoNuUThRatio);
     Vars->AddVar_unconstrained("geoNuNorm", N_geoNu, 0.0, 3.0 * N_geoNu);
 
     // Add geo-nu model, linking it to approproate variables and E-systematics defined above
