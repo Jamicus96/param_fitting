@@ -32,8 +32,10 @@ int main(int argv, char** argc) {
     std::string geoNuTh_events_address = argc[3];
     std::string geoNuU_events_address = argc[4];
     std::string accidentals_address = argc[5];
-    std::string output_file = argc[6];
-    double classifier_cut = std::stod(argc[7]);
+    std::string sideband_address = argc[6];
+    std::string output_file = argc[7];
+    double bin_width = std::stod(argc[8]);
+    double classifier_cut = std::stod(argc[9]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
@@ -41,43 +43,47 @@ int main(int argv, char** argc) {
     TFile *geoNuThFile = TFile::Open(geoNuTh_events_address.c_str());
     TFile *geoNuUFile = TFile::Open(geoNuU_events_address.c_str());
     TFile *AccUFile = TFile::Open(accidentals_address.c_str());
+    TFile *sidebandFile = TFile::Open(sideband_address.c_str());
 
-    TTree *reactorEventTree = (TTree *) reactorFile->Get("output");  // change to "prompt"?
-    TTree *alphaNEventTree = (TTree *) alphaNFile->Get("output");  // change to "prompt"?
-    TTree *geoNuThEventTree = (TTree *) geoNuThFile->Get("output");  // change to "prompt"?
-    TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("output");  // change to "prompt"?
+    TTree *reactorEventTree = (TTree *) reactorFile->Get("prompt");
+    TTree *alphaNEventTree = (TTree *) alphaNFile->Get("prompt");
+    TTree *geoNuThEventTree = (TTree *) geoNuThFile->Get("prompt");
+    TTree *geoNuUEventTree = (TTree *) geoNuUFile->Get("prompt");
     TTree *AccEventTree = (TTree *) AccUFile->Get("promptAccidental");
+    TTree *sidebandEventTree = (TTree *) sidebandFile->Get("output");
 
     // Create recon E_e vs true E_nu 2-D hist (MeV)
     // Keep binning the same, for consistency, even though cuts may change
     double Ee_min = 0.0;
     double Ee_max = 10.0;
     unsigned int N_bins_Ee = 200;
+    unsigned int Nbins = (unsigned int) ((Ee_max - Ee_min) / bin_width);
 
     double Enu_min = ((neutron_mass_c2 + electron_mass_c2) * (neutron_mass_c2 + electron_mass_c2) - proton_mass_c2 * proton_mass_c2) / (2.0 * proton_mass_c2);  // minimum antinu energy for IBD
     double Enu_max = Ee_max + (neutron_mass_c2 - proton_mass_c2) + (5.0 / neutron_mass_c2); // convert from zeroth order Ee, then add 5/M to include 1st order (1/M) effects
-    unsigned int N_bins_Enu = 200;
     std::cout << "E_nu_min = " << Enu_min << ", E_nu_max = " << Enu_max << std::endl;
 
-    TH2D* E_conv = new TH2D("E_conversion", "E_conversion", N_bins_Ee, Ee_min, Ee_max, N_bins_Enu, Enu_min, Enu_max);
+    TH2D* E_conv = new TH2D("E_conversion", "E_conversion", Nbins, Ee_min, Ee_max, Nbins, Enu_min, Enu_max);
 
     // Loop through and apply tagging + cuts
     std::vector<TH1D*> recordHists;
     std::cout << "Looping through reactor IBD events..." << std::endl;
-    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "reactorIBD", classifier_cut);
+    std::map<std::string, TH1D*> reactor_hist_map = CreatePDFs(reactorEventTree, E_conv, Ee_min, Ee_max, Nbins, "reactorIBD", classifier_cut);
     std::cout << "Looping through alpha-n events..." << std::endl;
-    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "alphaN", classifier_cut);
+    std::map<std::string, TH1D*> alphaN_hist_map = CreatePDFs(alphaNEventTree, E_conv, Ee_min, Ee_max, Nbins, "alphaN", classifier_cut);
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl;
-    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_Th", classifier_cut);
+    std::map<std::string, TH1D*> geoNuTh_hist_map = CreatePDFs(geoNuThEventTree, E_conv, Ee_min, Ee_max, Nbins, "geoNu_Th", classifier_cut);
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl;
-    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "geoNu_U", classifier_cut);
+    std::map<std::string, TH1D*> geoNuU_hist_map = CreatePDFs(geoNuUEventTree, E_conv, Ee_min, Ee_max, Nbins, "geoNu_U", classifier_cut);
     std::cout << "Looping through Accidental events..." << std::endl;
-    std::map<std::string, TH1D*> Acc_hist_map = CreatePDFs(AccEventTree, E_conv, Ee_min, Ee_max, N_bins_Ee, "Accidental", classifier_cut);
+    std::map<std::string, TH1D*> Acc_hist_map = CreatePDFs(AccEventTree, E_conv, Ee_min, Ee_max, Nbins, "Accidental", classifier_cut);
+    std::cout << "Looping through sideband events..." << std::endl;
+    std::map<std::string, TH1D*> sideband_hist_map = CreatePDFs(sidebandEventTree, E_conv, Ee_min, Ee_max, Nbins, "sideband", classifier_cut);
 
     // Normalise 2D hist along y axis (E_nu) for each x-bin (E_e)
     double integ;
     for (unsigned int i = 1; i <= E_conv->GetXaxis()->GetNbins(); ++i) {
-        integ = E_conv->Integral(i, i, 1, N_bins_Enu);
+        integ = E_conv->Integral(i, i, 1, Nbins);
         if (integ != 0.0) {
             for (unsigned int j = 1; j <= E_conv->GetYaxis()->GetNbins(); ++j) {
                 E_conv->SetBinContent(i, j, E_conv->GetBinContent(i, j) / integ);
@@ -102,6 +108,9 @@ int main(int argv, char** argc) {
     for (auto& x : Acc_hist_map) {  
         x.second->Write();
     }
+    for (auto& x : sideband_hist_map) {  
+        x.second->Write();
+    }
     E_conv->Write();
     outroot->Write();
     outroot->Close();
@@ -120,8 +129,11 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
     TString *originReactor = NULL;
     Double_t parentKE1, reconEnergy, classResult;
 
-    EventInfo->SetBranchAddress("energy", &reconEnergy);
+    if (data_type == "sideband") EventInfo->SetBranchAddress("correctedEnergy", &reconEnergy);  // Naming Tony used
+    else EventInfo->SetBranchAddress("energy", &reconEnergy);  // Also corrected energy
+
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
+
     if (data_type == "reactorIBD") {
         // Want to get incoming antinu's origin core and energy
         EventInfo->SetBranchAddress("parentMeta1", &originReactor);
@@ -144,6 +156,9 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
     } else if (data_type == "Accidental") {
         TH1D* temp_hist_Acc = new TH1D("Accidental", "Accidental", nbins, lowenergybin, maxenergybin);
         hists_map.insert({"Accidental", temp_hist_Acc});
+    } else if (data_type == "sideband") {
+        TH1D* temp_hist_sideband = new TH1D("sideband", "sideband", nbins, lowenergybin, maxenergybin);
+        hists_map.insert({"sideband", temp_hist_sideband});
     } else {
         std::cout << "ERROR: data_type is wrong. Should be `reactorIBD`, `alphaN` or `geoNu`, not `" << data_type << "`." << std::endl;
         exit(1);
@@ -180,7 +195,7 @@ std::map<std::string, TH1D*> CreatePDFs(TTree* EventInfo, TH2D* E_conv, const do
             // Add event to E_e vs E_nu 2D hist (for reactor IBDs)
             E_conv->Fill(reconEnergy, parentKE1);
 
-        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U" || data_type == "Accidental") {
+        } else if (data_type == "geoNu_Th" || data_type == "geoNu_U" || data_type == "Accidental" || data_type == "sideband") {
             hist_name = data_type.c_str();
         } else {
             if (reconEnergy < PROTON_RECOIL_E_MAX) {

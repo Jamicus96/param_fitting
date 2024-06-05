@@ -176,6 +176,17 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
 
             // Perform fit and record log-likelihood
             value = antinuFitter->fit_models();
+            if (value  == 0) {  // fit failed, try changing value very slightly (0.1 * the bin width)
+                if (i < (sinTheta12.size()-1)) Vars->val("sinsqrtheta12") = 0.9 * sinTheta12.at(i) + 0.1 * sinTheta12.at(i+1);
+                else Vars->val("sinsqrtheta12") = 0.9 * sinTheta12.at(i) + 0.1 * sinTheta12.at(i-1);
+
+                if (j < (Dm21.size()-1)) Vars->val("deltamsqr21") = 0.9 * Dm21.at(j) + 0.1 * Dm21.at(j+1);
+                else Vars->val("deltamsqr21") = 0.9 * Dm21.at(j) + 0.1 * Dm21.at(j-1);
+
+                geoNuMod->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
+                ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
+                value = antinuFitter->fit_models();
+            }
             minllHist->SetBinContent(start_idx.at(0) + i + 1, start_idx.at(1) + j + 1, value);
             std::cout << "minLL = " << value << std::endl;
 

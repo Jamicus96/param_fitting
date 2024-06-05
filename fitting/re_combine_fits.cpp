@@ -361,12 +361,25 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
 
     // // Print some extra things
     // std::cout << "Covariance matrix:" << std::endl;
-    // for (unsigned int i = 0; i < Vars->GetNumVars()-4; ++i) {
-    //     std::cout << antinuFitter->GetCovarianceMatrixElement(i, 0);
-    //     for (unsigned int j = 1; j < Vars->GetNumVars()-4; ++j) {
-    //         std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(i, j);
+    // std::cout << "NA";
+    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+    //     if (Vars->isConstant(i)) continue;
+    //     std::cout << "\t" << Vars->name(i);
+    // }
+    // std::cout << std::endl;
+    // k = 0;
+    // l = 0;
+    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+    //     if (Vars->isConstant(i)) continue;
+    //     std::cout << Vars->name(i) << "\t" << antinuFitter->GetCovarianceMatrixElement(k, 0);
+    //     l = 0;
+    //     for (unsigned int j = 1; j < Vars->GetNumVars(); ++j) {
+    //         if (Vars->isConstant(j)) continue;
+    //         std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(k, l);
+    //         ++l;
     //     }
     //     std::cout << std::endl;
+    //     ++k;
     // }
     // std::cout << "GetErrors:" << std::endl;
     // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {

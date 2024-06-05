@@ -3,7 +3,7 @@
 
 #define VERBOSE
 #define USING_RUN_NUM
-// #define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
+#define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
 
 ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
 

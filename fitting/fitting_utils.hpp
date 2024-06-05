@@ -35,7 +35,7 @@
 void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin);
 void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin);
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv);
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, std::vector<TH1D*>& Sideband_hists, TH2D& E_conv);
 std::vector<std::string> SplitString(std::string str);
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
@@ -59,6 +59,8 @@ double geoNuUThRatio = 3.7;
 double geoNuRatio_err = 0.35;  // fractional error
 
 double N_acc = 0.3;               // Total number of expected accidentals coincidence events (no err)
+double N_side = 0.3;               // Total number of expected sideband events
+double sideband_err = 1.0;      // fractional error
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)
 double kB = 0.074;              // Birk's constant for betas
@@ -99,8 +101,9 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<TH1D*> alphaN_hists;
     std::vector<TH1D*> geoNu_hists;
     std::vector<TH1D*> Accidental_hists;
+    std::vector<TH1D*> Sideband_hists;
     TH2D E_conv;
-    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, E_conv);
+    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, Sideband_hists, E_conv);
 
     // Find data bin limits
     double bin_centre;
@@ -121,7 +124,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     Reactor* ReactorMod = Reactor::GetInstance();
     alphaN* alphaNMod = alphaN::GetInstance();
     geoNu* geoNuMod = geoNu::GetInstance();
-    Model* AccMod = Model::GetInstance();
+    Model* BasicMods = Model::GetInstance();
 
     /* ~~~~~~~~ OSCILLATION CONSTANTS ~~~~~~~~ */
 
@@ -245,7 +248,16 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     Vars->AddVar("AccidentalsNorm", N_acc, 0, N_acc, N_acc, true); // no normalisation error, since it is data driven
     Esysts->AddEsys_trivial("trivial");  // no energy systematics either, for the same reason
     // Add accidentals model, linking it to approproate variables and E-systematics defined above
-    AccMod->InitModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");
+    BasicMods->AddModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");
+
+    /* ~~~~~~~~ SIDEBAND ~~~~~~~~ */
+    
+    // Create sideband norm variable (allow to vary by ±3 sigma), and model
+    double sidebandNorm_min = (1.0 - 3.0 * sideband_err) * N_side;
+    if (sidebandNorm_min < 0) sidebandNorm_min = 0;
+    Vars->AddVar("sidebandsNorm", N_side, sideband_err * N_side, sidebandNorm_min, (1.0 + 3.0 * sideband_err) * N_side); // no normalisation error, since it is data driven
+    // Add sideband model, linking it to approproate variables and E-systematics defined above
+    BasicMods->AddModel("sidebandsNorm", "EsysBeta", Sideband_hists.at(0), "Sideband");
 
     /* ~~~~~~~~ INITIALISE FITTER ~~~~~~~~ */
 
@@ -262,7 +274,6 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         ReactorMod->compute_spec();
         alphaNMod->compute_spec();
         geoNuMod->compute_spec();
-        AccMod->compute_spec();
 
         TH1D* data = (TH1D*)(ReactorMod->GetModelEsys()->Clone("data"));
         data->SetTitle("Azimov Dataset");
@@ -275,8 +286,12 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
         data->Add(geoNuMod->GetModelEsys());
         std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
-        data->Add(AccMod->GetModelEsys());
-        std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+
+        for (unsigned int iMod = 0; iMod < BasicMods->GetNumMods(); ++iMod) {
+            BasicMods->compute_spec(iMod);
+            data->Add(BasicMods->GetModelEsys(iMod));
+            std::cout << "data integral = " << data->Integral(min_bin, max_bin) << std::endl;
+        }
 
         // Set bins outside "real data" cuts to zero
         for (unsigned int i = 1; i < min_bin; ++i) data->SetBinContent(i, 0.0);
@@ -376,7 +391,7 @@ void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std
  * @param geoNu_hists
  * @param E_conv
  */
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv) {
+void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, std::vector<TH1D*>& Sideband_hists, TH2D& E_conv) {
 
     TFile *fin = TFile::Open(file_address.c_str());
     if (!fin->IsOpen()) {
@@ -404,6 +419,8 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
                 alphaN_hists.push_back((TH1D*)obj);
             } else if (name == "Accidental") {
                 Accidental_hists.push_back((TH1D*)obj);
+            } else if (name == "sideband") {
+                Sideband_hists.push_back((TH1D*)obj);
             } else if (name == "E_conversion") {
                 continue;
             } else {
@@ -430,6 +447,10 @@ void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_
     }
     if (Accidental_hists.size() != 1) {
         std::cout << "ERROR: No accidentals histogram!" << std::endl;
+        exit(1);
+    }
+    if (Sideband_hists.size() != 1) {
+        std::cout << "ERROR: No sideband histogram!" << std::endl;
         exit(1);
     }
 }

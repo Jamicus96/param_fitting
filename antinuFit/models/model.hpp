@@ -14,19 +14,19 @@ class Model {
     private:
         static Model *ModelInstance_;
 
-        TH1D* model_noEsys;
-        TH1D* model_Esys;
-        bool isInit;
-        std::string ModName;
+        unsigned int numMods;
+        std::vector<TH1D*> model_noEsys;
+        std::vector<TH1D*> model_Esys;
+        std::vector<std::string> names;
 
-        unsigned int iNorm, iE_syst;
-        TH1D *hist;
-        double integral;
-        unsigned int iMinBin, iMaxBin;
+        std::vector<unsigned int> iNorm, iE_syst;
+        std::vector<TH1D*> hist;
+        std::vector<double> integral;
+        std::vector<unsigned int> iMinBin, iMaxBin;
     
     protected:
         // Constructors/desctructors
-        Model() : isInit(false) {}
+        Model() : numMods(0) {}
         ~Model() {}
 
     public:
@@ -44,61 +44,78 @@ class Model {
         static Model *GetInstance();
 
         // Initialisers
-        void InitModel(const unsigned int Norm_idx, const unsigned int E_syst_idx, TH1D* Hist, const std::string name) {
-            iNorm = Norm_idx; iE_syst = E_syst_idx;
-            ModName = name;
-            iMinBin = 1; iMaxBin = Hist->GetXaxis()->GetNbins();
-            hist = Hist; hist->SetName((ModName + "::hist").c_str());
-            integral = hist->Integral(iMinBin, iMaxBin);
+        void AddModel(const unsigned int Norm_idx, const unsigned int E_syst_idx, TH1D* Hist, const std::string name) {
+            ++numMods;
 
-            model_noEsys = (TH1D*)(hist->Clone("Model::model_noEsys"));
-            model_Esys = (TH1D*)(hist->Clone("Model::model_Esys"));
+            iNorm.push_back(Norm_idx); iE_syst.push_back(E_syst_idx);
+            names.push_back(name);
+            iMinBin.push_back(1); iMaxBin.push_back(Hist->GetXaxis()->GetNbins());
+            hist.push_back(Hist); hist.at(numMods-1)->SetName((name + "::hist").c_str());
+            integral.push_back(hist.at(numMods-1)->Integral(iMinBin.at(numMods-1), iMaxBin.at(numMods-1)));
 
-            isInit = true;
+            model_noEsys.push_back((TH1D*)(hist.at(numMods-1)->Clone("Model::model_noEsys")));
+            model_Esys.push_back((TH1D*)(hist.at(numMods-1)->Clone("Model::model_Esys")));
         }
         
-        void InitModel(const std::string Norm_name, const std::string E_syst_name, TH1D* Hist, const std::string name) {
+        void AddModel(const std::string Norm_name, const std::string E_syst_name, TH1D* Hist, const std::string name) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
-            InitModel(Vars->findIdx(Norm_name), Esysts->findIdx(E_syst_name), Hist, name);
+            AddModel(Vars->findIdx(Norm_name), Esysts->findIdx(E_syst_name), Hist, name);
         }
 
-        TH1D* GetHit() {return hist;}
+        unsigned int findIdx(const std::string ModName) {
+            for (unsigned int ModIdx = 0; ModIdx < numMods; ++ModIdx) {
+                if (ModName == names.at(ModIdx)) return ModIdx;
+            }
+            std::cout << "[Model::findIdx]: Model '" << ModName << "' not found!" << std::endl;
+            exit(1);
+            return 0;
+        }
 
-        void compute_spec() {
+        unsigned int GetNumMods() {return numMods;}
+
+        TH1D* GetHist(const unsigned int idx) {return hist.at(idx);}
+
+        void compute_spec(const unsigned int idx) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
-            model_noEsys->Reset("ICES");  // empty it before re-computing it
-            model_Esys->Reset("ICES");  // empty it before re-computing it
+            model_noEsys.at(idx)->Reset("ICES");  // empty it before re-computing it
+            model_Esys.at(idx)->Reset("ICES");  // empty it before re-computing it
 
-            model_noEsys->Add(hist, Vars->val(iNorm) / integral);
+            model_noEsys.at(idx)->Add(hist.at(idx), Vars->val(iNorm.at(idx)) / integral.at(idx));
 
             // Apply energy systematics
-            Esysts->apply_systematics(iE_syst, model_noEsys, model_Esys);
+            Esysts->apply_systematics(iE_syst.at(idx), model_noEsys.at(idx), model_Esys.at(idx));
         }
         
-        void Spectra(std::vector<TH1D*>& hists) {
+        void Spectra(const unsigned int idx, std::vector<TH1D*>& hists) {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
-            TH1D* temp_hist = (TH1D*)(hist->Clone("temp_hist"));
+            TH1D* temp_hist = (TH1D*)(hist.at(idx)->Clone("temp_hist"));
             
             temp_hist->Reset("ICES");
-            temp_hist->Add(hist, Vars->val(iNorm) / integral);
-            hists.push_back((TH1D*)(hist->Clone(ModName.c_str())));
+            temp_hist->Add(hist.at(idx), Vars->val(iNorm.at(idx)) / integral.at(idx));
+            hists.push_back((TH1D*)(hist.at(idx)->Clone(names.at(idx).c_str())));
             hists.at(hists.size()-1)->Reset("ICES");
-            Esysts->apply_systematics(iE_syst, temp_hist, hists.at(hists.size()-1));
+            Esysts->apply_systematics(iE_syst.at(idx), temp_hist, hists.at(hists.size()-1));
         }
 
-        TH1D* GetModelNoEsys() {return model_noEsys;}
-        TH1D* GetModelEsys() {return model_Esys;}
+        TH1D* GetModelNoEsys(const unsigned int idx) {return model_noEsys.at(idx);}
+        TH1D* GetModelEsys(const unsigned int idx) {return model_Esys.at(idx);}
 
-        bool IsInit() {return isInit;}
-        void SetBinLims(const unsigned int MinBin, const unsigned int MaxBin) {
-            iMinBin = MinBin;
-            iMaxBin = MaxBin;
+        void SetBinLims(const unsigned int idx, const unsigned int MinBin, const unsigned int MaxBin) {
+            iMinBin.at(idx) = MinBin;
+            iMaxBin.at(idx) = MaxBin;
 
-            integral = hist->Integral(iMinBin, iMaxBin);
+            integral.at(idx) = hist.at(idx)->Integral(iMinBin.at(idx), iMaxBin.at(idx));
         }
+
+        TH1D* GetHist(const std::string ModName) {return GetHist(findIdx(ModName));}
+        void compute_spec(const std::string ModName) {compute_spec(findIdx(ModName));}
+        void Spectra(const std::string ModName, std::vector<TH1D*>& hists) {Spectra(findIdx(ModName), hists);}
+        TH1D* GetModelNoEsys(const std::string ModName) {return GetModelNoEsys(findIdx(ModName));}
+        TH1D* GetModelEsys(const std::string ModName) {return GetModelEsys(findIdx(ModName));}
+        void SetBinLims(const std::string ModName, const unsigned int MinBin, const unsigned int MaxBin) {SetBinLims(findIdx(ModName), MinBin, MaxBin);}
 };
 
 // Static methods should be defined outside the class.

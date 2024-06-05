@@ -99,10 +99,9 @@ class Esys {
             bIsInit.at(idx) = true;
         }
         
-        void initialise(std::string Parname, TH1D* example_hist) {
-            FitVars* Vars = FitVars::GetInstance();
-            initialise(Vars->findIdx(Parname), example_hist);
-            }
+        void initialise(std::string EsysName, TH1D* example_hist) {
+            initialise(findIdx(EsysName), example_hist);
+        }
 
         unsigned int GetNumEsysts() {return numEsysts;}
 
@@ -196,16 +195,16 @@ class Esys {
             }
         }
 
-        void apply_systematics(std::string Parname, TH1D* INhist, TH1D* OUThist) {
-            apply_systematics(findIdx(Parname), INhist, OUThist);
+        void apply_systematics(std::string EsysName, TH1D* INhist, TH1D* OUThist) {
+            apply_systematics(findIdx(EsysName), INhist, OUThist);
         }
 
-        void apply_scaling(std::string Parname, TH1D* INhist) {
-            apply_scaling(findIdx(Parname), INhist);
+        void apply_scaling(std::string EsysName, TH1D* INhist) {
+            apply_scaling(findIdx(EsysName), INhist);
         }
 
-        void apply_smearing(std::string Parname, TH1D* OUThist) {
-            apply_smearing(findIdx(Parname), OUThist);
+        void apply_smearing(std::string EsysName, TH1D* OUThist) {
+            apply_smearing(findIdx(EsysName), OUThist);
         }
 
         double inv_scaling(const unsigned int idx, const double E) {
@@ -228,12 +227,12 @@ class Esys {
             return 0.5 * (std::erfc(x1 / std::sqrt(2.0)) - std::erfc(x2 / std::sqrt(2.0)));
         }
 
-        double inv_scaling(std::string Parname, const double E) {
-            return inv_scaling(findIdx(Parname), E);
+        double inv_scaling(std::string EsysName, const double E) {
+            return inv_scaling(findIdx(EsysName), E);
         }
 
-        double integ_normal(std::string Parname, const double x1, const double x2) {
-            return integ_normal(findIdx(Parname), x1, x2);
+        double integ_normal(std::string EsysName, const double x1, const double x2) {
+            return integ_normal(findIdx(EsysName), x1, x2);
         }
 };
 

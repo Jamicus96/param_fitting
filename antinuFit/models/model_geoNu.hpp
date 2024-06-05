@@ -9,6 +9,7 @@
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
 
+#define antinuDEBUG
 
 class geoNu {
     private:
@@ -74,8 +75,8 @@ class geoNu {
             survival_prob = Vars->val(iS_13_2)*Vars->val(iS_13_2) + (1. - Vars->val(iS_13_2))*(1. - Vars->val(iS_13_2)) * (1. - 2. * Vars->val(iS_12_2) * (1. - Vars->val(iS_12_2)));
         }
 
-        TH1D* GetHit_Th() {return histTh;}
-        TH1D* GetHit_U() {return histU;}
+        TH1D* GetHist_Th() {return histTh;}
+        TH1D* GetHist_U() {return histU;}
 
         void hold_osc_params_const(const bool isTrue) {
             FitVars* Vars = FitVars::GetInstance();

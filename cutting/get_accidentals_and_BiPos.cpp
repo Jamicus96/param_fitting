@@ -63,10 +63,6 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         std::cout << "RAT DB tag: " << db->GetDBTag() << std::endl;
     #endif
 
-    // Open file to print results muon veto times and info to
-    std::ofstream outTxtFile;
-    outTxtFile.open(outputVetoTxt, std::ofstream::out | std::ofstream::trunc);
-
     /* ~~~~~~~~~~~~~ If looking at end of previous ntuple (like previous run) ~~~~~~~~~~~~~ */
 
     Int_t lastRunNum = -999; //last run number loaded in DB
@@ -124,8 +120,8 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ;
-    ULong64_t eventTime, dcApplied, dcFlagged;
-    Int_t mcIndex, nHits, GTID, owlnhits;
+    ULong64_t clockCount10, clockCount50, dcApplied, dcFlagged;
+    Int_t mcIndex, nHits, GTID, owlnhits, UTDays, UTSecs, UTNSecs;
     Int_t runNum; //run number associated with MC
     Bool_t* valid;
 
@@ -133,7 +129,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("posx", &reconX);
     EventInfo->SetBranchAddress("posy", &reconY);
     EventInfo->SetBranchAddress("posz", &reconZ);
-    EventInfo->SetBranchAddress("clockCount50", &eventTime);
+    EventInfo->SetBranchAddress("clockCount10", &clockCount10);
+    EventInfo->SetBranchAddress("clockCount50", &clockCount50);
+    EventInfo->SetBranchAddress("uTDays", &UTDays);
+    EventInfo->SetBranchAddress("uTSecs", &UTSecs);
+    EventInfo->SetBranchAddress("uTNSecs", &UTNSecs);
     EventInfo->SetBranchAddress("fitValid", &valid);
     EventInfo->SetBranchAddress("mcIndex", &mcIndex);
     EventInfo->SetBranchAddress("dcApplied", &dcApplied);
@@ -144,6 +144,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("eventID", &GTID);
 
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
+
+    // Open file to print results muon veto times and info to
+    std::ofstream outTxtFile;
+    outTxtFile.open(outputVetoTxt, std::ofstream::out | std::ofstream::trunc);
+    outTxtFile << "run_number GTID Nhit clockCount50 clockCount10 UTDays UTSecs UTNSecs Veto_length" << std::endl;
 
     // Initialise DetectorStateCorrection (assume only one run in each file)
     RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
@@ -171,9 +176,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             }
         #endif
 
-        delayedTime = int64_t(eventTime);
+        delayedTime = int64_t(clockCount50);
         if (nHits > 3000) {
-            outTxtFile << GTID << ", " << runNum << ", " << delayedTime << std::endl;
+            // run_number GTID Nhit clockCount50 clockCount10 UTDays UTSecs UTNSecs Veto_length
+            // Muon veto time converted to ns
+            outTxtFile << runNum << " " << GTID << " " << nHits << " " << clockCount50 << " " << clockCount10 << " " << UTDays << " " << UTSecs << " " << (double)(UTNSecs) << " " << highNhit_deltaT * 1E9 << std::endl;
             vetoDeltaT = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;
             if (vetoDeltaT > highNhit_deltaT) totHighNhitTime += highNhit_deltaT;
             else totHighNhitTime += vetoDeltaT;
@@ -207,7 +214,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
                 if ((a - b) < 0) break;
                 EventInfo->GetEntry(a - b);
 
-                promptTime = int64_t(eventTime);
+                promptTime = int64_t(clockCount50);
                 highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
                 owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
                 if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
@@ -265,7 +272,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             if (sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset)) > FV_CUT) continue;
             ++nvalidFV;
 
-            if (reconEnergy < IBD_MIN_PROMPT_E || reconEnergy > IBD_MAX_PROMPT_E) continue;
+            #ifdef USING_PDF_PADDING
+                if (reconEnergy < IBD_PDF_MIN_PROMPT_E || reconEnergy > IBD_PDF_MAX_PROMPT_E) continue;
+            #else
+                if (reconEnergy < IBD_MIN_PROMPT_E || reconEnergy > IBD_MAX_PROMPT_E) continue;
+            #endif
             nvalidprompt++;
             AccidentalPromptTree->Fill();
 

@@ -16,7 +16,7 @@ def argparser():
         description='Run parameter fitting code')
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_ntuples/', help='Folder where raw ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
     parser.add_argument('--accidentals_ntuple_repo', '-ar', type=str, dest='accidentals_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/accidentals_ntuples/', help='Folder where accidentals ntuples are saved.')
     parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
@@ -26,10 +26,10 @@ def argparser():
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting_withSideband_0.05/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList.txt', help='Text file of runs to include (one run-number per line).')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
     parser.add_argument('---use_rl', '-uRL', type=bool, dest='use_rl',
                         default=True, help='Bool to restrict only to file names including run-numbers from the run list defined in rl_file.')
     
@@ -38,9 +38,10 @@ def argparser():
     parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
     parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
 
+    parser.add_argument('--PDFbinWidth', '-bw', type=float, dest='PDFbinWidth', default=0.05, help='PDF bin width [MeV]')
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
     parser.add_argument('--Nbins', '-N', type=int, dest='Nbins', default=500, help='Number of bins in x and y directions.')
-    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=50, help='Maximum number of bins looped over in one job.')
+    parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=25, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=True, help='For energy correction: True for data, False for MC.')
@@ -230,7 +231,7 @@ def get_accidentals_and_BiPos(args):
     commandList_file = open(commandList_address, 'w')
     for i, file_address in enumerate(ntuple_addresses):
         outNtuple_address = 'CUT_' + file_address.split('/')[-1][:-12] + '.ntuple.root'
-        outTxt_address = 'Veto_' + file_address.split('/')[-1][:-12] + '.txt'
+        outTxt_address = 'Veto_' + file_address.split('/')[-1][:-12] + '_vetooutput.txt'  # livetime calculator uses `*vetooutput.txt` format
         if i != 0 and args.use_rl:
             command = commandBase + file_address + ' ' + ntuple_addresses[i-1] + ' '
         else:
@@ -263,7 +264,7 @@ def makePDFsjobScript(example_jobScript, overall_folder, commands, args):
 
     output_logFile_address = overall_folder + 'log_files/'
     output_logFile_address = checkRepo(output_logFile_address, args.verbose)
-    output_logFile_address +=  'log_PDF_cut' + str(args.classCut) + '.txt'
+    output_logFile_address +=  'log_PDF_' + str(args.PDFbinWidth) + '_cut' + str(args.classCut) + '.txt'
 
     new_jobScript = []
     for line in example_jobScript:
@@ -302,8 +303,9 @@ def makePDFs(args):
     command += cut_ntuple_repo + 'CUT_geoNuTh.ntuple.root '
     command += cut_ntuple_repo + 'CUT_geoNuU.ntuple.root '
     command += accidentals_ntuple_repo + 'CUT_accidentals.ntuple.root '
-    command += pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root '
-    command += str(args.classCut)
+    command += cut_ntuple_repo + 'bipo_pdf.ntuple.root '
+    command += pdf_repo + 'PDFs_' + str(args.PDFbinWidth) + '_cut' + str(args.classCut) + '.root '
+    command += str(args.PDFbinWidth) + ' ' + str(args.classCut)
 
     # Make job script
     jobScript_address = path + 'job_scripts/PDF_job.job'
@@ -313,7 +315,7 @@ def makePDFs(args):
 
     # Run job script!
     print('Submitting job...')
-    command = 'qsub ' + job_address
+    command = 'qsub -l m_mem_free=4G ' + job_address
     if args.verbose:
         print('Running command: ', command)
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
@@ -420,7 +422,6 @@ def makeJobArrayScript(example_jobScript, overall_folder, commandList_address, v
 
     output_logFile_address = overall_folder + 'log_files/'
     output_logFile_address = checkRepo(output_logFile_address, verbose)
-    output_logFile_address +=  'log_fitting.txt'
 
     new_jobScript = []
     for line in example_jobScript:
@@ -457,7 +458,7 @@ def doFitting(args):
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')
-    command_base = path + 'fitting/fit_params.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_'
+    command_base = path + 'fitting/fit_params.exe ' + pdf_repo + 'PDFs_' + str(args.PDFbinWidth) + '_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_'
 
     # Make list of commands for job array to call
     jobScript_repo = fit_repo + 'job_scripts/'
@@ -535,7 +536,7 @@ def combi_fits(args):
     theta12_end_indices = Dm21_end_indices
 
     # make job command
-    command = path + 'fitting/re_combine_fits.exe ' + pdf_repo + 'PDFs_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_all.root ' + str(int(args.use_Azimov))
+    command = path + 'fitting/re_combine_fits.exe ' + pdf_repo + 'PDFs_' + str(args.PDFbinWidth) + '_cut' + str(args.classCut) + '.root ' + ntuple_repo + 'CUT_data.ntuple.root ' + fit_repo + 'param_fits_all.root ' + str(int(args.use_Azimov))
     k = 0
     for i in range(Dm21_start_indices.size):
         for j in range(theta12_start_indices.size):

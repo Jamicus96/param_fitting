@@ -58,7 +58,7 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
     TFile *scaled_ntuple = new TFile(outputFile.c_str(),"RECREATE");
 
     //clone the ntuple, we want to keep the original ntuple untouched and produce a new file after scaling
-    TTree *reactorEventInfo = (TTree *) reactorFile->Get("output"); 
+    TTree *reactorEventInfo = (TTree *) reactorFile->Get("prompt"); 
     TTree *scaledReactorEventInfo = reactorEventInfo->CloneTree(0);
 
     //Set branch addresses for relevant parameters
