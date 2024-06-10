@@ -26,7 +26,7 @@ def argparser():
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting_withSideband_0.05/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/fitting/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList_UPDATED.txt', help='Text file of runs to include (one run-number per line).')

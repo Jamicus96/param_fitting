@@ -129,10 +129,10 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     /* ~~~~~~~~ OSCILLATION CONSTANTS ~~~~~~~~ */
 
     // Add oscillation variables
-    Vars->AddVar("deltamsqr21", Dm21_2, 0, Dm21_2, Dm21_2, true);
-    Vars->AddVar("deltamsqr32", Dm32_2, 0, Dm32_2, Dm32_2, true);
-    Vars->AddVar("sinsqrtheta12", s_12_2, 0, s_12_2, s_12_2, true);
-    Vars->AddVar("sinsqrtheta13", s_13_2, 0, s_13_2, s_13_2, true);
+    Vars->AddVar("deltamsqr21", Dm21_2, 0, Dm21_2, Dm21_2, true, false);
+    Vars->AddVar("deltamsqr32", Dm32_2, 0, Dm32_2, Dm32_2, true, false);
+    Vars->AddVar("sinsqrtheta12", s_12_2, 0, s_12_2, s_12_2, true, false);
+    Vars->AddVar("sinsqrtheta13", s_13_2, 0, s_13_2, s_13_2, true, false);
 
 
     /* ~~~~~~~~ ENERGY SYSTEMATICS ~~~~~~~~ */
@@ -149,7 +149,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     Vars->AddVar("linScale_P", 1.0, linScale_err, linScale_min, 1.0 + 3.0 * linScale_err);
     if (kB_err_P == 0) {
         // No extra proton non-linear scaling
-        Vars->AddVar("kBp_P", kB_P, 0.0, kB_P, kB_P, true);
+        Vars->AddVar("kBp_P", kB_P, 0.0, kB_P, kB_P, true, false);
     } else {
         double kBp_P_min = kB_P - 3.0 * kB_err_P;  // same error, but different Birk's constant
         if (kBp_P_min < 0.0) kBp_P_min = 0.0;
@@ -229,7 +229,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         reacNorm = reac_hist_fracs.at(i) * N_IBD;
         reacLowLim = (1.0 - 3.0 * IBD_err_indiv) * reacNorm;
         if (reacLowLim < 0.0) reacLowLim = 0.0;
-        Vars->AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm, true);
+        Vars->AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm, true, false);
         ReactorNorms_VarNames.push_back("reactorNorm_" + reactor_names.at(i));
     }
     // Extra overall normalisation (= 1), to add shared unceetainties 
@@ -245,7 +245,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     /* ~~~~~~~~ ACCIDENTALS ~~~~~~~~ */
     
-    Vars->AddVar("AccidentalsNorm", N_acc, 0, N_acc, N_acc, true); // no normalisation error, since it is data driven
+    Vars->AddVar("AccidentalsNorm", N_acc, 0, N_acc, N_acc, true, false); // no normalisation error, since it is data driven
     Esysts->AddEsys_trivial("trivial");  // no energy systematics either, for the same reason
     // Add accidentals model, linking it to approproate variables and E-systematics defined above
     BasicMods->AddModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");

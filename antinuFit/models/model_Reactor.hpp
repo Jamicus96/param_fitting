@@ -361,7 +361,7 @@ class Reactor {
                     std::cout << "[Reactor::hold_osc_params_const]: NOT holding oscillation parameters constant" << std::endl;
                 #endif
                 computed_osc_specs = false;
-            } else if (Vars->isConstant(iDm_21_2) && Vars->isConstant(iDm_32_2) && Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2)) {
+            } else if (Vars->IsConstant(iDm_21_2) && Vars->IsConstant(iDm_32_2) && Vars->IsConstant(iS_12_2) && Vars->IsConstant(iS_13_2)) {
                 #ifdef antinuDEBUG
                     std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
                 #endif
@@ -379,7 +379,7 @@ class Reactor {
             model_Esys->Reset("ICES");  // empty it before re-computing it
 
             // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
-            if (!(Vars->isConstant(iDm_21_2) && Vars->isConstant(iDm_32_2) && Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2) && computed_osc_specs)) {
+            if (!(Vars->IsConstant(iDm_21_2) && Vars->IsConstant(iDm_32_2) && Vars->IsConstant(iS_12_2) && Vars->IsConstant(iS_13_2) && computed_osc_specs)) {
                 #ifdef SUPER_DEBUG
                     std::cout << "[Reactor::compute_spec]: computing oscillation specs" << std::endl;
                 #endif

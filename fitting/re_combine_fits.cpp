@@ -35,6 +35,7 @@ void read_hists_from_files(const std::vector<std::string>& hists_addresses, std:
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikelihood);
 void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::vector<double>& data);
 std::vector<double> GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov);
+void overallFit(std::string txt_fileName, const bool use_Azimov);
 
 
 int main(int argv, char** argc) {
@@ -96,6 +97,9 @@ int main(int argv, char** argc) {
     outroot->Write();
     outroot->Close();
     delete(outroot);
+
+    // Try overall fit
+    overallFit(txt_fileName, use_Azimov);
 
     return 0;
 }
@@ -288,6 +292,7 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
     // Do fitting for a range of values, summarised in 2-D hist
     std::cout << "Fitting spectra to dataset..." << std::endl;
 
+    antinuFitter->fitErrors(true);
     double ll = antinuFitter->fit_models();
     std::cout << "ll = " << ll <<std::endl;
 
@@ -300,26 +305,43 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
     else data = antinuFitter->DataNtuple();
 
     // Print some extra things
-    std::cout << "Covariance matrix:" << std::endl;
-    std::cout << "NA";
-    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-        if (Vars->isConstant(i)) continue;
-        std::cout << "\t" << Vars->name(i);
-    }
-    std::cout << std::endl;
+    std::vector<std::string> VarNames;
+    std::vector<std::vector<double>> CovMat;
+    std::vector<std::vector<double>> CorrMat;
     unsigned int k = 0, l = 0;
     for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-        if (Vars->isConstant(i)) continue;
-        std::cout << Vars->name(i) << "\t" << antinuFitter->GetCovarianceMatrixElement(k, 0);
+        if (Vars->IsConstant(i)) continue;
+        VarNames.push_back(Vars->name(i));
+        CovMat.push_back({});
+        CorrMat.push_back({});
         l = 0;
-        for (unsigned int j = 1; j < Vars->GetNumVars(); ++j) {
-            if (Vars->isConstant(j)) continue;
-            std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(k, l);
+        for (unsigned int j = 0; j < Vars->GetNumVars(); ++j) {
+            if (Vars->IsConstant(j)) continue;
+            CovMat.at(k).push_back(antinuFitter->GetCovarianceMatrixElement(k, l));
+            CorrMat.at(k).push_back(0);
             ++l;
         }
-        std::cout << std::endl;
         ++k;
     }
+
+    std::cout << "Covariance matrix:" << std::endl;
+    std::cout << "NA";
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << "\t" << VarNames.at(i);
+    }
+    std::cout << std::endl;
+    double denom;
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << VarNames.at(i);
+        for (unsigned int j = 0; j < VarNames.size(); ++j) {
+            std::cout << "\t" << CovMat.at(i).at(j);
+            denom = CovMat.at(i).at(i) * CovMat.at(j).at(j);
+            if (denom == 0) CorrMat.at(i).at(j) = 0;
+            else CorrMat.at(i).at(j) = CovMat.at(i).at(j) / sqrt(fabs(CovMat.at(i).at(i) * CovMat.at(j).at(j)));
+        }
+        std::cout << std::endl;
+    }
+
     Double_t eplus, eminus, eparab, globcc;
     std::cout << "GetErrors:" << std::endl;
     for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
@@ -328,225 +350,138 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
                   << eparab << ", globcc = " << globcc << std::endl;
     }
 
-    // /* ~~~~~~~~~~~~~ Try an overall fit ~~~~~~~~~~~~~ */
-
-    // const double fDmSqr21 = linkdb->GetD("deltamsqr21");
-    // const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
-
-    // double Dm212err = 0.2E-5;
-    // double s122err = 0.013;
-    // double min_s122 = fSSqrTheta12 - 3.*s122err;
-    // double max_s122 = fSSqrTheta12 + 3.*s122err;
-    // if (min_s122 < 0.0) min_s122 = 0.0;
-    // if (max_s122 > 1.0) max_s122 = 1.0;
-    // antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, fDmSqr21 - 3.*Dm212err, fDmSqr21 + 3.*Dm212err, false);
-    // antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, min_s122, max_s122, false);
-
-    // Reactor* ReactorMod = Reactor::GetInstance();
-    // geoNu* geoNuMod = geoNu::GetInstance();
-    // ReactorMod->hold_osc_params_const(false);
-    // geoNuMod->hold_osc_params_const(false);
-
-    // // Do fitting for a range of values, summarised in 2-D hist
-    // std::cout << "Doing full fit..." << std::endl;
-
-    // ll = antinuFitter->fit_models();
-    // std::cout << "ll = " << ll <<std::endl;
-
-    // // Add spectra to list
-    // antinuFitter->GetAllSpectra(spectra);
-
-    // // Add data hist to list
-    // spectra.push_back(antinuFitter->DataHist());
-
-    // // Print some extra things
-    // std::cout << "Covariance matrix:" << std::endl;
-    // std::cout << "NA";
-    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-    //     if (Vars->isConstant(i)) continue;
-    //     std::cout << "\t" << Vars->name(i);
-    // }
-    // std::cout << std::endl;
-    // k = 0;
-    // l = 0;
-    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-    //     if (Vars->isConstant(i)) continue;
-    //     std::cout << Vars->name(i) << "\t" << antinuFitter->GetCovarianceMatrixElement(k, 0);
-    //     l = 0;
-    //     for (unsigned int j = 1; j < Vars->GetNumVars(); ++j) {
-    //         if (Vars->isConstant(j)) continue;
-    //         std::cout << "\t" << antinuFitter->GetCovarianceMatrixElement(k, l);
-    //         ++l;
-    //     }
-    //     std::cout << std::endl;
-    //     ++k;
-    // }
-    // std::cout << "GetErrors:" << std::endl;
-    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-    //     antinuFitter->GetErrors(i, eplus, eminus, eparab, globcc);
-    //     std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
-    //               << eparab << ", globcc = " << globcc << std::endl;
-    // }
+    std::cout << "Correlation matrix:" << std::endl;
+    std::cout << "NA";
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << "\t" << VarNames.at(i);
+    }
+    std::cout << std::endl;
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << VarNames.at(i);
+        for (unsigned int j = 0; j < VarNames.size(); ++j) {
+            std::cout << "\t" << CorrMat.at(i).at(j);
+        }
+        std::cout << std::endl;
+    }
 
     return data;
 }
 
 
-TCanvas* ContourList(TH2D* minllHist){
-
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DEFAULT SNO+ SETTINGS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-
-    TStyle *snoStyle= new TStyle("snoplus","SNO+ plots style for publications");
-
-    // use plain black on white colors
-    snoStyle->SetFrameBorderMode(0);
-    snoStyle->SetCanvasBorderMode(0);
-    snoStyle->SetPadBorderMode(0);
-    snoStyle->SetPadBorderSize(0);
-    snoStyle->SetPadColor(0);
-    snoStyle->SetCanvasColor(0);
-    snoStyle->SetTitleColor(0);
-    snoStyle->SetStatColor(0);
-    snoStyle->SetFillColor(0);
-
-    // use bold lines 
-    snoStyle->SetHistLineWidth(2);
-    snoStyle->SetLineWidth(2);
-
-    // no title, stats box or fit as default
-    snoStyle->SetOptTitle(0);
-    //snoStyle->SetOptStat(0);
-    //snoStyle->SetOptFit(0);
-
-    // postscript dashes
-    snoStyle->SetLineStyleString(2,"[12 12]"); // postscript dashes
-
-    // text style and size
-    //snoStyle->SetTextFont(132);
-    //snoStyle->SetTextSize(0.24);
-    snoStyle->SetLabelOffset(0.01,"x");
-    snoStyle->SetTickLength(0.015,"x");
-    snoStyle->SetTitleOffset(1.5,"x");
-    snoStyle->SetLabelOffset(0.01,"y");
-    snoStyle->SetTickLength(0.015,"y");
-    snoStyle->SetTitleOffset(1.5,"y");
-    snoStyle->SetLabelOffset(0.01,"z");
-    snoStyle->SetTickLength(0.015,"z");
-    snoStyle->SetTitleOffset(1.5,"z");
-    snoStyle->SetLabelFont(132,"x");
-    snoStyle->SetLabelFont(132,"y");
-    snoStyle->SetLabelFont(132,"z");
-    snoStyle->SetTitleFont(132,"x");
-    snoStyle->SetTitleFont(132,"y");
-    snoStyle->SetTitleFont(132,"z");
-    snoStyle->SetLabelSize(0.04,"x");
-    snoStyle->SetTitleSize(0.05,"x");
-    snoStyle->SetTitleColor(1,"x");
-    snoStyle->SetLabelSize(0.04,"y");
-    snoStyle->SetTitleSize(0.05,"y");
-    snoStyle->SetTitleColor(1,"y");
-    snoStyle->SetLabelSize(0.04,"z");
-    snoStyle->SetTitleSize(0.05,"z");
-    snoStyle->SetTitleColor(1,"z");
-    snoStyle->SetPadTickX(1);
-    snoStyle->SetPadTickY(1);
-
-    // AXIS OFFSETS
-    snoStyle->SetTitleOffset(0.8,"x");
-    snoStyle->SetTitleOffset(0.8,"y");
-    snoStyle->SetTitleOffset(0.8,"z");
-
-    // Legends
-    snoStyle->SetLegendBorderSize(0);
-    snoStyle->SetLegendFont(132);
-    snoStyle->SetLegendFillColor(0);
-
-    // graphs - set default marker to cross, rather than .
-    snoStyle->SetMarkerStyle(21);  // filled square not .
-
-    // SNO+ Preliminary label
-    snoStyle->SetTextFont(132);
-    snoStyle->SetTextSize(0.06);
-
-    gROOT->SetStyle("snoplus");
-
-
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Set up canvas ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
- 
-    TCanvas* c = new TCanvas("c","Contour List",0,0,600,600);
+void overallFit(std::string txt_fileName, const bool use_Azimov) {
     
-    Double_t contours[6];
-    contours[0] = -0.7;
-    contours[1] = -0.5;
-    contours[2] = -0.1;
-    contours[3] =  0.1;
-    contours[4] =  0.4;
-    contours[5] =  0.8;
-    
-    minllHist->SetContour(6, contours);
-    
-    // Draw contours as filled regions, and Save points
-    minllHist->Draw("CONT Z LIST");
-    c->Update(); // Needed to force the plotting and retrieve the contours in TGraphs
-    
-    // Get Contours
-    TObjArray *conts = (TObjArray*)gROOT->GetListOfSpecials()->FindObject("contours");
-    
-    if (!conts){
-        printf("*** No Contours Were Extracted!\n");
-        return nullptr;
-    }
-    
-    TList* contLevel = nullptr;
-    TGraph* curv     = nullptr;
-    TGraph* gc       = nullptr;
-    
-    Int_t nGraphs    = 0;
-    Int_t TotalConts = conts->GetSize();
-    
-    printf("TotalConts = %d\n", TotalConts);
-    
-    TCanvas* c1 = new TCanvas("c1","Contour List",610,0,600,600);
-    c1->SetTopMargin(0.15);
-    TH2F *hr = new TH2F("hr",
-    "#splitline{Negative contours are returned first (highest to lowest). Positive contours are returned from}{lowest to highest. On this plot Negative contours are drawn in red and positive contours in blue.}",
-    2, -2, 2, 2, 0, 6.5);
-    
-    hr->Draw();
-    Double_t xval0, yval0, zval0;
-    TLatex l;
-    l.SetTextSize(0.03);
-    char val[20];
-    
-    for(unsigned int i = 0; i < TotalConts; i++){
-        contLevel = (TList*)conts->At(i);
-        if (i<3) zval0 = contours[2-i];
-        else     zval0 = contours[i];
-        printf("Z-Level Passed in as:  Z = %f\n", zval0);
-    
-        // Get first graph from list on curves on this level
-        curv = (TGraph*)contLevel->First();
-        for(unsigned int j = 0; j < contLevel->GetSize(); j++){
-            curv->GetPoint(0, xval0, yval0);
-            if (zval0<0) curv->SetLineColor(kRed);
-            if (zval0>0) curv->SetLineColor(kBlue);
-            nGraphs ++;
-            printf("\tGraph: %d  -- %d Elements\n", nGraphs,curv->GetN());
-    
-            // Draw clones of the graphs to avoid deletions in case the 1st
-            // pad is redrawn.
-            gc = (TGraph*)curv->Clone();
-            gc->Draw("C");
-    
-            sprintf(val,"%g",zval0);
-            l.DrawLatex(xval0,yval0,val);
-            curv = (TGraph*)contLevel->After(curv); // Get Next graph
+    Fitter* antinuFitter = Fitter::GetInstance();
+    FitVars* Vars = FitVars::GetInstance();
+    Reactor* ReactorMod = Reactor::GetInstance();
+    geoNu* geoNuMod = geoNu::GetInstance();
+
+    // Get DB
+    RAT::DB::Get()->SetAirplaneModeStatus(true);
+    RAT::DB* db = RAT::DB::Get();
+    db->LoadDefaults();
+
+    // Get oscillation constants
+    std::cout << "Getting oscillation parameters..." << std::endl;
+    RAT::DBLinkPtr linkdb = db->GetLink("OSCILLATIONS");
+
+    const double fDmSqr21 = linkdb->GetD("deltamsqr21");
+    const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
+
+    double Dm212err = 0.2E-5;
+    double s122err = 0.013;
+    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, false);
+    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, false);
+
+    ReactorMod->hold_osc_params_const(false);
+    geoNuMod->hold_osc_params_const(false);
+
+    // Do fitting for a range of values, summarised in 2-D hist
+    std::cout << "Doing full fit..." << std::endl;
+
+    double ll = antinuFitter->fit_models();
+    std::cout << "ll = " << ll <<std::endl;
+
+    // Add spectra to list
+    std::vector<TH1D*> spectra;
+    antinuFitter->GetAllSpectra(spectra);
+
+    // Print some extra things
+    std::vector<std::string> VarNames;
+    std::vector<std::vector<double>> CovMat;
+    std::vector<std::vector<double>> CorrMat;
+    unsigned int k = 0, l = 0;
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        if (Vars->IsConstant(i)) continue;
+        VarNames.push_back(Vars->name(i));
+        CovMat.push_back({});
+        CorrMat.push_back({});
+        l = 0;
+        for (unsigned int j = 0; j < Vars->GetNumVars(); ++j) {
+            if (Vars->IsConstant(j)) continue;
+            CovMat.at(k).push_back(antinuFitter->GetCovarianceMatrixElement(k, l));
+            CorrMat.at(k).push_back(0);
+            ++l;
         }
+        ++k;
     }
-    c1->Update();
-    printf("\n\n\tExtracted %d Contours and %d Graphs \n", TotalConts, nGraphs );
-    gStyle->SetTitleW(0.);
-    gStyle->SetTitleH(0.);
-    return c1;
-}
 
+    std::cout << "Covariance matrix:" << std::endl;
+    std::cout << "NA";
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << "\t" << VarNames.at(i);
+    }
+    std::cout << std::endl;
+    double denom;
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << VarNames.at(i);
+        for (unsigned int j = 0; j < VarNames.size(); ++j) {
+            std::cout << "\t" << CovMat.at(i).at(j);
+            denom = CovMat.at(i).at(i) * CovMat.at(j).at(j);
+            if (denom == 0) CorrMat.at(i).at(j) = 0;
+            else CorrMat.at(i).at(j) = CovMat.at(i).at(j) / sqrt(fabs(CovMat.at(i).at(i) * CovMat.at(j).at(j)));
+        }
+        std::cout << std::endl;
+    }
+
+    Double_t eplus, eminus, eparab, globcc;
+    std::cout << "GetErrors:" << std::endl;
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        antinuFitter->GetErrors(i, eplus, eminus, eparab, globcc);
+        std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
+                  << eparab << ", globcc = " << globcc << std::endl;
+    }
+
+    std::cout << "Correlation matrix:" << std::endl;
+    std::cout << "NA";
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << "\t" << VarNames.at(i);
+    }
+    std::cout << std::endl;
+    for (unsigned int i = 0; i < VarNames.size(); ++i) {
+        std::cout << VarNames.at(i);
+        for (unsigned int j = 0; j < VarNames.size(); ++j) {
+            std::cout << "\t" << CorrMat.at(i).at(j);
+        }
+        std::cout << std::endl;
+    }
+
+    // print to file
+    std::ofstream datafile;
+    datafile.open(txt_fileName.c_str(), std::ios::app);
+
+    datafile << "# Global Fit Spectra:" << std::endl;
+
+    datafile << "NA";
+    for (unsigned int j = 1; j < spectra.at(0)->GetNbinsX() + 1; ++j) {
+        datafile << " " << spectra.at(0)->GetBinCenter(j);
+    }
+    datafile << std::endl;
+    for (unsigned int i = 0; i < spectra.size(); ++i) {
+        std::cout << "spectra.at(" << i << ")" << std::endl;
+        datafile << spectra.at(i)->GetName();
+        for (unsigned int j = 1; j < spectra.at(i)->GetNbinsX() + 1; ++j) {
+            datafile << " " << spectra.at(i)->GetBinContent(j);
+        }
+        datafile << std::endl;
+    }
+}

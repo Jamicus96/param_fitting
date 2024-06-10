@@ -27,6 +27,7 @@ class Fitter {
         static std::vector<double> data_E;
         static double Emin, dE;
         static bool dataIsSet;
+        static bool fitErrs;
 
         static unsigned int iBinMin, iBinMax;
         static bool setLims, binnedData, init_tot_fitModel;
@@ -67,8 +68,10 @@ class Fitter {
         static void Initialise();
 
         // Fitting functions
+        static int ExecuteFit();
         static double fit_models();
         static Double_t fitFunc(Double_t* p);
+        static void fitErrors(bool flag);
 
         // (Int_t& /*nPar*/, Double_t* /*grad*/ , Double_t& fval, Double_t* p, Int_t /*iflag*/)
         static void fitFunc_minuit_format(Int_t&, Double_t*, Double_t& fval, Double_t* p, Int_t);
@@ -90,7 +93,7 @@ class Fitter {
         static double GetCovarianceMatrixElement(int i, int j);
         static void GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc);
 
-        static void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false);
+        static void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false, bool isConstrained = true);
         static void InitTotFitModHist(TH1D* exampleHist);
 };
 
@@ -105,7 +108,7 @@ double Fitter::minfuncOut, Fitter::edm, Fitter::errdef;
 int Fitter::nvpar, Fitter::nparx;
 bool Fitter::dataIsSet = false;
 unsigned int Fitter::iBinMin, Fitter::iBinMax;
-bool Fitter::setLims = false, Fitter::binnedData = false, Fitter::init_tot_fitModel = false;
+bool Fitter::setLims = false, Fitter::binnedData = false, Fitter::init_tot_fitModel = false, Fitter::fitErrs = false;
 double Fitter::Emin, Fitter::dE;
 
 /**
@@ -152,7 +155,8 @@ void Fitter::Initialise() {
 
     for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++iVar) {
         // Sets the parameter
-        minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
+        if (Vars->IsConstant(iVar)) minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->val(iVar), 0.0, Vars->val(iVar), Vars->val(iVar));
+        else minuit->SetParameter(iVar, Vars->name(iVar).c_str(), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
         // Binds the parameter's detail's addresses to fitVar's, so that changing the fitVar object changes this automatically [DOESN'T WORK]
         // minuit->GetParameter(iVar, const_cast<char*>(Vars->name(iVar).c_str()), Vars->prior(iVar), Vars->err(iVar), Vars->min(iVar), Vars->max(iVar));
     }
@@ -170,6 +174,49 @@ void Fitter::SetFunc() {
         std::cout << "[Fitter::SetFunc]: Bound minuit to fitFunc_minuit_format()." << std::endl;
     #endif
     minuit->SetFCN(fitFunc_minuit_format);
+}
+
+int Fitter::ExecuteFit() {
+    int iErr;
+
+    if (fitErrs) {
+        arglist[0] = 2.0;  // 0, 1 (default), 2 (strategy = 2 allows Minuit to waste function calls to ensure that all values are precise)                                                                    
+        iErr = minuit->ExecuteCommand("SET STR", arglist, 1);
+        if (iErr != 0) return iErr;
+    }
+
+    // Adjust the error definition for the likelihood fits. 0.5 is the value for negative log-likelihood fit.
+    arglist[0] = 0.5;
+    iErr = minuit->ExecuteCommand("SET ERR", arglist, 1);
+    if (iErr != 0) return iErr;
+
+    // 1000 steps, Simplex method for minimization to find good starting values
+    arglist[0] = 1000;
+    iErr = minuit->ExecuteCommand("SIMPLEX", arglist, 1);
+    if (iErr != 0) return iErr;
+
+    // Try MIGRAD a few times
+    iErr = 1;
+    unsigned int num_attempts = 0;
+    while (iErr) {
+        ++num_attempts;
+        // 1000 steps, Migrad minimization
+        iErr = minuit->ExecuteCommand("MIGRAD", arglist, 1);
+        if (num_attempts >= 5) break;
+    }
+    if (iErr != 0) return iErr;
+
+    // Get fit errors
+    if (fitErrs) {
+        // Calculate uncertainties with Minos (asymmetric errors)
+        iErr = minuit->ExecuteCommand("MINOS", arglist, 1);
+        if (iErr != 0) return iErr;
+
+        // Calculate Hesse Matrix (i.e. 2dn derivatives) for parameter uncertainties
+        iErr = minuit->ExecuteCommand("HESSE", arglist, 1);
+    }
+    
+    return iErr;
 }
 
 double Fitter::fit_models() {
@@ -190,7 +237,8 @@ double Fitter::fit_models() {
     unsigned int num_attempts = 0;
     while (iErr) {
         ++num_attempts;
-        iErr = minuit->ExecuteCommand("MIGRAD", arglist, 2);
+        // iErr = minuit->ExecuteCommand("MIGRAD", arglist, 2);
+        iErr = ExecuteFit();
         if (num_attempts >= 10) break;
     }
 
@@ -200,7 +248,8 @@ double Fitter::fit_models() {
         num_attempts = 0;
         while (iErr) {
             ++num_attempts;
-            iErr = minuit->ExecuteCommand("MIGRAD", arglist, 2);
+            // iErr = minuit->ExecuteCommand("MIGRAD", arglist, 2);
+            iErr = ExecuteFit();
             if (num_attempts >= 5) break;
         }
     }
@@ -214,6 +263,8 @@ double Fitter::fit_models() {
     std::cout << "[Fitter::fit_models]: minfuncOut = " << minfuncOut << ", edm = " << edm << ", errdef = " << errdef << ", iErr = " << iErr << ", num_attempts = " << num_attempts << std::endl;
     return minfuncOut;
 }
+
+void Fitter::fitErrors(bool flag) {fitErrs = flag;}
 
 Double_t Fitter::fitFunc(Double_t* p) {
     #ifdef SUPER_DEBUG
@@ -328,7 +379,7 @@ double Fitter::ExtendedConstrainedLogLikelihood() {
     FitVars* Vars = FitVars::GetInstance();
     for (unsigned int iVar = 0; iVar < Vars->GetNumVars(); ++ iVar) {
         // If variable is being held constant, assume it's equal to its prior most likely value
-        if (!Vars->isConstant(iVar) && Vars->isConstrained(iVar)) {
+        if (Vars->IsConstrained(iVar) && Vars->err(iVar) != 0.0) {
             // Add gaussian constraint
             logL -= 0.5 * (Vars->val(iVar) - Vars->prior(iVar))*(Vars->val(iVar) - Vars->prior(iVar)) / (Vars->err(iVar)*Vars->err(iVar));
         }
@@ -521,16 +572,9 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
 double Fitter::GetCovarianceMatrixElement(int i, int j) {return minuit->GetCovarianceMatrixElement(i, j);}
 void Fitter::GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc) {minuit->GetErrors(ipar, eplus, eminus, eparab, globcc);}
 
-void Fitter::resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant) {
+void Fitter::resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant, bool isConstrained) {
     FitVars* Vars = FitVars::GetInstance();
-    Vars->val(Parname) = Value;
-    Vars->prior(Parname) = Value;
-    Vars->err(Parname) = Verr;
-    Vars->min(Parname) = Vlow;
-    Vars->max(Parname) = Vhigh;
-    Vars->HoldConstant(Parname, holdConstant);
-
-    if (holdConstant) Vars->err(Parname) = 0.0;
+    Vars->resetVar(Parname, Value, Verr, Vlow, Vhigh, holdConstant, isConstrained);
 
     minuit->SetParameter(Vars->findIdx(Parname), Parname.c_str(), Value, Verr, Vlow, Vhigh);
 }

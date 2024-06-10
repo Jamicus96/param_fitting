@@ -82,7 +82,7 @@ class geoNu {
             FitVars* Vars = FitVars::GetInstance();
             if (!isTrue) {
                 computed_survival_prob = false;
-            } else if (isTrue && Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2)) {
+            } else if (isTrue && Vars->IsConstant(iS_12_2) && Vars->IsConstant(iS_13_2)) {
                 geoNu_survival_prob();
                 computed_survival_prob = true;
             } else {
@@ -97,7 +97,7 @@ class geoNu {
             model_Esys->Reset("ICES");  // empty it before re-computing it
 
             // If the oscillation parameters are constant and the survival prob was already computed, can skip this step!
-            if (!(Vars->isConstant(iS_12_2) && Vars->isConstant(iS_13_2) && computed_survival_prob)) {
+            if (!(Vars->IsConstant(iS_12_2) && Vars->IsConstant(iS_13_2) && computed_survival_prob)) {
                 geoNu_survival_prob();
             }
             double N_Th = Vars->val(iNorm) / (1.0 + Vars->val(iUThRatio));

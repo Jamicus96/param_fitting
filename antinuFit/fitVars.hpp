@@ -42,7 +42,7 @@ class FitVars {
         static FitVars *GetInstance();
 
         // Member function
-        void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false) {
+        void AddVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false, bool isConstrained = true) {
             ++numVars;
             parnames.push_back(Parname);
             values.push_back(Value);
@@ -52,9 +52,7 @@ class FitVars {
             vlows.push_back(Vlow);
             vhighs.push_back(Vhigh);
             holdConstants.push_back(holdConstant);
-            constraineds.push_back(true);
-
-            if (holdConstant) verrs.at(numVars-1) = 0.0;
+            constraineds.push_back(isConstrained);
         }
 
         void AddVar_unconstrained(std::string Parname, double Value, double Vlow, double Vhigh) {
@@ -70,6 +68,19 @@ class FitVars {
             constraineds.push_back(false);
         }
 
+        void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false, bool isConstrained = true) {
+            unsigned int idx = findIdx(Parname);
+
+            values.at(idx) = Value;
+            vpriors.at(idx) = Value;
+            verrs.at(idx) = Verr;
+            verr_copies.at(idx) = Verr;
+            vlows.at(idx) = Vlow;
+            vhighs.at(idx) = Vhigh;
+            holdConstants.at(idx) = holdConstant;
+            constraineds.at(idx) = isConstrained;
+        }
+
         unsigned int findIdx(const std::string Parname) {
             for (unsigned int varIdx = 0; varIdx < numVars; ++varIdx) {
                 if (Parname == parnames.at(varIdx)) return varIdx;
@@ -79,15 +90,6 @@ class FitVars {
             return 0;
         }
 
-        void HoldConstant(const unsigned int idx, const bool isTrue) {
-            if (isTrue) {
-                holdConstants.at(idx) = true;  // This will tell us that it's held constant
-                verrs.at(idx) = 0.0;  // This will tell Minuit to hold it constant
-            } else {
-                holdConstants.at(idx) = false;
-                verrs.at(idx) = verr_copies.at(idx);
-            }
-        }
         unsigned int GetNumVars() {return numVars;}
         std::string& name(unsigned int idx) {return parnames.at(idx);}
         double& val(unsigned int idx) {return values.at(idx);}
@@ -95,17 +97,20 @@ class FitVars {
         double& err(unsigned int idx) {return verrs.at(idx);}
         double& min(unsigned int idx) {return vlows.at(idx);}
         double& max(unsigned int idx) {return vhighs.at(idx);}
-        bool isConstant(unsigned int idx) {return holdConstants.at(idx);}
-        bool isConstrained(unsigned int idx) {return constraineds.at(idx);}
+        bool IsConstant(unsigned int idx) {return holdConstants.at(idx);}
+        bool IsConstrained(unsigned int idx) {return constraineds.at(idx);}
+        void HoldConstant(unsigned int idx, bool flag) {holdConstants.at(idx) = flag;}
+        void Constrain(unsigned int idx, bool flag) {constraineds.at(idx) = flag;}
 
-        void HoldConstant(const std::string Parname, const bool isTrue) {HoldConstant(findIdx(Parname), isTrue);}
         double& val(std::string Parname) {return val(findIdx(Parname));}
         double& prior(std::string Parname) {return prior(findIdx(Parname));}
         double& err(std::string Parname) {return err(findIdx(Parname));}
         double& min(std::string Parname) {return min(findIdx(Parname));}
         double& max(std::string Parname) {return max(findIdx(Parname));}
-        bool isConstant(std::string Parname) {return isConstant(findIdx(Parname));}
-        bool isConstrained(std::string Parname) {return constraineds.at(findIdx(Parname));}
+        bool IsConstant(std::string Parname) {return IsConstant(findIdx(Parname));}
+        bool IsConstrained(std::string Parname) {return IsConstrained(findIdx(Parname));}
+        void HoldConstant(std::string Parname, bool flag) {HoldConstant(findIdx(Parname), flag);}
+        void Constrain(std::string Parname, bool flag) {Constrain(findIdx(Parname), flag);}
 
         void GetVarValues(Double_t* p) {
             #ifdef SUPER_DEBUG
