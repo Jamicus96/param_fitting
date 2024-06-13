@@ -114,9 +114,13 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     // Set branch addresses to unpack TTree
     Double_t reconEnergy, reconX, reconY, reconZ, classResult;
     ULong64_t eventTime, dcApplied, dcFlagged;
-    Int_t mcIndex, nHits, GTID, owlnhits;
+    Int_t nHits, GTID, owlnhits;
     Int_t runNum; //run number associated with MC
     Bool_t* valid;
+    // Extra MC stuff, if available
+    Double_t mcX, mcY, mcZ;
+    Int_t EVindex;  // For MC: 0 = prompt, 1 = delayed
+    Int_t pdg1, pdg2;
 
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
@@ -124,7 +128,6 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("posz", &reconZ);
     EventInfo->SetBranchAddress("clockCount50", &eventTime);
     EventInfo->SetBranchAddress("fitValid", &valid);
-    EventInfo->SetBranchAddress("mcIndex", &mcIndex);
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
     EventInfo->SetBranchAddress("dcApplied", &dcApplied);
     EventInfo->SetBranchAddress("dcFlagged", &dcFlagged);
@@ -132,6 +135,14 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("nhits", &nHits);
     EventInfo->SetBranchAddress("owlnhits", &owlnhits);
     EventInfo->SetBranchAddress("eventID", &GTID);
+    if (!is_data) {
+        EventInfo->SetBranchAddress("mcPosx", &mcX);
+        EventInfo->SetBranchAddress("mcPosy", &mcY);
+        EventInfo->SetBranchAddress("mcPosz", &mcZ);
+        EventInfo->SetBranchAddress("evIndex", &EVindex);
+        EventInfo->SetBranchAddress("pdg1", &pdg1);
+        EventInfo->SetBranchAddress("pdg2", &pdg2);
+    }
 
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
@@ -141,11 +152,13 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
     unsigned int nentries = EventInfo->GetEntries();
     unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0, nvalidMultiplicity = 0;
+    unsigned int numInsideFV_MC = 0;
     int64_t delayedTime, promptTime;
     TVector3 delayedPos, promptPos, multiplicityPos;
     double delay, highNhitDelay, owlNhitDelay;
     bool passMultiplicity;
     double promptEcorr, delayedEcorr;
+    double MC_rPos;
     // Loop through all events:
     for (int a = 0; a < nentries; ++a) {
         if (a % 10000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
@@ -160,16 +173,26 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             }
         #endif
 
+        // Veto logic (accounted for in livetime)
         delayedTime = int64_t(eventTime);
         if (nHits > 3000) highNhitTime = delayedTime;
         if (owlnhits > 3) owlNhitTime = delayedTime;
         highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
         owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
         if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+
+        // Counting number of prompt IBD events simulated within FV, outside of veto windows
+        if (!is_data) {
+            MC_rPos = sqrt(mcX*mcX + mcY*mcY + mcZ*mcZ);
+            if (MC_rPos < FV_CUT && EVindex == 0 && pdg1 == -11 && pdg2 == 2112) ++numInsideFV_MC;
+        }
+
+        // Fit-valid and DC logic (accounted for in detector/cut efficiency)
         if (!valid) {++nValidCut; continue;}
         if (reconEnergy < 0) {++negEcut; continue;}
         if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
+        // Compute quantities used for cuts
         delayedPos = TVector3(reconX, reconY, reconZ);
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
 
@@ -283,6 +306,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
               << ", number of that survive multiplicity cut: " << nvalidMultiplicity << std::endl;
     std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
     std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;
+    std::cout << "Number of prompt IBD events simulated inside FV (outside veto windows): " << numInsideFV_MC << std::endl;
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 

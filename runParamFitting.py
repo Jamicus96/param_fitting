@@ -172,7 +172,8 @@ def cutNtuples(args):
     # Check repos are formatted correctly and exist, otherwise make them
     ntuple_repo = checkRepo(args.ntuple_repo, args.verbose)
     cut_ntuple_repo = checkRepo(args.cut_ntuple_repo, args.verbose)
-    commandList_address = cut_ntuple_repo + 'commandList.txt'
+    job_script_repo = checkRepo(cut_ntuple_repo + 'job_scripts/', args.verbose)
+    commandList_address = job_script_repo + 'commandList.txt'
 
     # Get full path to this repo
     path = getRepoAddress()
