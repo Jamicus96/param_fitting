@@ -30,9 +30,7 @@ def setup_plot_style():
 
 ### COLLECT DATA ###
 
-# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt'
-# data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt'
-data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/param_fits_all.txt'
+data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/param_fits_all.txt'
 
 min_E = 0.9
 max_E = 8.0
@@ -44,9 +42,13 @@ def read_data(data_address):
 
     Ebin_centers = []
     spectra = {}
+    ovarallFit_spectra = {}
+    ntuple_data = False
 
     reading_minLL = False
     reading_spectra = False
+    reading_data = False
+    reading_overallFit_spectra = False
     with open(data_address, 'r') as file:
         for line in file:
             if '# Delta log-likelihood:' in line:
@@ -57,6 +59,18 @@ def read_data(data_address):
                 first_line = True
                 reading_minLL = False
                 reading_spectra = True
+                continue
+            if '# Data:' in line:
+                reading_minLL = False
+                reading_spectra = False
+                reading_data = True
+                continue
+            if '# Global Fit Spectra:' in line:
+                first_line = True
+                reading_minLL = False
+                reading_spectra = False
+                reading_data = False
+                reading_overallFit_spectra = True
                 continue
 
             line_splt = line.rstrip().split(' ')
@@ -80,24 +94,69 @@ def read_data(data_address):
                     spec_name = line_splt[0]
                     line_splt.pop(0)
                     spectra[spec_name] = np.asarray(line_splt, dtype=float)
+            
+            if reading_data:
+                ntuple_data = np.asarray(line_splt,dtype=float)
+            
+            if reading_overallFit_spectra:
+                if first_line:
+                    first_line = False
+                else:
+                    spec_name = line_splt[0]
+                    line_splt.pop(0)
+                    ovarallFit_spectra[spec_name] = np.asarray(line_splt, dtype=float)
 
     Dm21 = np.asarray(Dm21, dtype=float)[1:-1] * 1E5
     theta_12 = np.asarray(theta_12, dtype=float)[1:-1]
     minLL = np.asarray(minLL, dtype=float)[1:-1, 1:-1]
-    minLL[np.where(minLL < 0)[0], np.where(minLL < 0)[1]] = 50
     minLL = minLL.transpose()
+
+    for i in range(len(Dm21)):
+        for j in range(len(theta_12)):
+            if minLL[i, j] <= 0:
+                avNum = 0
+                sum = 0.
+                for i2 in range(1, i+1):
+                    if minLL[i-i2, j] > 0:
+                        sum += minLL[i-i2, j]
+                        avNum += 1
+                        break
+                for i2 in range(i+1, len(Dm21)):
+                    if minLL[i2, j] > 0:
+                        sum += minLL[i2, j]
+                        avNum += 1
+                        break
+                for j2 in range(1, j+1):
+                    if minLL[i, j-j2] > 0:
+                        sum += minLL[i, j-j2]
+                        avNum += 1
+                        break
+                for j2 in range(j+1, len(Dm21)):
+                    if minLL[i, j2] > 0:
+                        sum += minLL[i, j2]
+                        avNum += 1
+                        break
+                minLL[i, j] =  sum / float(avNum)  
 
     Ebin_centers = np.asarray(Ebin_centers, dtype=float)
     print('Ebin_centers =', Ebin_centers)
     min_idx = np.where(min_E <= Ebin_centers)[0][0]
     max_idx = np.where(max_E < Ebin_centers)[0][0]
     print('min_idx =', min_idx, ', max_idx =', max_idx)
-    print('Ebin_centers =', Ebin_centers[min_idx:max_idx])
+    Ebin_centers = Ebin_centers[min_idx:max_idx]
+    print('Ebin_centers =', Ebin_centers)
 
+    print('Spectra:')
     for spec in spectra:
-        print(spec + ': ' + str(np.sum(spectra[spec][min_idx:max_idx])))
+        spectra[spec] = spectra[spec][min_idx:max_idx]
+        print(spec + ': ' + str(np.sum(spectra[spec])))
+    
+    print('Overall fit spectra:')
+    for spec in ovarallFit_spectra:
+        ovarallFit_spectra[spec] = ovarallFit_spectra[spec][min_idx:max_idx]
+        print(spec + ': ' + str(np.sum(ovarallFit_spectra[spec])))
 
-    return Dm21, theta_12, minLL, Ebin_centers, spectra
+    return Dm21, theta_12, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data
 
 def ll_diff_per_nSig(n):
     '''
@@ -119,6 +178,15 @@ def plot_LL(Dm21, theta_12, minLL):
     min_theta_idx = min_indices[1][0]
     min_Dm_idx = min_indices[0][0]
 
+    # min_theta_idx = np.argmin(np.abs(theta_12 - 40))
+    # min_Dm_idx = np.argmin(minLL[:, min_theta_idx])
+
+    # min_indices = np.where(minLL == np.min(minLL[:, :int(len(theta_12)/2)]))
+    # min_theta_idx = min_indices[1][0]
+    # min_Dm_idx = min_indices[0][0]
+
+    print(minLL[min_Dm_idx, min_theta_idx])
+
     min_theta_12 = theta_12[min_theta_idx]
     min_Dm21 = Dm21[min_Dm_idx]
 
@@ -126,34 +194,34 @@ def plot_LL(Dm21, theta_12, minLL):
     # Chi2Diff = ll_diff_per_nSig(1.0)
     Chi2Diff = 1.0
     for i in range(min_Dm_idx, Dm21.size):
-        if minLL[i, min_theta_idx] == Chi2Diff:
+        if (minLL[i, min_theta_idx] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
             min_Dm21_max = Dm21[i] - min_Dm21
             break
-        elif minLL[i, min_theta_idx] > Chi2Diff:
+        elif (minLL[i, min_theta_idx] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
             min_Dm21_max = 0.5 * (Dm21[i] + Dm21[i - 1]) - min_Dm21
             break
 
     for i in range(min_Dm_idx):
-        if minLL[min_Dm_idx - i, min_theta_idx] == Chi2Diff:
+        if (minLL[min_Dm_idx - i, min_theta_idx] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
             min_Dm21_min = min_Dm21 - Dm21[min_Dm_idx - i]
             break
-        elif minLL[min_Dm_idx - i, min_theta_idx] > Chi2Diff:
+        elif (minLL[min_Dm_idx - i, min_theta_idx] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
             min_Dm21_min = min_Dm21 - 0.5 * (Dm21[min_Dm_idx - i] + Dm21[min_Dm_idx - i - 1])
             break
 
     for i in range(min_theta_idx, theta_12.size):
-        if minLL[min_Dm_idx, i] == Chi2Diff:
+        if (minLL[min_Dm_idx, i] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
             min_theta12_max = theta_12[i] - min_theta_12
             break
-        elif minLL[min_Dm_idx, i] > Chi2Diff:
+        elif (minLL[min_Dm_idx, i] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
             min_theta12_max = 0.5 * (theta_12[i] + theta_12[i - 1]) - min_theta_12
             break
 
     for i in range(min_theta_idx):
-        if minLL[min_Dm_idx, min_theta_idx - i] == Chi2Diff:
+        if (minLL[min_Dm_idx, min_theta_idx - i] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
             min_theta12_min = min_theta_12 - theta_12[min_theta_idx - i]
             break
-        elif minLL[min_Dm_idx, min_theta_idx - i] > Chi2Diff:
+        elif (minLL[min_Dm_idx, min_theta_idx - i] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
             min_theta12_min = min_theta_12 - 0.5 * (theta_12[min_theta_idx - i] + theta_12[min_theta_idx - i - 1])
             break
 
@@ -172,7 +240,7 @@ def plot_LL(Dm21, theta_12, minLL):
 
     # Background heat map
     im = ax1.imshow(np.sqrt(minLL), cmap=plt.cm.viridis, interpolation='none', extent=[theta_12[0], theta_12[-1], Dm21[0], Dm21[-1]],
-                    aspect='auto', origin='lower', vmin=0, vmax=7.1)
+                    aspect='auto', origin='lower', vmin=0, vmax=3.5)
     colbar = plt.colorbar(im)
     colbar.ax.set_ylabel(r'$\sqrt{-2\Delta \mathrm{log}(L)}$', rotation=90, fontproperties=prop_font)
 
@@ -181,8 +249,8 @@ def plot_LL(Dm21, theta_12, minLL):
 
     # Contours
     X, Y = np.meshgrid(theta_12, Dm21)
-    contour_vals = [1, 2, 3, 4, 5]
-    contour_cols = ['peachpuff', 'sandybrown', 'darkorange', 'red', 'brown']
+    contour_vals = [1, 2, 3] #, 4, 5]
+    contour_cols = ['peachpuff','red', 'brown'] # 'sandybrown', 'darkorange', 
     contour_styles = ['-', '--', '-.', '-.', '-.', '-.']
     contour_labels = [r'$1 \sigma$ contour', r'$2 \sigma$ contour', r'$3 \sigma$ contour', r'$4 \sigma$ contour', r'$5 \sigma$ contour']
 
@@ -220,15 +288,20 @@ def plot_LL(Dm21, theta_12, minLL):
     ax1.xaxis.set_ticks_position('both')
 
     ax1.set_title(r'Reactor-$\nu$ Sensitivity, from Asimov Dataset', fontproperties=prop_font)
-    ax1.text(29, 5.73, "SNO+ Preliminary", fontproperties=prop_font, color='tan')
+    # ax1.text(29, 5.73, "SNO+ Preliminary", fontproperties=prop_font, color='tan')
     plt.show()
 
-def plot_spectra(Ebin_centers, spectra):
+def plot_spectra(Ebin_centers, spectra, ntuple_data):
 
     dE = Ebin_centers[1] - Ebin_centers[0]
     bin_edges = np.zeros(len(Ebin_centers)+1)
     bin_edges[:-1] = Ebin_centers - 0.5*dE
     bin_edges[-1] = Ebin_centers[-1] + 0.5*dE
+
+    data_bin_width = 0.4
+
+    for spec in spectra:
+        spectra[spec] = spectra[spec] * (data_bin_width / dE)
 
     # ax.stackplot(bin_edges[:-1], spectra['model_BRUCE'], spectra['model_DARLINGTON'], spectra['model_PICKERING'], spectra['model_WORLD'],
     #              spectra['model_geoNu_Th'], spectra['model_geoNu_U'],
@@ -242,14 +315,37 @@ def plot_spectra(Ebin_centers, spectra):
     fig = plt.subplot(111)
     ax1 = plt.gca()
 
-    ax1.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['geoNu::model_Esys'], spectra['alphaN::model_Esys'],
-                 step='post', labels=[r'reactor-$\nu$ IBD', r'geo-$\nu$ IBD', r'($\alpha$,n)'], colors=['salmon', 'palegreen', 'cornflowerblue'], ec='grey', linewidth=1)
+    ax1.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['alphaN::model_Esys'], spectra['geoNu::model_Esys'], spectra['Accidentals'], spectra['Sideband'],
+                 step='post', labels=[r'reactor-$\nu$ IBD', r'($\alpha$,n)', r'geo-$\nu$ IBD', 'accidentals', 'sideband'], colors=['salmon', 'cornflowerblue', 'palegreen', 'gold', 'violet'], ec='grey', linewidth=1)
 
     # plt.stairs(spectra['Total_Model_Spectrum'], edges=bin_edges, color='k', linestyle='dashed', label='total model')
-    ax1.scatter(Ebin_centers, spectra['data'], marker='+', linewidths=2, s=140, color='k', label='Asimov data')
+
+    if ntuple_data is not False:
+        print('len(ntuple_data) =', len(ntuple_data))
+        bin_min = Ebin_centers[0] - 0.5 * (Ebin_centers[1] - Ebin_centers[0])
+        bin_max = Ebin_centers[-1] + 0.5 * (Ebin_centers[1] - Ebin_centers[0])
+
+        bin_edges = np.arange(bin_min, bin_max + data_bin_width, data_bin_width)
+        bin_centres = bin_edges[:-1] + 0.5*data_bin_width
+        bin_vals, _ = np.histogram(ntuple_data, bin_edges)
+
+        ax1.scatter(bin_centres, bin_vals, marker='s', s=50, color='k', label='data')
+        ax1.hlines(bin_vals, bin_edges[:-1], bin_edges[1:], linewidths=2, color='k')
+
+        # errors = np.array(scipy.stats.chi2.interval(0.683, 2 * bin_vals)) / 2 - 1
+        loBounds = scipy.stats.chi2.ppf(0.159, 2 * bin_vals) / 2
+        loBounds[np.where(bin_vals == 0)[0]] = 0
+        upBounds = scipy.stats.chi2.ppf(1 - 0.159, 2 * (bin_vals + 1)) / 2  # see https://www.pp.rhul.ac.uk/~cowan/atlas/ErrorBars.pdf
+        upBounds[np.where(bin_vals == 0)[0]] = 0  # From Steve
+
+        ax1.vlines(bin_centres, loBounds, upBounds, linewidths=2, color='k')
+        # ax1.vlines(bin_edges[:-1], bin_vals-0.1, bin_vals+0.1, linewidths=2, color='k')
+        # ax1.vlines(bin_edges[1:], bin_vals-0.1, bin_vals+0.1, linewidths=2, color='k')
+    else:
+        ax1.scatter(Ebin_centers, spectra['data'], marker='+', linewidths=2, s=140, color='k', label='Asimov data')
 
     ax1.set_xlabel('E [MeV]', fontproperties=prop_font, size = 32, x=1, ha='right')
-    ax1.set_ylabel('arbitrary', fontproperties=prop_font, size = 32, y=1, ha='right')
+    ax1.set_ylabel('Events per {} MeV'.format(data_bin_width), fontproperties=prop_font, size = 32, y=1, ha='right')
 
     for label in ax1.get_xticklabels():
         label.set_fontproperties(prop_font)
@@ -257,7 +353,7 @@ def plot_spectra(Ebin_centers, spectra):
         label.set_fontproperties(prop_font)
 
     ax1.set_xlim(min_E, max_E)
-    ax1.set_ylim(0, 2.8)
+    # ax1.set_ylim(0, 2.8)
 
     handles, labels = ax1.get_legend_handles_labels()
     ax1.legend(handles, labels,loc='upper right', fancybox=False, numpoints=1, prop=prop_font, frameon=False)
@@ -267,7 +363,7 @@ def plot_spectra(Ebin_centers, spectra):
     ax1.get_yaxis().set_tick_params(which='both',direction='in', width=1)
     ax1.xaxis.set_ticks_position('both')
 
-    ax1.set_title(r'Fit Prompt Energy Spectrum, from Asimov Dataset', fontproperties=prop_font)
+    ax1.set_title(r'Fit Prompt Energy Spectrum', fontproperties=prop_font)
     ax1.text(2.5, 0.05, "SNO+ Preliminary", fontproperties=prop_font)
     plt.show()
 
@@ -360,8 +456,8 @@ def find_min_and_errs(minLL, Dm21, theta_12):
     return Dm21_fit, theta12_fit
 
 def sensitivity_over_time():
-    Dm21, theta_12, minLL, Ebin_centers, spectra = read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt')
-    Dm21_classCUT, theta_12_classCUT, minLL_classCUT, Ebin_centers_classCUT, spectra_classCUT = read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt')
+    Dm21, theta_12, minLL, _, _, _, _ = read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt')
+    Dm21_classCUT, theta_12_classCUT, minLL_classCUT, _, _, _, _= read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt')
     
     livetime_init = 134.4 / 365.25
     livetimes = np.linspace(livetime_init, 4, 100)
@@ -415,8 +511,9 @@ def sensitivity_over_time():
     plt.show()
 
 
-Dm21, theta_12, minLL, Ebin_centers, spectra = read_data(data_address)
+Dm21, theta_12, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data = read_data(data_address)
 plot_LL(Dm21, theta_12, minLL)
-plot_spectra(Ebin_centers, spectra)
+plot_spectra(Ebin_centers, spectra, ntuple_data)
+plot_spectra(Ebin_centers, ovarallFit_spectra, ntuple_data)
 
 # sensitivity_over_time()
