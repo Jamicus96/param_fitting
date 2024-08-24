@@ -30,7 +30,8 @@ def setup_plot_style():
 
 ### COLLECT DATA ###
 
-data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/param_fits_all.txt'
+data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/param_fits_all_constrained.txt'
+logfile = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/log_combi_constrained.txt'
 
 min_E = 0.9
 max_E = 8.0
@@ -113,7 +114,7 @@ def read_data(data_address):
 
     for i in range(len(Dm21)):
         for j in range(len(theta_12)):
-            if minLL[i, j] <= 0:
+            if minLL[i, j] < 0:
                 avNum = 0
                 sum = 0.
                 for i2 in range(1, i+1):
@@ -287,7 +288,7 @@ def plot_LL(Dm21, theta_12, minLL):
     ax1.get_yaxis().set_tick_params(which='both',direction='in', width=1)
     ax1.xaxis.set_ticks_position('both')
 
-    ax1.set_title(r'Reactor-$\nu$ Sensitivity, from Asimov Dataset', fontproperties=prop_font)
+    # ax1.set_title(r'Reactor-$\nu$ Sensitivity', fontproperties=prop_font)
     # ax1.text(29, 5.73, "SNO+ Preliminary", fontproperties=prop_font, color='tan')
     plt.show()
 
@@ -517,3 +518,120 @@ plot_spectra(Ebin_centers, spectra, ntuple_data)
 plot_spectra(Ebin_centers, ovarallFit_spectra, ntuple_data)
 
 # sensitivity_over_time()
+
+### Plot Correlation Matrix ###
+
+def correlation_matrix(logfile_address):
+
+    f = open(logfile_address, 'r')
+    lines = f.readlines()
+    f.close()
+
+    # variables = np.array(['deltamsqr21', 'sinsqrtheta12', 'linScal', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_PR', 'alphaNNorm_C12', 'alphaNNorm_ES', 'reactorNorm_tot', 'sidebandsNorm'])
+    # corr = np.zeros((len(variables), len(variables)))
+
+    passed_overall_fit = False
+    passed_correlation = False
+    i = 0
+    for line in lines:
+        if 'Doing full fit...' in line:
+            passed_overall_fit = True
+            continue
+        
+        if passed_overall_fit:
+            if 'Correlation matrix:' in line:
+                passed_correlation = True
+                continue
+            elif 'spectra.at(0)' in line:
+                break
+        
+            if passed_correlation:
+                if 'NA	' in line:
+                    variables = line.rstrip('\n').split()
+                    variables = np.array(variables)
+                    variables = variables[1:]
+                    corr = np.zeros((len(variables), len(variables)))
+                    continue
+                
+                line_splt = line.rstrip('\n').split()
+                for j in range(len(variables)):
+                    corr[i, j] = float(line_splt[j + 1])
+                i += 1
+
+    # Plotting
+    prop_font = setup_plot_style()
+
+    # temp change
+    matplotlib.rcParams['figure.figsize'] = 14, 10
+
+    fig = plt.subplot(111)
+    ax1 = plt.gca()
+
+    # colour map
+    im = ax1.imshow(corr, cmap=plt.cm.seismic, interpolation='none', extent=[0, 1, 0, 1],
+                    aspect='auto', origin='lower', vmin=-1, vmax=1)
+
+    colbar = plt.colorbar(im)
+    colbar.ax.set_ylabel(r'   $\rho$', rotation=0, fontproperties=prop_font)
+    
+    # tick labelling
+    tick_pos = np.arange(0 + 0.5/len(variables), 1 + 0.5/len(variables), 1/len(variables))
+
+    if np.all(variables == np.array(['deltamsqr21', 'sinsqrtheta12', 'linScale', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_PR', 'alphaNNorm_C12', 'alphaNNorm_ES', 'reactorNorm_tot', 'sidebandsNorm'])):
+        print('True')
+        variable_names = [r'$\Delta m^2_{21}$', r'$s_{12}^2$', r'$c$', r"$k_B'$", r'$c_P$', r'$\sigma / \sqrt{E}$', r'$R_{U/Th}$', r'$N_{geo-\nu}$', r'$N_{(\alpha, n) PR}$', r'$N_{(\alpha, n) 12C}$', r'$N_{(\alpha, n) 16O}$', r'$N_{reactor}$', r'$N_{sideband}$']
+    else:
+        variable_names = variables
+    
+    ax1.set_xticks(tick_pos, variable_names, rotation=90, fontproperties=prop_font) #, fontsize=18)
+    ax1.set_yticks(tick_pos, variable_names, fontproperties=prop_font) #, fontsize=18)
+
+    # print values in plot
+    dx = tick_pos[1] - tick_pos[0]
+    fontisize = 12
+    for i in range(len(tick_pos)):
+        for j in range(len(tick_pos)):
+            if np.abs(corr[i, j]) < 0.005:
+                ax1.text(tick_pos[i] - 0.05 * dx, tick_pos[j] - 0.1 * dx, '0', fontsize = fontisize)
+            elif corr[i, j] == 1:
+                ax1.text(tick_pos[i] - 0.05 * dx, tick_pos[j] - 0.1 * dx, '1', fontsize = fontisize, color='w')
+            elif np.abs(corr[i, j]) > 0.5:
+                ax1.text(tick_pos[i] - 0.3 * dx, tick_pos[j] - 0.1 * dx, '%.2f' % corr[i, j], fontsize = fontisize, color='w')
+            else:
+                ax1.text(tick_pos[i] - 0.3 * dx, tick_pos[j] - 0.1 * dx, '%.2f' % corr[i, j], fontsize = fontisize)
+
+    plt.show()
+
+    # Formatting: left 0.14, bottom 0.19, right 0.856, top 0.977 (wspace, hspace unchanged: 0.2)
+
+
+# correlation_matrix(logfile)
+
+
+### Printing Errors ###
+
+def propagate_geoNu_err():
+    # defs:
+    s13_2 = 0.0220
+
+    s12_2 = 0.43306
+    # s12_2_err = 0.336197
+    # s12_2_err = 0.324115
+    s12_2_err = 0.191024
+
+    N_geo = 21.915
+    # N_geo_err = 14.4289
+    N_geo_err = 14.3073
+
+    corr_N_geo_s12_2 = 0.22456
+
+    # probs:
+    Pee = s13_2 * s13_2 + (1. - s13_2) * (1. - s13_2) * (1. - 2. * s12_2 * (1. - s12_2))
+    dPee_ds12_2 = 2. * (2. * s12_2 - 1.) * (1. - s13_2) * (1. - s13_2)
+
+    # calcs:
+    N_geo_osc = N_geo * Pee
+    N_geo_osc_err = np.sqrt((Pee * N_geo_err)**2 + (dPee_ds12_2 * N_geo * s12_2_err)**2 + 2. * N_geo_osc * dPee_ds12_2 * s12_2_err * N_geo_err * corr_N_geo_s12_2)
+
+    print('Pee = {}, dPee_ds12_2 = {}'.format(Pee, dPee_ds12_2))
+    print('N_geo_osc = {} ± {}'.format(N_geo_osc, N_geo_osc_err))
