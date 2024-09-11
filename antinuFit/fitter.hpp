@@ -90,8 +90,9 @@ class Fitter {
         static void SetData(TTree* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
 
-        static double GetCovarianceMatrixElement(int i, int j);
+        static void GetParameter(Int_t ipar, char* name, Double_t& value, Double_t& verr, Double_t& vlow, Double_t& vhigh);
         static void GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc);
+        static double GetCovarianceMatrixElement(int i, int j);
 
         static void resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant = false, bool isConstrained = true);
         static void InitTotFitModHist(TH1D* exampleHist);
@@ -518,8 +519,8 @@ void Fitter::SetData(TTree* Data) {
     }
 
     // Temporary addition:
-    // data_E.push_back(1.6603);
-    // data_E.push_back(1.3997);
+    data_E.push_back(1.6603);
+    data_E.push_back(1.3997);
 
     #ifdef antinuDEBUG
         std::cout << "[Fitter::SetData]: data_E = [" << data_E.at(0);
@@ -569,8 +570,9 @@ void Fitter::SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max) 
     }
 }
 
-double Fitter::GetCovarianceMatrixElement(int i, int j) {return minuit->GetCovarianceMatrixElement(i, j);}
+void Fitter::GetParameter(Int_t ipar, char* name, Double_t& value, Double_t& verr, Double_t& vlow, Double_t& vhigh) {minuit->GetParameter(ipar, name, value, verr, vlow, vhigh);}
 void Fitter::GetErrors(Int_t ipar, Double_t& eplus, Double_t& eminus, Double_t& eparab, Double_t& globcc) {minuit->GetErrors(ipar, eplus, eminus, eparab, globcc);}
+double Fitter::GetCovarianceMatrixElement(int i, int j) {return minuit->GetCovarianceMatrixElement(i, j);}
 
 void Fitter::resetVar(std::string Parname, double Value, double Verr, double Vlow, double Vhigh, bool holdConstant, bool isConstrained) {
     FitVars* Vars = FitVars::GetInstance();

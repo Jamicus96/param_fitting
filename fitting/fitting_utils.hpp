@@ -59,7 +59,7 @@ double geoNuUThRatio = 3.7;
 double geoNuRatio_err = 0.35;  // fractional error
 
 double N_acc = 0.3;               // Total number of expected accidentals coincidence events (no err)
-double N_side = 0.3;               // Total number of expected sideband events
+double N_side = 1.1;               // Total number of expected sideband events
 double sideband_err = 1.0;      // fractional error
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)

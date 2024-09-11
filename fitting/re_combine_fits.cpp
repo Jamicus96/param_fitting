@@ -324,7 +324,7 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
         ++k;
     }
 
-    std::cout << "Covariance matrix:" << std::endl;
+    std::cout << "\nCovariance matrix:" << std::endl;
     std::cout << "NA";
     for (unsigned int i = 0; i < VarNames.size(); ++i) {
         std::cout << "\t" << VarNames.at(i);
@@ -342,15 +342,24 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
         std::cout << std::endl;
     }
 
+    char* name;
+    Double_t value, verr, vlow, vhigh;
+    std::cout << "\nGetParameters:" << std::endl;
+    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+        antinuFitter->GetParameter(i, name, value, verr, vlow, vhigh);
+        std::cout << Vars->name(i) << ": name = " << name << ", value = " << value << ", verr = "
+                  << verr << ", vlow = " << vlow << ", vhigh = " << vhigh << std::endl;
+    }
+
     Double_t eplus, eminus, eparab, globcc;
-    std::cout << "GetErrors:" << std::endl;
+    std::cout << "\nGetErrors:" << std::endl;
     for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
         antinuFitter->GetErrors(i, eplus, eminus, eparab, globcc);
         std::cout << Vars->name(i) << ": eplus = " << eplus << ", eminus = " << eminus << ", eparab = "
                   << eparab << ", globcc = " << globcc << std::endl;
     }
 
-    std::cout << "Correlation matrix:" << std::endl;
+    std::cout << "\nCorrelation matrix:" << std::endl;
     std::cout << "NA";
     for (unsigned int i = 0; i < VarNames.size(); ++i) {
         std::cout << "\t" << VarNames.at(i);
@@ -387,16 +396,16 @@ void overallFit(std::string txt_fileName, const bool use_Azimov) {
     const double fDmSqr21 = linkdb->GetD("deltamsqr21");
     const double fSSqrTheta12 = linkdb->GetD("sinsqrtheta12");
 
-    double Dm212err = 0.2E-5;
+    double Dm212err = 0.18E-5;
     double s122err = 0.013;
-    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, false);
-    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, false);
+    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, true);
+    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, true);
 
     ReactorMod->hold_osc_params_const(false);
     geoNuMod->hold_osc_params_const(false);
 
     // Do fitting for a range of values, summarised in 2-D hist
-    std::cout << "Doing full fit..." << std::endl;
+    std::cout << "\n\nDoing full fit...\n" << std::endl;
 
     double ll = antinuFitter->fit_models();
     std::cout << "ll = " << ll <<std::endl;

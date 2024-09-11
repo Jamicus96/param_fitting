@@ -16,17 +16,17 @@ def argparser():
         description='Run parameter fitting code')
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/ReactoribdRun_709/', help='Folder where raw ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_ntuples/', help='Folder where raw ntuples are saved.')
     parser.add_argument('--accidentals_ntuple_repo', '-ar', type=str, dest='accidentals_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/accidentals_ntuples/', help='Folder where accidentals ntuples are saved.')
     parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples/', help='Folder where cut ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples_extraEvents/', help='Folder where cut ntuples are saved.')
     parser.add_argument('--scaled_ntuple_repo', '-snr', type=str, dest='scaled_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/scaled_reactorIBD/', help='Folder where re-scaled cut reactor IBD ntuples are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/fitting/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting_final/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
@@ -115,6 +115,7 @@ def selectNutples(ntuple_repo, args):
         if os.path.isfile(file_address):
             if file_address[-12:] == '.ntuple.root':
                 addFile = True
+                run = 0
                 if args.use_rl:
                     addFile = False
                     for runNum in run_numbers_str:
@@ -122,14 +123,15 @@ def selectNutples(ntuple_repo, args):
                             addFile = True
                             if int(runNum) in unused_runs:
                                 unused_runs.remove(int(runNum))
-                                runs.append(int(runNum))
+                                run = int(runNum)
                             break
                 if addFile:
                     file_addresses.append(file_address)
+                    runs.append(run)
     
     if args.use_rl:
         # re-order
-        file_addresses = [x for _,x in sorted(zip(runs, file_addresses))]
+        file_addresses = [x for _, x in sorted(zip(runs, file_addresses))]
 
         print('Missing {} out of {} runs'.format(len(unused_runs), len(run_numbers_str)))
         print('Missing runs:', np.array(unused_runs))

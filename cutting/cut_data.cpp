@@ -206,7 +206,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
                 promptTime = int64_t(eventTime);
                 highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-                owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+                owlNhitDelay = ((promptTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
                 if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
                 if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
                 if (!valid) {++nValidCut; continue;}
