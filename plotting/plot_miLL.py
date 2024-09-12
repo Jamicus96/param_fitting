@@ -605,7 +605,7 @@ def correlation_matrix(logfile_address):
     # Formatting: left 0.14, bottom 0.19, right 0.856, top 0.977 (wspace, hspace unchanged: 0.2)
 
 
-# correlation_matrix(logfile)
+correlation_matrix(logfile)
 
 
 ### Printing Errors ###
