@@ -47,9 +47,9 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     // Make histograms while at it [R_AV, delta_R, delta_T]
     unsigned int nbins = 200;
     std::vector<TH1D*> hists;
-    hists.push_back(new TH1D("R_AV", "R_AV [mm]", nbins, 0, 6000));
-    hists.push_back(new TH1D("delta_R", "delta R [mm]", nbins, 0, 6000));
-    hists.push_back(new TH1D("delta_T", "delta T [ns]", nbins, 0, 1.5E6));
+    hists.push_back(new TH1D("R_AV", "Recon R_AV [mm] (for true R_AV < 5.7 m)", nbins, 0, 6000));
+    hists.push_back(new TH1D("delta_R", "Recon delta R [mm]", nbins, 0, 6000));
+    hists.push_back(new TH1D("delta_T", "Recon delta T [ns]", nbins, 0, 1.5E6));
 
     // Set up db access
     RAT::DB *db = RAT::DB::Get();
@@ -160,7 +160,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int numInsideFV_MC = 0, nValid = 0, nEpos = 0, nDCpass = 0, nFVpass = 0;
+    unsigned int numInsideFV_MC = 0, nEvtType_InsideFV_MC = 0, nValid = 0, nEpos = 0, nDCpass = 0, nFVpass = 0, nEvtType_InsideFV = 0;
     unsigned int nPromptPass = 0, nDelayedPass = 0, nDtPass = 0, nDrPass = 0, nClassPass = 0;
     unsigned int nMuonCut = 0, nMultPass = 0;
     int64_t delayedTime, promptTime;
@@ -193,11 +193,16 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         owlNhitDelay = ((delayedTime - owlNhitTimes.at(owlNhitTimes.size()-1)) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
         if (owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
 
-        // Counting number of prompt IBD events simulated within FV, outside of veto windows
-        if (!is_data && (EVindex == 0 || EVindex == 1)) {
-            if (check_event_type(mcX, mcY, mcZ, pdg1, pdg2, eventType)) {
-                hists.at(0)->Fill(sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset))); // [R_AV, delta_R, delta_T]
-                if (EVindex == 0) numInsideFV_MC++;
+        // Counting number of events simulated within FV, outside of veto windows
+        if (!is_data) {
+            delayedPos = TVector3(mcX, mcY, mcZ);
+            if (pass_FV_cut(delayedPos)) {
+                numInsideFV_MC++;
+                // Is it of the correct event type simulated?
+                if (check_event_type(pdg1, pdg2, eventType)) {
+                    hists.at(0)->Fill(sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset))); // [R_AV, delta_R, delta_T]
+                    nEvtType_InsideFV_MC++;
+                }
             }
         }
 
@@ -213,6 +218,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         delayedPos = TVector3(reconX, reconY, reconZ);
         if (!pass_FV_cut(delayedPos)) continue;
         nFVpass++;
+
+        // Is it of the correct event type simulated?
+        if (!is_data) {
+            if (check_event_type(pdg1, pdg2, eventType)) nEvtType_InsideFV++;
+        }
 
         // Energy correction
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
@@ -337,15 +347,15 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         }
     }
 
-    // Out of nentries, numInsideFV_MC simulated inside FV.
+    // Out of nentries, numInsideFV_MC simulated inside FV, of these nEvtType_InsideFV_MC are the correct particle type.
     // Out of nentries, there are nValid events, out of these there are nEpos, out these nDCpass,
-    // out of these nFVpass, out of these nPromptPass, out of these nDelayedPass, out of these nDtPass,
+    // out of these nFVpass, out of these nEvtType_InsideFV, out of these nPromptPass, out of these nDelayedPass, out of these nDtPass,
     // out of these nDrPass, out of these nClassPass, out of these nMultPass.
     // Out of all nentries, there were nMuonCut. 
 
-    std::cout << "Cut efficiencies [nentries, numInsideFV_MC, nValid, nEpos, nDCpass, nFVpass, nPromptPass, nDelayedPass, nDtPass, nDrPass, nClassPass, nMuonCut, nMultPass]:" << std::endl;
-    std::cout << nentries << ", " << numInsideFV_MC << ", " << nValid << ", " << nEpos << ", "
-              << nDCpass << ", " << nFVpass << ", " << nPromptPass << ", " << nDelayedPass << ", "
+    std::cout << "Cut efficiencies [nentries, numInsideFV_MC, nEvtType_InsideFV_MC, nValid, nEpos, nDCpass, nFVpass, nEvtType_InsideFV, nPromptPass, nDelayedPass, nDtPass, nDrPass, nClassPass, nMuonCut, nMultPass]:" << std::endl;
+    std::cout << nentries << ", " << numInsideFV_MC << ", " << nEvtType_InsideFV_MC << ", " << nValid << ", " << nEpos << ", "
+              << nDCpass << ", " << nFVpass << ", " << nEvtType_InsideFV << ", " << nPromptPass << ", " << nDelayedPass << ", "
               << nDtPass << ", " << nDrPass << ", " << nClassPass << ", " << nMuonCut << ", " << nMultPass << std::endl;
 
     std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;

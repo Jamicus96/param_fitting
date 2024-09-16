@@ -3,7 +3,7 @@
 
 #define VERBOSE
 #define USING_RUN_NUM
-#define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
+// #define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
 
 ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
 
@@ -42,22 +42,18 @@ double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in cut_data.cpp
 
 /**
  * @brief Check that event was in fact generated as expected:
- * - For all events: within the FV.
  * - For IBD and alphaN events: involving the correct particles.
  * pdg1 and pdg2 are the two most energetic particles involved in the event (in order).
  * (Could alternatively check parentpdg1 == -12 for IBDs. AlphaN have no parent particles.)
+ * - Else: true.
  * 
- * @param mcX 
- * @param mcY 
- * @param mcZ 
  * @param PDG1 
  * @param PDG2 
  * @param eventType 
  * @return true 
  * @return false 
  */
-bool check_event_type(const double mcX, const double mcY, const double mcZ, const int PDG1, const int PDG2, const std::string eventType) {
-    if (sqrt(mcX*mcX + mcY*mcY + (mcZ - AV_offset)*(mcZ - AV_offset)) > FV_CUT) return false;
+bool check_event_type(const int PDG1, const int PDG2, const std::string eventType) {
     if (eventType == "IBD") {
         // e+ is always more energetic than neutron
         if (PDG1 != PDG_positron || PDG2 != PDG_neutron) return false;
