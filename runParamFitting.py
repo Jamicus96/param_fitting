@@ -45,6 +45,8 @@ def argparser():
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=True, help='For energy correction: True for data, False for MC.')
+    parser.add_argument('---evt_type', '-et', type=str, dest='evt_type', default='any',
+                        choices=['any', 'IBD', 'alphaN'], help='For cut efficiency calculation (MC only).')
     parser.add_argument('---use_Azimov', '-uA', type=bool, dest='use_Azimov',
                         default=False, help='Use Azimov data set made from PDFs, instead of ntuple data from cut_ntuple_repo')
 
@@ -193,8 +195,8 @@ def cutNtuples(args):
             command = commandBase + file_address + ' ' + ntuple_addresses[i-1] + ' '
         else:
             command = commandBase + file_address + ' 0 '
-        command += cut_ntuple_repo + outNtuple_address + ' '
-        command += str(args.classCut) + ' ' + str(int(args.is_data))
+        command += cut_ntuple_repo + outNtuple_address
+        command += ' ' + str(args.classCut) + ' ' + str(int(args.is_data)) + ' ' + args.evt_type
         commandList_file.write(command + '\n')
     commandList_file.close()
 
@@ -212,7 +214,7 @@ def cutNtuples(args):
     subprocess.call(command, stdout=subprocess.PIPE, shell=True) # use subprocess to make code wait until it has finished
 
 
-def get_accidentals_and_BiPos(args):
+def get_accidentals_and_Vetos(args):
     ''''''
 
     # Check repos are formatted correctly and exist, otherwise make them
@@ -229,7 +231,7 @@ def get_accidentals_and_BiPos(args):
     ntuple_addresses = selectNutples(ntuple_repo, args)
 
     # Create command
-    commandBase = path + 'cutting/get_accidentals_and_BiPos.exe '
+    commandBase = path + 'cutting/get_accidentals_and_vetos.exe '
     
     commandList_file = open(commandList_address, 'w')
     for i, file_address in enumerate(ntuple_addresses):
@@ -240,7 +242,7 @@ def get_accidentals_and_BiPos(args):
         else:
             command = commandBase + file_address + ' 0 '
         command += accidentals_ntuple_repo + outNtuple_address + ' ' + accidentals_ntuple_repo + outTxt_address
-        command += ' ' + str(int(args.is_data))
+        command += ' ' + str(args.classCut) + ' ' + str(int(args.is_data))
         commandList_file.write(command + '\n')
     commandList_file.close()
 
@@ -568,7 +570,7 @@ def main():
     args = argparser()
 
     if args.step == 'accidentals':
-        get_accidentals_and_BiPos(args)
+        get_accidentals_and_Vetos(args)
     elif args.step == 'cut':
         cutNtuples(args)
     elif args.step == 'scale':

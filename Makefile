@@ -10,7 +10,7 @@ all: cutting fitting tests clean
 
 
 # Cutting and PDF making
-cutting: make_PDFs cut_data get_accidentals_and_BiPos reScaleReactorIBD clean
+cutting: make_PDFs cut_data get_accidentals_and_vetos reScaleReactorIBD clean
 
 make_PDFs: make_PDFs.cpp 
 	${COMPILE} cutting/make_PDFs.cpp -o cutting/make_PDFs.exe ${INCLUDE}
@@ -20,10 +20,10 @@ cut_data: cut_data.o
 cut_data.o: cut_data.cpp cutting_utils.hpp
 	${COMPILE} cutting/cut_data.cpp -c ${INCLUDE}
 
-get_accidentals_and_BiPos: get_accidentals_and_BiPos.o 
-	${COMPILE} get_accidentals_and_BiPos.o -o cutting/get_accidentals_and_BiPos.exe ${INCLUDE}
-get_accidentals_and_BiPos.o: get_accidentals_and_BiPos.cpp cutting_utils.hpp
-	${COMPILE} cutting/get_accidentals_and_BiPos.cpp -c ${INCLUDE}
+get_accidentals_and_vetos: get_accidentals_and_vetos.o 
+	${COMPILE} get_accidentals_and_vetos.o -o cutting/get_accidentals_and_vetos.exe ${INCLUDE}
+get_accidentals_and_vetos.o: get_accidentals_and_vetos.cpp cutting_utils.hpp
+	${COMPILE} cutting/get_accidentals_and_vetos.cpp -c ${INCLUDE}
 
 reScaleReactorIBD: reScaleReactorIBD.cpp 
 	${COMPILE} cutting/reScaleReactorIBD.cpp -o cutting/reScaleReactorIBD.exe ${INCLUDE}
