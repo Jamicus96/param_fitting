@@ -170,6 +170,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
     // crated hists and numbers that will be saved
     PDF_hists.push_back(new TH1D("PWR_promptE", "PWR_promptE", nbins, Ee_min, Ee_max));
     PDF_hists.push_back(new TH1D("PWR_Enu", "PWR_Enu", nbins, Enu_min, Enu_max));
+    PDF_hists.push_back(new TH1D("PHWR_promptE", "PHWR_promptE", nbins, Ee_min, Ee_max));
     PDF_hists.push_back(new TH1D("PHWR_Enu", "PHWR_Enu", nbins, Enu_min, Enu_max));
 
     Double_t PWR_promptE_frac;
@@ -205,7 +206,8 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
             core_num = std::stoi(splt_str.at(1));
             PHWR_Enu_baselines.push_back(GetReactorDistanceLLA(fLongitute.at(core_num), fLatitude.at(core_num), fAltitude.at(core_num)));
             PHWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
-            PDF_hists.at(2)->Add(Enu_hists.at(core_idx));  // PHWR_Enu
+            PDF_hists.at(2)->Add(promptE_hists.at(core_idx));  // PHWR_promptE
+            PDF_hists.at(3)->Add(Enu_hists.at(core_idx));  // PHWR_Enu
         } else {
             // Get average reactor complex baseline
             av_baseline = 0;
@@ -217,9 +219,8 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
 
             // Check if it is beyond averaging threshold
             if (av_baseline > MAX_BASELINE) {
-                // Add to relevant number and hist
+                // Add to relevant number and (ignore hist)
                 PWR_promptE_frac += reactor_fluxes.at(core_idx);
-                PDF_hists.at(0)->Add(promptE_hists.at(core_idx));  // PWR_promptE
             } else {
                 // Get reactor type (use first core)
                 reactor_types = linkdb->GetSArray("core_spectrum");
@@ -227,11 +228,13 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
                     // add info relevant hist/vectors
                     PHWR_Enu_baselines.push_back(av_baseline);
                     PHWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
-                    PDF_hists.at(2)->Add(Enu_hists.at(core_idx));  // PHWR_Enu
+                    PDF_hists.at(2)->Add(promptE_hists.at(core_idx));  // PHWR_promptE
+                    PDF_hists.at(3)->Add(Enu_hists.at(core_idx));  // PHWR_Enu
                 } else {
                     // add info relevant hist/vectors
                     PWR_Enu_baselines.push_back(av_baseline);
                     PWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
+                    PDF_hists.at(0)->Add(promptE_hists.at(core_idx));  // PWR_promptE
                     PDF_hists.at(1)->Add(Enu_hists.at(core_idx));  // PWR_Enu
                 }
             }
