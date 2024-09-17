@@ -30,7 +30,9 @@ void CreatePDFs_alphaN(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const do
                        const unsigned int nbins, const double classifier_cut);
 void CreatePDFs_other(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const double Ee_min, const double Ee_max,
                       const unsigned int nbins, const double classifier_cut, std::string PDF_name);
-
+std::vector<std::string> SplitString(std::string str);
+TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude);
+double GetReactorDistanceLLA(const double& longitude, const double& latitude, const double &altitude);
 
 int main(int argv, char** argc) {
     std::string reactor_events_address = argc[1];
@@ -74,7 +76,7 @@ int main(int argv, char** argc) {
     std::cout << "Looping through reactor IBD events..." << std::endl;
     CreatePDFs_reactorIBD(reactorEventTree, outInfo, PDF_hists, E_conv, Enu_min, Enu_max, Ee_min, Ee_max, Nbins, classifier_cut);
     std::cout << "Looping through alpha-n events..." << std::endl;
-    CreatePDFs_alphaN(alphaNEventTree, PDF_hists, E_conv, Ee_min, Ee_max, Nbins, classifier_cut);
+    CreatePDFs_alphaN(alphaNEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut);
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl;
     CreatePDFs_other(geoNuThEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut, "geoNu_Th");
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl;
@@ -160,7 +162,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
         E_conv->Fill(parentKE1, reconEnergy); // all events go to this hist
 
         // If it passes prompt E cuts, add to flux too (PDFs have broader prompt E cuts)
-        if (energy > IBD_MIN_PROMPT_E && energy < IBD_MAX_PROMPT_E) reactor_fluxes.at(core_idx) += 1;
+        if (reconEnergy > IBD_MIN_PROMPT_E && reconEnergy < IBD_MAX_PROMPT_E) reactor_fluxes.at(core_idx) += 1;
     }
 
     /* ~~~~~~~ Loop through all reactors/cores and sort into PDFs and vectors ~~~~~~~ */
@@ -187,7 +189,6 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
     std::vector<std::string> reactor_types;
     std::vector<Double_t> fLatitude, fLongitute, fAltitude;
     int nCores, core_num;
-    RAT::DBLinkPtr* linkdb;
     for (auto& x : reactor_map) {  
         core_name = x.first;
         core_idx = x.second;
@@ -231,7 +232,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
                     // add info relevant hist/vectors
                     PWR_Enu_baselines.push_back(av_baseline);
                     PWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
-                    PDF_hists.at(1)>Add(Enu_hists.at(core_idx));  // PWR_Enu
+                    PDF_hists.at(1)->Add(Enu_hists.at(core_idx));  // PWR_Enu
                 }
             }
         }
@@ -248,8 +249,9 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
 void CreatePDFs_alphaN(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const double Ee_min, const double Ee_max,
                        const unsigned int nbins, const double classifier_cut) {
 
-
     // Set branch addresses to unpack TTree, and set up PDF histograms
+    Double_t reconEnergy, classResult;
+
     EventInfo->SetBranchAddress("energy", &reconEnergy);  // corrected energy
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
 
@@ -288,8 +290,9 @@ void CreatePDFs_alphaN(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const do
 void CreatePDFs_other(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const double Ee_min, const double Ee_max,
                       const unsigned int nbins, const double classifier_cut, std::string PDF_name) {
 
-
     // Set branch addresses to unpack TTree, and set up PDF histograms
+    Double_t reconEnergy, classResult;
+
     EventInfo->SetBranchAddress("energy", &reconEnergy);  // corrected energy
     EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
 
