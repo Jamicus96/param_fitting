@@ -129,7 +129,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     // Extra MC stuff, if available
     Double_t mcX, mcY, mcZ;
     Int_t EVindex;  // For MC: 0 = prompt, 1 = delayed
-    Int_t pdg1, pdg2;
+    Int_t pdg1, pdg2, mcIndex;
 
     EventInfo->SetBranchAddress("energy", &reconEnergy);
     EventInfo->SetBranchAddress("posx", &reconX);
@@ -144,31 +144,27 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("nhits", &nHits);
     EventInfo->SetBranchAddress("owlnhits", &owlnhits);
     EventInfo->SetBranchAddress("eventID", &GTID);
-    if (!is_data) {
-        EventInfo->SetBranchAddress("mcPosx", &mcX);
-        EventInfo->SetBranchAddress("mcPosy", &mcY);
-        EventInfo->SetBranchAddress("mcPosz", &mcZ);
-        EventInfo->SetBranchAddress("evIndex", &EVindex);
-        EventInfo->SetBranchAddress("pdg1", &pdg1);
-        EventInfo->SetBranchAddress("pdg2", &pdg2);
-    }
 
-    /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
+    EventInfo->SetBranchAddress("mcPosx", &mcX);
+    EventInfo->SetBranchAddress("mcPosy", &mcY);
+    EventInfo->SetBranchAddress("mcPosz", &mcZ);
+    EventInfo->SetBranchAddress("evIndex", &EVindex);
+    EventInfo->SetBranchAddress("pdg1", &pdg1);
+    EventInfo->SetBranchAddress("pdg2", &pdg2);
+    EventInfo->SetBranchAddress("mcIndex", &mcIndex);
 
-    // Initialise DetectorStateCorrection (assume only one run in each file)
-    RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
-    RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
+    /* ~~~~~~~ Clean up events first ~~~~~~~ */
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int numInsideFV_MC = 0, nEvtType_InsideFV_MC = 0, nValid = 0, nEpos = 0, nDCpass = 0, nFVpass = 0, nEvtType_InsideFV = 0;
-    unsigned int nPromptPass = 0, nDelayedPass = 0, nDtPass = 0, nDrPass = 0, nClassPass = 0;
-    unsigned int nMuonCut = 0, nMultPass = 0;
-    int64_t delayedTime, promptTime;
-    TVector3 delayedPos, promptPos, multiplicityPos;
-    double delay, highNhitDelay, owlNhitDelay;
-    bool passMultiplicity, passOWLnhit;
-    double promptEcorr, delayedEcorr;
+
+    unsigned int numNotVetoed = 0, nEvtType = 0, numInsideFV_MC = 0, nEvtType_InsideFV_MC = 0, nValid = 0,
+                 nEpos = 0, nEvtType_InsideFV_MC_Valid = 0, nFVpass = 0, nEvtType_InsideFV = 0;
+    int64_t delayedTime;
+    TVector3 delayedPos;
+    double highNhitDelay, owlNhitDelay;
+
     // Loop through all events:
+    std::vector<int> cleaned_entries;
     for (int a = 0; a < nentries; ++a) {
         if (a % 10000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
 
@@ -187,22 +183,23 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         
         if (nHits > 3000) highNhitTime = delayedTime;
         highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-        if (highNhitDelay < highNhit_deltaT) {++nMuonCut; continue;}
+        if (highNhitDelay < highNhit_deltaT) continue;
 
         if (owlnhits > 3) owlNhitTimes.push_back(delayedTime);
         owlNhitDelay = ((delayedTime - owlNhitTimes.at(owlNhitTimes.size()-1)) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-        if (owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+        if (owlNhitDelay < owlNhit_deltaT) continue;
+
+        ++numNotVetoed;
+        if (check_event_type(pdg1, pdg2, eventType) && EVindex == 0) nEvtType++;
 
         // Counting number of events simulated within FV, outside of veto windows
-        if (!is_data) {
-            delayedPos = TVector3(mcX, mcY, mcZ);
-            if (pass_FV_cut(delayedPos)) {
-                numInsideFV_MC++;
-                // Is it of the correct event type simulated?
-                if (check_event_type(pdg1, pdg2, eventType)) {
-                    hists.at(0)->Fill(sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset))); // [R_AV, delta_R, delta_T]
-                    nEvtType_InsideFV_MC++;
-                }
+        delayedPos = TVector3(mcX, mcY, mcZ);
+        if (pass_FV_cut(delayedPos)) {
+            numInsideFV_MC++;
+            // Is it of the correct event type simulated?
+            if (check_event_type(pdg1, pdg2, eventType) && EVindex == 0) {
+                hists.at(0)->Fill(sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset))); // [R_AV, delta_R, delta_T]
+                nEvtType_InsideFV_MC++;
             }
         }
 
@@ -211,8 +208,8 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         nValid++;
         if (reconEnergy < 0) continue;
         nEpos++;
-        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) continue;
-        nDCpass++;
+
+        if (pass_FV_cut(delayedPos) && check_event_type(pdg1, pdg2, eventType) && EVindex == 0) nEvtType_InsideFV_MC_Valid++;
 
         // FV cut
         delayedPos = TVector3(reconX, reconY, reconZ);
@@ -220,50 +217,64 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         nFVpass++;
 
         // Is it of the correct event type simulated?
-        if (!is_data) {
-            if (check_event_type(pdg1, pdg2, eventType)) nEvtType_InsideFV++;
-        }
+        if (check_event_type(pdg1, pdg2, eventType) && EVindex == 0) nEvtType_InsideFV++;
+
+        cleaned_entries.push_back(a);
+    }
+
+    /* ~~~~~~~ loop through events, cut loosely and tag ~~~~~~~ */
+
+    // Initialise DetectorStateCorrection (assume only one run in each file)
+    RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
+    RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
+
+    unsigned int nDelayedPass = 0, nPromptPass = 0, nDtPass = 0, nDrPass = 0;
+    int64_t promptTime;
+    TVector3 promptPos, multiplicityPos;
+    double delay;
+    bool passMultiplicity, passOWLnhit;
+    double promptEcorr, delayedEcorr;
+    // Loop through all events:
+    int a, b;
+    std::vector<int> prompt_entries_loose, delayed_entries_loose;
+    for (int i_entry = 0; i_entry < cleaned_entries.size(); ++i_entry) {
+        if (i_entry % 10000 == 0) std::cout << "Done " << ((float)i_entry / (float)cleaned_entries.size()) * 100.0 << "%" << std::endl;
+
+        a = cleaned_entries.at(i_entry);
+        EventInfo->GetEntry(a);
+
+        #ifdef USING_RUN_NUM
+            if (lastRunNum != runNum) {
+                run.SetRunID(runNum);
+                db->BeginOfRun(run);
+                lastRunNum = runNum;
+            }
+        #endif
 
         // Energy correction
+        delayedTime = int64_t(eventTime);
+        delayedPos = TVector3(reconX, reconY, reconZ);
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
 
-        // Prompt E cut (just for cut eff, but also if prompt fails, delayed will also fail)
-        if (!pass_prompt_cuts_IBD(delayedEcorr)) continue;
-        nPromptPass++;
-
         // delayed cut
-        if (!pass_delayed_cuts_IBD(delayedEcorr)) continue;
-        nDelayedPass++;
+        if (!(delayedEcorr > 1.3 && delayedEcorr < 3.2)) continue;
+        ++nDelayedPass;
 
         // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
-        for (int b = 1; b <= 1000; ++b) {
-            if ((a - b) < 0) break;
+        for (int j_entry = 1; j_entry < cleaned_entries.size(); ++j_entry) {
+            if ((i_entry - j_entry) < 0) break;
+            b = cleaned_entries.at(j_entry);
             EventInfo->GetEntry(a - b);
 
             promptTime = int64_t(eventTime);
-            highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-            if (highNhitDelay < highNhit_deltaT) break;
-
-            passOWLnhit = true;
-            for (unsigned int i = owlNhitTimes.size()-1; i >= 0; --i) { // work through list of OWL hits (prompt event can be before or after them)
-                owlNhitDelay = ((promptTime - owlNhitTimes.at(i)) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-                if (fabs(owlNhitDelay) < owlNhit_deltaT) {passOWLnhit = false; break;} // within ± window
-                if (owlNhitDelay > owlNhit_deltaT) {passOWLnhit = true; break;}  // OWL hit is over a window before prompt
-            }
-            if (!passOWLnhit) continue;
-
-            if (!valid) continue;
-            if (reconEnergy < 0) continue;
-            if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) continue;
-            if (!pass_FV_cut(delayedPos)) continue;
-
             delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
             if (delay > IBD_MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
 
             promptPos = TVector3(reconX, reconY, reconZ);
             promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
 
-            if (!pass_prompt_cuts_IBD(promptEcorr)) continue;
+            if (!pass_prompt_PDF_cuts_IBD(promptEcorr)) continue;
+            nPromptPass++;
             hists.at(2)->Fill(delay); // [R_AV, delta_R, delta_T]
 
             // Coincidenc cuts
@@ -274,89 +285,79 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             if (!pass_dR_cut_IBD(promptPos, delayedPos)) continue;
             nDrPass++;
 
-            if (!pass_classifier(promptEcorr, classResult, classifier_cut)) continue;
-            nClassPass++;
+            // Add to output TTrees
+            EventInfo->GetEntry(a - b);
+            reconEnergy = promptEcorr;
+            prompt_entries_loose.push_back(a - b);
 
-            // check for multiplicity (any events around the event pairs that have E>0.4MeV and dr<2m)
-            passMultiplicity = true;
-            for (unsigned int c = 1; c < 1000; ++c) {
-                // before prompt
-                if ((a - b - c) < 0) break;
-                EventInfo->GetEntry(a - b - c);
-
-                delay = ((promptTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                if (delay > 1.) break;
-
-                if (reconEnergy > 0.4) {
-                    multiplicityPos = TVector3(reconX, reconY, reconZ);
-                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                        passMultiplicity = false;
-                        break;
-                    }
-                }
-            }
-            // after prompt is covered by before delayed
-            if (passMultiplicity) {
-                for (unsigned int c = 1; c < 1000; ++c) {
-                    // before delayed
-                    if (c >= b) break;
-                    EventInfo->GetEntry(a - c);
-
-                    delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                    if (delay > 1.) break;
-
-                    if (reconEnergy > 0.4) {
-                        multiplicityPos = TVector3(reconX, reconY, reconZ);
-                        if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                            passMultiplicity = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (passMultiplicity) {
-                for (unsigned int c = 1; c < 1000; ++c) {
-                    // after delayed
-                    if ((a + c) > nentries) break;
-                    EventInfo->GetEntry(a + c);
-
-                    delay = ((int64_t(eventTime) - delayedTime) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                    if (delay > 1.) break;
-
-                    if (reconEnergy > 0.4) {
-                        multiplicityPos = TVector3(reconX, reconY, reconZ);
-                        if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                            passMultiplicity = false;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (passMultiplicity) {
-                // Add to output TTrees
-                EventInfo->GetEntry(a - b);
-                reconEnergy = promptEcorr;
-                CutPromptTree->Fill();
-                EventInfo->GetEntry(a);
-                reconEnergy = delayedEcorr;
-                CutDelayedTree->Fill();
-
-                ++nMultPass;
-            }
+            EventInfo->GetEntry(a);
+            reconEnergy = delayedEcorr;
+            delayed_entries_loose.push_back(a);
+            CutDelayedTree->Fill();  // Just record for nice plots
         }
     }
 
-    // Out of nentries, numInsideFV_MC simulated inside FV, of these nEvtType_InsideFV_MC are the correct particle type.
-    // Out of nentries, there are nValid events, out of these there are nEpos, out these nDCpass,
-    // out of these nFVpass, out of these nEvtType_InsideFV, out of these nPromptPass, out of these nDelayedPass, out of these nDtPass,
-    // out of these nDrPass, out of these nClassPass, out of these nMultPass.
-    // Out of all nentries, there were nMuonCut. 
+    /* ~~~~~~~ tighten delayed cuts ~~~~~~~ */
 
-    std::cout << "Cut efficiencies [nentries, numInsideFV_MC, nEvtType_InsideFV_MC, nValid, nEpos, nDCpass, nFVpass, nEvtType_InsideFV, nPromptPass, nDelayedPass, nDtPass, nDrPass, nClassPass, nMuonCut, nMultPass]:" << std::endl;
-    std::cout << nentries << ", " << numInsideFV_MC << ", " << nEvtType_InsideFV_MC << ", " << nValid << ", " << nEpos << ", "
-              << nDCpass << ", " << nFVpass << ", " << nEvtType_InsideFV << ", " << nPromptPass << ", " << nDelayedPass << ", "
-              << nDtPass << ", " << nDrPass << ", " << nClassPass << ", " << nMuonCut << ", " << nMultPass << std::endl;
+    std::vector<int> prompt_entries_mid, delayed_entries_mid;
+    for (int i_entry = 0; i_entry < delayed_entries_loose.size(); ++i_entry) {
+        if (i_entry % 10000 == 0) std::cout << "Done " << ((float)i_entry / (float)delayed_entries_loose.size()) * 100.0 << "%" << std::endl;
+
+        a = delayed_entries_loose.at(i_entry);
+        EventInfo->GetEntry(a);
+
+        #ifdef USING_RUN_NUM
+            if (lastRunNum != runNum) {
+                run.SetRunID(runNum);
+                db->BeginOfRun(run);
+                lastRunNum = runNum;
+            }
+        #endif
+
+        // delayed cut
+        if (pass_delayed_cuts_IBD(reconEnergy)) {
+            prompt_entries_mid.push_back(prompt_entries_loose.at(i_entry));
+            delayed_entries_mid.push_back(a);
+
+            // Record for PDF making
+            EventInfo->GetEntry(prompt_entries_loose.at(i_entry));
+            CutPromptTree->Fill();
+        }
+    }
+
+    /* ~~~~~~~ tighten prompt cut, just for efficiency ~~~~~~~ */
+
+    unsigned int num_tagged_final = 0;
+    for (int i_entry = 0; i_entry < prompt_entries_mid.size(); ++i_entry) {
+        if (i_entry % 10000 == 0) std::cout << "Done " << ((float)i_entry / (float)prompt_entries_mid.size()) * 100.0 << "%" << std::endl;
+
+        a = prompt_entries_mid.at(i_entry);
+        EventInfo->GetEntry(a);
+
+        #ifdef USING_RUN_NUM
+            if (lastRunNum != runNum) {
+                run.SetRunID(runNum);
+                db->BeginOfRun(run);
+                lastRunNum = runNum;
+            }
+        #endif
+
+        // delayed cut
+        if (pass_prompt_cuts_IBD(reconEnergy)) ++num_tagged_final;
+    }
+
+
+    /* ~~~~~~~ Print info for efficiency, and record data to ntuple file ~~~~~~~ */
+
+    std::cout << "Cut efficiencies from cleaning [nentries, numNotVetoed, nEvtType, numInsideFV_MC, nEvtType_InsideFV_MC, nValid, nEpos, nEvtType_InsideFV_MC_Valid, nFVpass, nEvtType_InsideFV]:" << std::endl;
+    std::cout << nentries << ", " << numNotVetoed << ", " << nEvtType << ", " << numInsideFV_MC << ", " << nEvtType_InsideFV_MC << ", " << nValid << ", "
+              << nEpos << ", " << nEvtType_InsideFV_MC_Valid << ", " << nFVpass << ", " << nEvtType_InsideFV << std::endl;
+
+    std::cout << "Cut efficiencies from loose cuts and tagging [nDelayedPass, nPromptPass, nDtPass, nDrPass]:" << std::endl;
+    std::cout << nDelayedPass << ", " << nPromptPass << ", " << nDtPass << ", " << nDrPass << std::endl;
+
+    std::cout << "Cut efficiencies from tighter cuts [nDelayed_cut_pairs, num_tagged_final]:" << std::endl;
+    std::cout << prompt_entries_mid.size() << ", " << num_tagged_final << std::endl;
 
     std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;
 

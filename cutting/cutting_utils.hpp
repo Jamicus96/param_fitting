@@ -3,7 +3,7 @@
 
 #define VERBOSE
 #define USING_RUN_NUM
-// #define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
+#define USING_PDF_PADDING  // use broader prompt E cuts for IBDs, to make PDFs suitable for energy systematics
 
 ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
 
@@ -95,14 +95,16 @@ bool pass_classifier(const double energy, const double class_result, const doubl
 
 /* ~~~~~~~~~~~~ IBD cuts ~~~~~~~~~~~~ */
 
+bool pass_prompt_PDF_cuts_IBD(const double energy) {
+    if (energy < IBD_PDF_MIN_PROMPT_E) return false;  // min energy cut (MeV)
+    if (energy > IBD_PDF_MAX_PROMPT_E) return false;  // max energy cut (MeV)
+
+    return true;
+}
+
 bool pass_prompt_cuts_IBD(const double energy) {
-    #ifdef USING_PDF_PADDING
-        if (energy < IBD_PDF_MIN_PROMPT_E) return false;  // min energy cut (MeV)
-        if (energy > IBD_PDF_MAX_PROMPT_E) return false;  // max energy cut (MeV)
-    #else
-        if (energy < IBD_MIN_PROMPT_E) return false;  // min energy cut (MeV)
-        if (energy > IBD_MAX_PROMPT_E) return false;  // max energy cut (MeV)
-    #endif
+    if (energy < IBD_MIN_PROMPT_E) return false;  // min energy cut (MeV)
+    if (energy > IBD_MAX_PROMPT_E) return false;  // max energy cut (MeV)
 
     return true;
 }
