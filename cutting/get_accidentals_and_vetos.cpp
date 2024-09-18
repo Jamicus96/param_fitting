@@ -15,7 +15,7 @@
 #include "cutting_utils.hpp"
 
 
-void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, std::string outputVetoTxt, const double classifier_cut, const bool is_data);
+void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, std::string outputVetoTxt, const bool is_data);
 
 
 int main(int argv, char** argc) {
@@ -23,16 +23,15 @@ int main(int argv, char** argc) {
     std::string previousRunNtuple = argc[2];
     std::string outputNtuple = argc[3];
     std::string outputVetoTxt = argc[4];
-    double classifier_cut = std::stod(argc[5]);
-    bool is_data = std::stoi(argc[6]);
+    bool is_data = std::stoi(argc[5]);
 
     std::cout << "Looping through events..." << std::endl;
-    Apply_tagging_and_cuts(inputNtuple, previousRunNtuple, outputNtuple, outputVetoTxt, classifier_cut, is_data);
+    Apply_tagging_and_cuts(inputNtuple, previousRunNtuple, outputNtuple, outputVetoTxt, is_data);
 
     return 0;
 }
 
-void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, std::string outputVetoTxt, const double classifier_cut, const bool is_data) {
+void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtuple, std::string outputNtuple, std::string outputVetoTxt, const bool is_data) {
 
     // Read in file and create output file
     TFile* inFile = TFile::Open(inputNtuple.c_str());
@@ -44,6 +43,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     AccidentalPromptTree->SetObject("promptAccidental", "promptAccidental");
     TTree* AccidentalDelayedTree = EventInfo->CloneTree(0);
     AccidentalDelayedTree->SetObject("delayedAccidental", "delayedAccidental");
+
+    TTree* BiPoPromptTree = EventInfo->CloneTree(0);
+    BiPoPromptTree->SetObject("promptBiPo", "promptBiPo");
+    TTree* BiPoDelayedTree = EventInfo->CloneTree(0);
+    BiPoDelayedTree->SetObject("delayedBiPo", "delayedBiPo");
 
     // Set up db access
     RAT::DB *db = RAT::DB::Get();
@@ -115,7 +119,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     /* ~~~~~~~~~~~~~ Look at main ntuple ~~~~~~~~~~~~~ */
 
     // Set branch addresses to unpack TTree
-    Double_t reconEnergy, reconX, reconY, reconZ, classResult;
+    Double_t reconEnergy, reconX, reconY, reconZ;
     ULong64_t clockCount10, clockCount50, dcApplied, dcFlagged;
     Int_t mcIndex, nHits, GTID, owlnhits, UTDays, UTSecs, UTNSecs;
     Int_t runNum; //run number associated with MC
@@ -138,7 +142,6 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     EventInfo->SetBranchAddress("nhits", &nHits);
     EventInfo->SetBranchAddress("owlnhits", &owlnhits);
     EventInfo->SetBranchAddress("eventID", &GTID);
-    EventInfo->SetBranchAddress("alphaNReactorIBD", &classResult);
 
     /* ~~~~~~~ loop through events, tag and cut ~~~~~~~ */
 
@@ -152,13 +155,11 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nValid = 0, nEpos = 0, nDCpass = 0, nFVpass = 0;
-    unsigned int nPromptPass = 0, nDelayedPass = 0, nClassPass = 0;
-    unsigned int nMuonCut = 0;
-    int64_t eventTime;
-    TVector3 eventPos;
-    double highNhitDelay, owlNhitDelay;
-    double eventEcorr;
+    unsigned int nvaliddelayed = 0, nvalidpair = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0;
+    int64_t delayedTime, promptTime;
+    TVector3 delayedPos, promptPos, multiplicityPos;
+    double delay, highNhitDelay, owlNhitDelay;
+    double promptEcorr, delayedEcorr;
     // Loop through all events:
     double totHighNhitTime = 0, totOwlNhitTime = 0, vetoDeltaT;
     std::vector<int> cleaned_entry, promptBiPos, delayedBiPos;
@@ -175,75 +176,125 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             }
         #endif
 
-        // Veto logic (accounted for in livetime)
-        eventTime = int64_t(clockCount50);
+        delayedTime = int64_t(clockCount50);
         if (nHits > 3000) {
             // run_number GTID Nhit clockCount50 clockCount10 UTDays UTSecs UTNSecs Veto_length
             // Muon veto time converted to ns
             outTxtFile << runNum << " " << GTID << " " << nHits << " " << clockCount50 << " " << clockCount10 << " " << UTDays << " " << UTSecs << " " << (double)(UTNSecs) << " " << highNhit_deltaT * 1E9 << std::endl;
-            vetoDeltaT = ((eventTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;
+            vetoDeltaT = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;
             if (vetoDeltaT > highNhit_deltaT) totHighNhitTime += highNhit_deltaT;
             else totHighNhitTime += vetoDeltaT;
-            highNhitTime = eventTime;
+            highNhitTime = delayedTime;
         }
-        highNhitDelay = ((eventTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-        if (highNhitDelay < highNhit_deltaT) {++nMuonCut; continue;}
-        
         if (owlnhits > 3) {
-            vetoDeltaT = ((eventTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;
+            vetoDeltaT = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;
             if (vetoDeltaT > owlNhit_deltaT) totOwlNhitTime += owlNhit_deltaT;
             else totOwlNhitTime += vetoDeltaT;
-            owlNhitTime = eventTime;
+            owlNhitTime = delayedTime;
         }
-        owlNhitDelay = ((eventTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-        if (owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+        highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+        owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+        if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+        if (!valid) {++nValidCut; continue;}
+        if (reconEnergy < 0) {++negEcut; continue;}
+        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
-        // Fit-valid and DC logic (accounted for in detector/cut efficiency)
-        if (!valid) continue;
-        nValid++;
-        if (reconEnergy < 0) continue;
-        nEpos++;
-        if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) continue;
-        nDCpass++;
+        // If it survives the basic fitvalid + muon veto + data cleaning cuts, add to output ntuple
+        cleaned_entry.push_back(a);
 
-        // FV cut
-        eventPos = TVector3(reconX, reconY, reconZ);
-        if (!pass_FV_cut(eventPos)) continue;
-        nFVpass++;
+        delayedPos = TVector3(reconX, reconY, reconZ);
+        delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
+        reconEnergy = promptEcorr;  // All usable events will have corrected energies now, so don't need to re-do it
 
-        // Energy correction
-        eventEcorr = EnergyCorrection(reconEnergy, eventPos, is_data, stateCorr, e_cal);
+        if (pass_delayed_cuts_BiPo(delayedEcorr, delayedPos)) {
+            nvaliddelayed++;
 
-        // Prompt E cut (just for cut eff)
-        if (!pass_prompt_cuts_IBD(eventEcorr)) continue;
-        nPromptPass++;
-        reconEnergy = eventEcorr;
+            // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
+            for (int b = 1; b <= 1000; ++b) {
+                if ((a - b) < 0) break;
+                EventInfo->GetEntry(a - b);
 
-        // Apply classifier to prompt events
-        if (pass_classifier(eventEcorr, classResult, classifier_cut)) {
-            nClassPass++;
-            AccidentalPromptTree->Fill();
+                promptTime = int64_t(clockCount50);
+                highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+                owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+                if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
+                if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
+                if (!valid) {++nValidCut; continue;}
+                if (reconEnergy < 0) {++negEcut; continue;}
+                if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
+
+                delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+                if (delay > BIPO_MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
+
+                promptPos = TVector3(reconX, reconY, reconZ);
+
+                if (pass_prompt_cuts_BiPo(reconEnergy, promptPos) and pass_coincidence_cuts_BiPo(delay, promptPos, delayedPos)) {
+                    // Event pair survived analysis cuts
+                    nvalidpair++;
+
+                    promptBiPos.push_back(a - b);
+                    delayedBiPos.push_back(a);
+
+                    // Add to output TTrees
+                    EventInfo->GetEntry(a - b);
+                    // reconEnergy = promptEcorr;
+                    BiPoPromptTree->Fill();
+                    EventInfo->GetEntry(a);
+                    // reconEnergy = delayedEcorr;
+                    BiPoDelayedTree->Fill();
+                }
+            }
         }
-
-        // delayed cut
-        if (!pass_delayed_cuts_IBD(eventEcorr)) continue;
-        nDelayedPass++;
-        AccidentalDelayedTree->Fill();
     }
     outTxtFile.close();
 
-    std::cout << "Cut efficiencies [nentries, nValid, nEpos, nDCpass, nFVpass, nPromptPass, nDelayedPass, nClassPass, nMuonCut]:" << std::endl;
-    std::cout << nentries << ", " << nValid << ", " << nEpos << ", " << nDCpass << ", "
-              << nFVpass << ", " << nPromptPass << ", " << nDelayedPass << ", "
-              << nClassPass << ", " << nMuonCut << std::endl;
-    std::cout << "highNhitDelay = " << highNhitDelay << ", owlNhitDelay = " << owlNhitDelay << std::endl;
+    std::cout << "[BiPos] From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
+              << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair << std::endl;
+    std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
+    std::cout << "High nhit cut time = " << totHighNhitTime << "s, owl nhit cut time = " << totOwlNhitTime * 1E-6 << "s" << std::endl;
 
-    std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;
+    // Filter out BiPos from the rest
+    bool notBiPo;
+    unsigned int nvalidFV = 0, nvalidprompt = 0;
+    nvaliddelayed = 0;
+    for (unsigned int iEntry = 0; iEntry < cleaned_entry.size(); ++iEntry) {
+        notBiPo = true;
+        for (unsigned int iBiPo = 0; iBiPo < promptBiPos.size(); ++iBiPo) {
+            if (cleaned_entry.at(iEntry) == promptBiPos.at(iBiPo) || cleaned_entry.at(iEntry) == delayedBiPos.at(iBiPo)) {
+                notBiPo = false;
+                break;
+            }
+        }
+
+        if (notBiPo) {
+            EventInfo->GetEntry(cleaned_entry.at(iEntry));
+            
+            if (sqrt(reconX*reconX + reconY*reconY + (reconZ - AV_offset)*(reconZ - AV_offset)) > FV_CUT) continue;
+            ++nvalidFV;
+
+            #ifdef USING_PDF_PADDING
+                if (reconEnergy < IBD_PDF_MIN_PROMPT_E || reconEnergy > IBD_PDF_MAX_PROMPT_E) continue;
+            #else
+                if (reconEnergy < IBD_MIN_PROMPT_E || reconEnergy > IBD_MAX_PROMPT_E) continue;
+            #endif
+            nvalidprompt++;
+            AccidentalPromptTree->Fill();
+
+            if (reconEnergy < IBD_MIN_DELAYED_E || reconEnergy > IBD_MAX_DELAYED_E) continue;
+            nvaliddelayed++;
+            AccidentalDelayedTree->Fill();
+        }
+    }
+
+    std::cout << "[Accidentals] From " << cleaned_entry.size() << " cleaned entries, number of valid FV + not BiPo events: " << nvalidFV
+              << ", number of valid prompt events : " << nvalidprompt << ", number of valid delayed events : " << nvaliddelayed << std::endl;
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 
 
     outroot->cd();
+    BiPoPromptTree->Write();
+    BiPoDelayedTree->Write();
     AccidentalPromptTree->Write();
     AccidentalDelayedTree->Write();
     outroot->Close();

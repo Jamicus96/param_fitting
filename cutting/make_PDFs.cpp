@@ -40,9 +40,9 @@ int main(int argv, char** argc) {
     std::string geoNuTh_events_address = argc[3];
     std::string geoNuU_events_address = argc[4];
     std::string accidentals_address = argc[5];
-    std::string output_file = argc[7];
-    double bin_width = std::stod(argc[8]);
-    double classifier_cut = std::stod(argc[9]);
+    std::string output_file = argc[6];
+    double bin_width = std::stod(argc[7]);
+    double classifier_cut = std::stod(argc[8]);
 
     // Read in files and get their TTrees
     TFile *reactorFile = TFile::Open(reactor_events_address.c_str());
@@ -80,7 +80,7 @@ int main(int argv, char** argc) {
     std::cout << "Looping through geo-nu Thorium IBD events..." << std::endl;
     CreatePDFs_other(geoNuThEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut, "geoNu_Th");
     std::cout << "Looping through geo-nu Uranium IBD events..." << std::endl;
-    CreatePDFs_other(geoNuThEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut, "geoNu_U");
+    CreatePDFs_other(geoNuUEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut, "geoNu_U");
     std::cout << "Looping through Accidental events..." << std::endl;
     CreatePDFs_other(AccEventTree, PDF_hists, Ee_min, Ee_max, Nbins, classifier_cut, "Accidental");
 
@@ -145,7 +145,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
 
         core_name = originReactor->Data();  // core name
         splt_str = SplitString(core_name);
-        if (splt_str.at(0) != "BRUCE") core_name == splt_str.at(0); // All cores in reactor complexes grouped up, except at Bruce
+        if (splt_str.at(0) != "BRUCE") core_name = splt_str.at(0); // All cores in reactor complexes grouped up, except at Bruce
         
         if (reactor_map.find(core_name) == reactor_map.end()) {
             // reactor not added to list yet -> add it
@@ -190,20 +190,33 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
     std::vector<std::string> reactor_types;
     std::vector<Double_t> fLatitude, fLongitute, fAltitude;
     int nCores, core_num;
+    std::string reactor_name;
     for (auto& x : reactor_map) {  
         core_name = x.first;
         core_idx = x.second;
 
         total_flux += reactor_fluxes.at(core_idx);
-        splt_str = SplitString(core_name);
-        linkdb = db->GetLink("REACTOR", splt_str.at(0));
+
+        if (core_name.find(" ") == std::string::npos) {
+            reactor_name = core_name; // If there are no spaces
+        } else {
+            splt_str = SplitString(core_name);
+            if (splt_str.at(0) == "BRUCE") {  // Only bruce has its core number in the name
+                reactor_name = splt_str.at(0);
+                core_num = std::stoi(splt_str.at(1));
+            }
+            else {
+                reactor_name = core_name;
+            }
+        }
+
+        linkdb = db->GetLink("REACTOR", reactor_name);
         fLatitude = linkdb->GetDArray("latitude");
         fLongitute = linkdb->GetDArray("longitude");
         fAltitude = linkdb->GetDArray("altitude");
 
-        if (splt_str.at(0) == "BRUCE") {
+        if (reactor_name == "BRUCE") {
             // Get core baseline, then add info relevant hist/vectors
-            core_num = std::stoi(splt_str.at(1));
             PHWR_Enu_baselines.push_back(GetReactorDistanceLLA(fLongitute.at(core_num), fLatitude.at(core_num), fAltitude.at(core_num)));
             PHWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
             PDF_hists.at(2)->Add(promptE_hists.at(core_idx));  // PHWR_promptE
@@ -225,6 +238,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
                 // Get reactor type (use first core)
                 reactor_types = linkdb->GetSArray("core_spectrum");
                 if (reactor_types.at(0) == "PHWR") {
+                    std::cout << "PHWR: " << core_name << ", av_baseline: " << av_baseline << std::endl;
                     // add info relevant hist/vectors
                     PHWR_Enu_baselines.push_back(av_baseline);
                     PHWR_Enu_fracs.push_back(reactor_fluxes.at(core_idx));
@@ -264,7 +278,7 @@ void CreatePDFs_alphaN(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const do
 
     unsigned int alphaN_O16_idx = PDF_hists.size() - 1;
     unsigned int alphaN_C12_idx = alphaN_O16_idx - 1;
-    unsigned int alphaN_PR_idx = alphaN_PR_idx - 1;
+    unsigned int alphaN_PR_idx = alphaN_C12_idx - 1;
 
     RAT::DBLinkPtr linkdb;
     RAT::DB *db = RAT::DB::Get();
@@ -326,29 +340,31 @@ void CreatePDFs_other(TTree* EventInfo, std::vector<TH1D*>& PDF_hists, const dou
  * @brief Split reactor name strings for getting baselines
  * 
  * @param str 
- * @return std::vector<std::string> 
+ * @return std::vector<std::string> = {"reactor name", "core number"}
  */
 std::vector<std::string> SplitString(std::string str) {
+
     std::istringstream buf(str);
     std::istream_iterator<std::string> beg(buf), end;
     std::vector<std::string> tokens(beg, end); //each word of string now in vector
-    std::vector<std::string> info;
     std::string dummy = "";
+    std::vector<std::string> info;
 
-    for(int i=0;i<tokens.size();i++){ //combine back to reactor name, core number
-        if(i==0){
+    // If there is a core number, as normal (WARNING: if ractor name has a space, but there is no core number, this will return an empty vector)
+    for (int i = 0; i < tokens.size(); i++) { //combine back to reactor name, core number
+        if (i == 0) {
             dummy = tokens.at(i);
-            if(i!=tokens.size()-2){
+            if (i != tokens.size()-2) {
                 dummy += " ";
             }
         }
-        else if(i!=tokens.size()-1){
+        else if (i != tokens.size()-1) {
             dummy += tokens.at(i);
-            if(i!=tokens.size()-2){
+            if (i != tokens.size()-2) {
                 dummy += " ";
             }
         }
-        else{
+        else {
             info.push_back(dummy);
             info.push_back(tokens.at(i));
         }

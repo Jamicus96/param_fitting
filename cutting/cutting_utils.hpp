@@ -7,13 +7,6 @@
 
 ULong64_t dcAnalysisWord = 0x2100000042C2;  // Converts hex to decimal
 
-// PDG codes (see https://pdg.lbl.gov/2007/reviews/montecarlorpp.pdf)
-int PDG_neutron = 2112;  // first three digits are the quark content, last digit is total spin (2J+1)
-int PDG_alpha = 1000020040;  // Atoms: ±10LZZZAAAI (L = # of s-quarks, ZZZ = atomic number, AAA = mass number, I = excitation level)
-int PDG_gamma = 22;  //  21–30 for gauge bosons and Higgs
-int PDG_electron = 11;  // Quarks and leptons numbered from 1 and 11 respectively
-int PDG_positron = -11;  // negative for antiparticles
-
 // Global DC and FV cuts + AV offset
 double highNhit_deltaT = 20;  // [s]
 double owlNhit_deltaT = 10;  // [us]
@@ -39,32 +32,6 @@ double PROTON_RECOIL_E_MAX = 3.5;  // [MeV]  Ideally the same as in cut_data.cpp
 
 
 /* ~~~~~~~~~~~~ General functions (E correction, DC, classifier) ~~~~~~~~~~~~ */
-
-/**
- * @brief Check that event was in fact generated as expected:
- * - For IBD and alphaN events: involving the correct particles.
- * pdg1 and pdg2 are the two most energetic particles involved in the event (in order).
- * (Could alternatively check parentpdg1 == -12 for IBDs. AlphaN have no parent particles.)
- * - Else: true.
- * 
- * @param PDG1 
- * @param PDG2 
- * @param eventType 
- * @return true 
- * @return false 
- */
-bool check_event_type(const int PDG1, const int PDG2, const std::string eventType) {
-    if (eventType == "IBD") {
-        // e+ is always more energetic than neutron
-        if (PDG1 != PDG_positron || PDG2 != PDG_neutron) return false;
-    } else if (eventType == "alphaN") {
-        // Not any 100% rules on this I could see beyond needing to involve some particles
-        if (PDG1 == PDG2) return false;
-        if (PDG1 != PDG_positron && PDG1 != PDG_neutron && PDG1 != PDG_electron && PDG1 != PDG_alpha && PDG1 != PDG_gamma) return false;
-        if (PDG2 != PDG_positron && PDG2 != PDG_neutron && PDG2 != PDG_electron && PDG2 != PDG_alpha && PDG2 != PDG_gamma) return false;
-    }
-    return true;
-}
 
 double EnergyCorrection(const double E, TVector3 pos, const bool is_data, RAT::DU::DetectorStateCorrection& stateCorr, RAT::DU::ReconCalibrator* e_cal) {
     // Data vs MC energy correction (Tony's)
@@ -95,59 +62,52 @@ bool pass_classifier(const double energy, const double class_result, const doubl
 
 /* ~~~~~~~~~~~~ IBD cuts ~~~~~~~~~~~~ */
 
-bool pass_prompt_PDF_cuts_IBD(const double energy) {
-    if (energy < IBD_PDF_MIN_PROMPT_E) return false;  // min energy cut (MeV)
-    if (energy > IBD_PDF_MAX_PROMPT_E) return false;  // max energy cut (MeV)
-
-    return true;
-}
-
-bool pass_prompt_cuts_IBD(const double energy) {
-    if (energy < IBD_MIN_PROMPT_E) return false;  // min energy cut (MeV)
-    if (energy > IBD_MAX_PROMPT_E) return false;  // max energy cut (MeV)
-
-    return true;
-}
-
-bool pass_FV_cut(const TVector3& position) {
+bool pass_prompt_cuts_IBD(const double energy, const TVector3& position) {
+    #ifdef USING_PDF_PADDING
+        if (energy < IBD_PDF_MIN_PROMPT_E) return false;  // min energy cut (MeV)
+        if (energy > IBD_PDF_MAX_PROMPT_E) return false;  // max energy cut (MeV)
+    #else
+        if (energy < IBD_MIN_PROMPT_E) return false;  // min energy cut (MeV)
+        if (energy > IBD_MAX_PROMPT_E) return false;  // max energy cut (MeV)
+    #endif
     if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
+
     return true;
 }
 
-bool pass_delayed_cuts_IBD(const double energy) {
+bool pass_delayed_cuts_IBD(const double energy, const TVector3& position) {
     if (energy < IBD_MIN_DELAYED_E) return false;  // min energy cut (MeV)
     if (energy > IBD_MAX_DELAYED_E) return false;  // max energy cut (MeV)
+    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
 
     return true;
 }
 
-bool pass_dR_cut_IBD(const TVector3& prompt_pos, const TVector3& delayed_pos) {
-    if ((delayed_pos - prompt_pos).Mag() > IBD_MAX_DIST) return false;  // max distance cut (mm)
-
-    return true;
-}
-
-bool pass_dT_cut_IBD(const double delay) {
+bool pass_coincidence_cuts_IBD(const double delay, const TVector3& prompt_pos, const TVector3& delayed_pos) {
     // double delay = (delayed_time - prompt_time) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+    double distance = (delayed_pos - prompt_pos).Mag();
 
     if (delay < IBD_MIN_DELAY) return false;  // min delay cut (ns)
     if (delay > IBD_MAX_DELAY) return false;  // max delay cut (ns)
+    if (distance > IBD_MAX_DIST) return false;  // max distance cut (mm)
 
     return true;
 }
 
 /* ~~~~~~~~~~~~ BiPo cuts ~~~~~~~~~~~~ */
 
-bool pass_prompt_cuts_BiPo(const double energy) {
+bool pass_prompt_cuts_BiPo(const double energy, const TVector3& position) {
     if (energy < BIPO_MIN_PROMPT_E) return false;  // min energy cut (MeV)
     if (energy > BIPO_MAX_PROMPT_E) return false;  // max energy cut (MeV)
+    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
 
     return true;
 }
 
-bool pass_delayed_cuts_BiPo(const double energy) {
+bool pass_delayed_cuts_BiPo(const double energy, const TVector3& position) {
     if (energy < BIPO_MIN_DELAYED_E) return false;  // min energy cut (MeV)
     if (energy > BIPO_MAX_DELAYED_E) return false;  // max energy cut (MeV)
+    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
 
     return true;
 }
