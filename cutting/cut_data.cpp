@@ -183,10 +183,10 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
         // Counting number of prompt IBD events simulated within FV, outside of veto windows
         if (!is_data) {
-            if (EVindex == 0) {
+            if (EVindex <= 0) {
                 ++nEvtType;
-                MC_rPos = sqrt(mcX*mcX + mcY*mcY + mcZ*mcZ);
-                if (MC_rPos < FV_CUT && EVindex == 0) ++nEvtType_insideFV_MC;
+                MC_rPos = sqrt(mcX*mcX + mcY*mcY + (mcZ - AV_offset)*(mcZ - AV_offset));
+                if (MC_rPos < FV_CUT) ++nEvtType_insideFV_MC;
             }
         }
 

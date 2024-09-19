@@ -61,7 +61,6 @@ int main(int argv, char** argc) {
     // Keep binning the same, for consistency, even though cuts may change
     double Ee_min = 0.0;
     double Ee_max = 10.0;
-    unsigned int N_bins_Ee = 200;
     unsigned int Nbins = (unsigned int) ((Ee_max - Ee_min) / bin_width);
 
     double Enu_min = ((neutron_mass_c2 + electron_mass_c2) * (neutron_mass_c2 + electron_mass_c2) - proton_mass_c2 * proton_mass_c2) / (2.0 * proton_mass_c2);  // minimum antinu energy for IBD
@@ -162,7 +161,7 @@ void CreatePDFs_reactorIBD(TTree* EventInfo, TTree* outInfo, std::vector<TH1D*>&
         E_conv->Fill(parentKE1, reconEnergy); // all events go to this hist
 
         // If it passes prompt E cuts, add to flux too (PDFs have broader prompt E cuts)
-        if (reconEnergy > IBD_MIN_PROMPT_E && reconEnergy < IBD_MAX_PROMPT_E) reactor_fluxes.at(core_idx) += 1;
+        if (reconEnergy > IBD_PDF_MIN_PROMPT_E && reconEnergy < IBD_PDF_MAX_PROMPT_E) reactor_fluxes.at(core_idx) += 1;
     }
 
     /* ~~~~~~~ Loop through all reactors/cores and sort into PDFs and vectors ~~~~~~~ */
