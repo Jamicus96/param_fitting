@@ -26,8 +26,7 @@ class Reactor {
         bool isInit;
 
         // Indices pointing to variables
-        unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2, iTotNorm;
-        std::vector<unsigned int> iNorms;
+        unsigned int iDm_21_2, iDm_32_2, iS_12_2, iS_13_2, iNorm;
         unsigned int iEsys;
 
         // Initial oscillation parameters that only depend on
@@ -44,19 +43,16 @@ class Reactor {
         std::vector<double> eigen;  // Antinu propagation Hamiltonian eigenvalues
         std::vector<double> X_mat;  // Values from matrix governing oscillation
 
-        std::vector<double> baselines;  // Baselines [km]
-        std::vector<TH1D*> reactor_hists;  // Un-oscillated reactor IBD spectra
-        unsigned int num_reactors;
         unsigned int hists_Nbins;
         TH2D* E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
+        TH1D *PWR_promptE_hist, *PWR_Enu_hist, *PHWR_Enu_hist;
 
-        // Oscillated reactor hists
-        // Names of reactors whose norms can float independently, last one is always 'WORLD':
-        std::vector<std::string> reactor_names; // example: {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"}  
-        std::vector<unsigned int> reactor_idx;  // Maps each reactor_hists to the idx it should be assigned to in reactor_names
-        std::vector<TH1D*> osc_hists;
-        std::vector<double> unosc_hist_ints;  // Integral un un-oscillated histograms (computed once)
+        double fPWR_promptE_frac;
+        std::vector<double> fPWR_Enu_fracs, fPHWR_Enu_fracs, fPWR_Enu_baselines, fPHWR_Enu_baselines;
+        unsigned int num_PWR, num_PHWR;
+
         bool computed_osc_specs = false;
+        double av_survival_prob;
         unsigned int iMinBin, iMaxBin;
 
         RAT::DB* db;
@@ -82,11 +78,12 @@ class Reactor {
 
         // Initialisers
         void InitReactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
-                const std::vector<unsigned int>& norms_idx, const unsigned int totNorm_idx, const unsigned int Esys_idx,
-                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+                const unsigned int Norm_idx, const unsigned int Esys_idx,
+                const std::vector<TH1D*> PWR_promptE_hists, TH2D* E_conv_hist, const Double_t PWR_promptE_frac, const std::vector<Double_t>& PWR_Enu_fracs,
+                const std::vector<Double_t>& PHWR_Enu_fracs, const std::vector<Double_t>& PWR_Enu_baselines, const std::vector<Double_t>& PHWR_Enu_baselines, RAT::DB* DB) {
                         
-            if (Reactor_names.size() != norms_idx.size()) {
-                std::cout << "[Reactor::InitReactor] ERROR: Reactor_names and Norms should have the same size!" << std::endl;
+            if (PWR_Enu_fracs.size() != PWR_Enu_baselines.size() || PHWR_Enu_fracs.size() != PHWR_Enu_baselines.size()) {
+                std::cout << "[Reactor::InitReactor] ERROR: flux fractions and baselines should have the same size!" << std::endl;
                 exit(1);
             }
 
@@ -101,14 +98,11 @@ class Reactor {
             iS_12_2 = s12_2_idx;
             iS_13_2 = s13_2_idx;
             iEsys = Esys_idx;
-            reactor_names = Reactor_names;
-            iNorms = norms_idx;
-            iTotNorm = totNorm_idx;
+            iNorm = Norm_idx;
             db = DB;
-            iMinBin = 1; iMaxBin = Reactor_hists.at(0)->GetXaxis()->GetNbins();
 
             #ifdef antinuDEBUG
-                std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iTotNorm = " << iTotNorm << std::endl;
+                std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iNorm = " << iNorm << std::endl;
             #endif
 
             // Save hist variables
@@ -117,102 +111,82 @@ class Reactor {
             hists_Nbins = reactor_hists.at(0)->GetXaxis()->GetNbins();
             E_conv = (TH2D*)(E_conv_hist->Clone("Reactor::E_conv"));
             E_conv->Reset("ICES"); E_conv->Add(E_conv_hist);
-            baselines.resize(num_reactors);
+
+            bool bPWR_promptE = false, bPWR_Enu = false, bPHWR_promptE = false, bPHWR_Enu = false;
+            for (unsigned int i = 0; i < Reactor_hists.size(); ++i) {
+                if (Reactor_hists.at(i)->GetName() == "PWR_promptE") {
+                    PWR_promptE_hist = Reactor_hists.at(i)->Clone("Reactor::PWR_promptE");
+                    PWR_promptE_hist->Reset("ICES"); PWR_promptE_hist->Add(Reactor_hists.at(i));
+                    bPWR_promptE = true;
+                } else if (Reactor_hists.at(i)->GetName() == "PWR_Enu") {
+                    PWR_Enu_hist = Reactor_hists.at(i)->Clone("Reactor::PWR_Enu");
+                    PWR_Enu_hist->Reset("ICES"); PWR_Enu_hist->Add(Reactor_hists.at(i));
+                    bPWR_Enu = true;
+                } else if (Reactor_hists.at(i)->GetName() == "PHWR_Enu") {
+                    PHWR_Enu_hist = Reactor_hists.at(i)->Clone("Reactor::PHWR_Enu");
+                    PHWR_Enu_hist->Reset("ICES"); PHWR_Enu_hist->Add(Reactor_hists.at(i));
+                    bPHWR_Enu = true;
+                }
+            }
+            if (!(bPWR_promptE && bPWR_Enu && bPHWR_promptE && bPHWR_Enu)) {
+                std::cout << "[Reactor::InitReactor]: ERROR: PDF missing!" std::endl;
+                exit(1);
+            }
+
+            SetBinLims(1, PWR_promptE_hist->GetXaxis()->GetNbins());
+
+            fPWR_promptE_frac = PWR_promptE_frac;
+            num_PWR = PWR_Enu_fracs.size();
+            num_PHWR = PHWR_Enu_fracs.size();
+            for (unsigned int = 0; i < num_PWR; ++i) {
+                fPWR_Enu_fracs.push_back(PWR_Enu_fracs.at(i));
+                fPWR_Enu_baselines.push_back(PWR_Enu_baselines.at(i));
+            }
+            for (unsigned int = 0; i < num_PHWR; ++i) {
+                fPHWR_Enu_fracs.push_back(PHWR_Enu_fracs.at(i));
+                fPHWR_Enu_baselines.push_back(PHWR_Enu_baselines.at(i));
+            }
 
             // Set up empty vectors
             eigen.resize(3);
             X_mat.resize(3);
 
-            // Create histogram to sum oscillated reactor events, based off reactor_names
-            for (unsigned int i = 0; i < reactor_names.size(); ++i) {
-                osc_hists.push_back((TH1D*)(reactor_hists.at(0)->Clone(("Reactor::osc_hists::" + reactor_names.at(i)).c_str())));
-                osc_hists.at(i)->SetTitle((reactor_names.at(i) + " spectrum").c_str());
-            }
-            unosc_hist_ints.resize(reactor_names.size());
-            
-            // Assign each element in reactor_hists to the appropriate element in osc_hists/reactor_names
-            std::string origin_reactor;
-            bool reactor_not_found;
-            for (unsigned int i = 0; i < num_reactors; ++i) {
-                origin_reactor = SplitString(reactor_hists.at(i)->GetName())[0];
-
-                // See if reactor is in reactor_names (except last element 'WORLD')
-                reactor_not_found = true;
-                for (unsigned int j = 0; j < (reactor_names.size()-1); ++j) {
-                    if (origin_reactor == reactor_names.at(j)) {
-                        reactor_idx.push_back(j);
-                        reactor_not_found = false;
-                        break;
-                    }
-                }
-                // Reactor was not in the list, so assign it to 'WORLD' (last element in reactor_names)
-                if (reactor_not_found) reactor_idx.push_back(reactor_names.size() - 1);
-            }
-
-            // Compute baselines
-            compute_baselines();
-
-            // Compute unoscillated histogram integrals for the different sources in Reactor_names
-            compute_unosc_integrals();
-
             model_noEsys = (TH1D*)(reactor_hists.at(0)->Clone("Reactor::model_noEsys"));
             model_Esys = (TH1D*)(reactor_hists.at(0)->Clone("Reactor::model_Esys"));
 
             #ifdef antinuDEBUG
-                std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iTotNorm = " << iTotNorm << std::endl;
+                std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iNorm = " << iNorm << std::endl;
             #endif
 
             isInit = true;
         }
         
         void InitReactor(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
-                const std::vector<std::string>& norms_names, const std::string totNorm_name, const std::string Esys_name,
-                const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist, const std::vector<std::string>& Reactor_names, RAT::DB* DB) {
+                const std::string Norm_name, const std::string Esys_name, const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist,
+                const Double_t PWR_promptE_frac, const std::vector<Double_t>& PWR_Enu_fracs, const std::vector<Double_t>& PHWR_Enu_fracs,
+                const std::vector<Double_t>& PWR_Enu_baselines, const std::vector<Double_t>& PHWR_Enu_baselines, RAT::DB* DB) {
 
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
 
-            std::vector<unsigned int> norms_idx;
-            for (unsigned int i = 0; i < norms_names.size(); ++i) norms_idx.push_back(Vars->findIdx(norms_names.at(i)));
             #ifdef antinuDEBUG
                 std::cout << "[Reactor::InitReactor]: Vars->GetNumVars() = " << Vars->GetNumVars() << std::endl;
             #endif
 
-            InitReactor(Vars->findIdx(Dm21_2_name), Vars->findIdx(Dm32_2_name), Vars->findIdx(s12_2_name), Vars->findIdx(s13_2_name), norms_idx,
-                    Vars->findIdx(totNorm_name), Esysts->findIdx(Esys_name), Reactor_hists, E_conv_hist, Reactor_names, DB);
+            InitReactor(Vars->findIdx(Dm21_2_name), Vars->findIdx(Dm32_2_name), Vars->findIdx(s12_2_name), Vars->findIdx(s13_2_name),
+                    Vars->findIdx(Norm_name), Esysts->findIdx(Esys_name), Reactor_hists, E_conv_hist, PWR_promptE_frac, PWR_Enu_fracs,
+                    PHWR_Enu_fracs, PWR_Enu_baselines, PHWR_Enu_baselines, DB);
         };
 
-        // Member function
-        void compute_unosc_integrals() {
-            for (unsigned int i = 0; i < unosc_hist_ints.size(); ++i) {
-                unosc_hist_ints.at(i) = 0;
-            }
-            for (unsigned int i = 0; i < num_reactors; ++i) {
-                unosc_hist_ints.at(reactor_idx.at(i)) += reactor_hists.at(i)->Integral(iMinBin, iMaxBin);
-            }
-            #ifdef antinuDEBUG
-                for (unsigned int i = 0; i < unosc_hist_ints.size(); ++i) {
-                    std::cout << "[Reactor::compute_unosc_integrals]: unosc_hist_ints.at(i) = " << unosc_hist_ints.at(i) << std::endl;
-                }
-            #endif
-        }
 
-        void compute_osc_specs() {
+        void compute_spec() {
             // Compute oscillation constants
             compute_oscillation_constants();
 
-            // Reset total reactor histograms (i.e. empty them)
-            for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-                #ifdef antinuDEBUG
-                    std::cout << "[Reactor::compute_osc_specs]: resetting osc_hists.at(" << i << ")" << std::endl;
-                #endif
-                osc_hists.at(i)->Reset("ICES");
-            }
+            model_noEsys->Reset("ICES");  // empty it before re-computing it
 
             // Assume all the histograms have the same E binning
-            double Ee, Enu;
-            double tot_weight;
-            double weight;
+            double Enu, tot_weight, weight;
             std::string origin_reactor;
             #ifdef antinuDEBUG
                 std::cout << "[Reactor::compute_osc_specs]: hists_Nbins = " << hists_Nbins << std::endl;
@@ -220,38 +194,61 @@ class Reactor {
                 std::cout << "[Reactor::compute_osc_specs]: E_conv->GetYaxis()->GetNbins() = " << E_conv->GetYaxis()->GetNbins() << std::endl;
             #endif
 
-            // Loop over event energy bins (positron energy)
-            for (unsigned int iBin = 1; iBin <= hists_Nbins; ++iBin) {
-                Ee = reactor_hists.at(0)->GetXaxis()->GetBinCenter(iBin);
+            // Add constribution from distant reactors (average scaling from oscillation)
+            model_noEsys->Add(PWR_promptE_hist, av_survival_prob * fPWR_promptE_frac);
 
-                // Integrate survival prob over E_nu, weigthed by E_nu(E_e) distribution -> weigthed average survival prob
-                tot_weight = 0.0;
-                for (unsigned int k = 1; k <= E_conv->GetYaxis()->GetNbins(); ++k) {
-                    weight = E_conv->GetBinContent(iBin, k);
+            // Loop over event energy bins (prompt energy)
+            for (unsigned int iBin = 1; iBin <= hists_Nbins; ++iBin) {
+                // Loop over corresponding E_nu bins to apply oscillation and energy conversion
+                tot_weight = 0;
+                for (unsigned int iEnu = 1; iEnu <= E_conv->GetXaxis()->GetNbins(); ++k) {
+                    weight = E_conv->GetBinContent(iEnu, iBin);
 
                     // Most of the histogram is empty, so only bother if > 0
                     if (weight > 0.0) {
                         // Compute associated antinu energy, and re-compute oscillation parameters
-                        Enu = E_conv->GetYaxis()->GetBinCenter(k);
+                        Enu = E_conv->GetXaxis()->GetBinCenter(iEnu);
                         re_compute_consts(Enu);
 
-                        // Loop over all PDFs
-                        for (unsigned int iReac = 0; iReac < num_reactors; ++iReac) {
+                        // Loop over all PWRs
+                        double PWR_weight = 0;
+                        for (unsigned int iPWR = 0; iPWR < num_PWR; ++iPWR) {
                             // Add value of bin from reactor core to appropriate hist, scaled by survival probability
-                            osc_hists.at(reactor_idx.at(iReac))->AddBinContent(iBin, weight * survival_prob(Enu, baselines.at(iReac)) * reactor_hists.at(iReac)->GetBinContent(iBin));
+                            PWR_weight += survival_prob(Enu, fPWR_Enu_baselines.at(iPWR)) * fPWR_Enu_fracs.at(iPWR);
                         }
-                        tot_weight += weight;
+                        PWR_weight *= PWR_Enu_hist->GetBinContent(iEnu);
+
+                        // Loop over all PHWRs
+                        double PHWR_weight = 0;
+                        for (unsigned int iPHWR = 0; iPHWR < num_PHWR; ++iPHWR) {
+                            // Add value of bin from reactor core to appropriate hist, scaled by survival probability
+                            PHWR_weight += survival_prob(Enu, fPHWR_Enu_baselines.at(iPHWR)) * fPHWR_Enu_fracs.at(iPHWR);
+                        }
+                        PHWR_weight *= PHWR_Enu_hist->GetBinContent(iEnu);
+
+                        tot_weight += weight * (PWR_weight + PHWR_weight);
                     }
                 }
+
+                // Add total oscillated weight to the bin, multiplied by the total normalisation
+                model_noEsys->AddBinContent(iBin, tot_weight * Vars->val(iNorm));
+                
                 #ifdef SUPER_DEBUG
-                    std::cout << "[Reactor::compute_osc_specs]: iBin = " << iBin << ", Ee = " << Ee << ", tot_weight = " << tot_weight << std::endl;
+                    double prompt_E = model_noEsys->GetXaxis()->GetBinCenter(iBin);
+                    std::cout << "[Reactor::compute_osc_specs]: iBin = " << iBin << ", prompt_E = " << prompt_E << ", tot_weight = " << tot_weight << std::endl;
                 #endif
             }
 
+            // Apply energy systematics
+            Esys* Esysts = Esys::GetInstance();
+            model_Esys->Reset("ICES");  // empty it before re-computing it
+
+            Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
+
             #ifdef antinuDEBUG
-                for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-                    std::cout << "[Reactor::compute_osc_specs]: osc_hists.at(i)->Integral() = " << osc_hists.at(i)->Integral() << std::endl;
-                }
+                std::cout << "[Reactor::compute_spec]: Vars->val(iNorm) = " << Vars->val(iNorm) << std::endl;
+                std::cout << "[Reactor::compute_spec]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
+                std::cout << "[Reactor::compute_spec]: model_Esys->Integral(iMinBin, iMaxBin) = " << model_Esys->Integral(iMinBin, iMaxBin) << std::endl;
             #endif
         }
 
@@ -332,22 +329,10 @@ class Reactor {
             return prob;
         }
 
-        void compute_baselines() {
-
-            RAT::DBLinkPtr linkdb;
-            std::vector<std::string> originReactorVect;
-            std::vector<Double_t> fLatitude;
-            std::vector<Double_t> fLongitute;
-            std::vector<Double_t> fAltitude;
-            for (unsigned int n = 0; n < num_reactors; ++n) {
-                originReactorVect = SplitString(reactor_hists.at(n)->GetName());
-                linkdb = db->GetLink("REACTOR",originReactorVect[0]);
-                fLatitude  = linkdb->GetDArray("latitude");
-                fLongitute = linkdb->GetDArray("longitude");
-                fAltitude = linkdb->GetDArray("altitude");
-
-                baselines.at(n) = GetReactorDistanceLLA(fLongitute[std::stoi(originReactorVect[1])], fLatitude[std::stoi(originReactorVect[1])], fAltitude[std::stoi(originReactorVect[1])]);
-            }
+        // Geo-nu survival probability, used for most distant reactors: averaged over baseline -> No E-depence, only depends on mixing angles.
+        void geoNu_survival_prob() {
+            FitVars* Vars = FitVars::GetInstance();
+            av_survival_prob = Vars->val(iS_13_2)*Vars->val(iS_13_2) + (1. - Vars->val(iS_13_2))*(1. - Vars->val(iS_13_2)) * (1. - 2. * Vars->val(iS_12_2) * (1. - Vars->val(iS_12_2)));
         }
 
         void hold_osc_params_const(const bool isTrue) {
@@ -365,59 +350,13 @@ class Reactor {
                 #ifdef antinuDEBUG
                     std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
                 #endif
+                geoNu_survival_prob();
                 compute_osc_specs();
                 computed_osc_specs = true;
             } else {
                 std::cout << "[Reactor] WARNING: Oscillation constants not held constant for fitting, since they were not set to constants before hand." << std::endl;
             }
         }
-
-        void compute_spec() {
-            FitVars* Vars = FitVars::GetInstance();
-            Esys* Esysts = Esys::GetInstance();
-            model_noEsys->Reset("ICES");  // empty it before re-computing it
-            model_Esys->Reset("ICES");  // empty it before re-computing it
-
-            // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
-            if (!(Vars->IsConstant(iDm_21_2) && Vars->IsConstant(iDm_32_2) && Vars->IsConstant(iS_12_2) && Vars->IsConstant(iS_13_2) && computed_osc_specs)) {
-                #ifdef SUPER_DEBUG
-                    std::cout << "[Reactor::compute_spec]: computing oscillation specs" << std::endl;
-                #endif
-                compute_osc_specs();
-            }
-            
-            for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-                model_noEsys->Add(osc_hists.at(i), Vars->val(iTotNorm) * Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
-                #ifdef SUPER_DEBUG
-                    std::cout << "[Reactor::compute_spec]: Adding oscillation spectrum from " << osc_hists.at(i)->GetName() << std::endl;
-                    std::cout << "[Reactor::compute_spec]: osc_hists.at(i)->Integral(iMinBin, iMaxBin) = " << osc_hists.at(i)->Integral(iMinBin, iMaxBin) << std::endl;
-                    std::cout << "[Reactor::compute_spec]: Vars->val(iTotNorm) = " << Vars->val(iTotNorm) << ", Vars->val(iNorms.at(i)) = " << Vars->val(iNorms.at(i)) << ", unosc_hist_ints.at(i) = " << unosc_hist_ints.at(i) << std::endl;
-                    std::cout << "[Reactor::compute_spec]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
-                #endif
-            }
-            // Apply energy systematics
-            Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
-        }
-
-        std::vector<std::string>& GetReactorNames() {return reactor_names;}
-
-        void Spectra(std::vector<TH1D*>& hists) {
-            FitVars* Vars = FitVars::GetInstance();
-            Esys* Esysts = Esys::GetInstance();
-            TH1D* temp_hist = (TH1D*)(osc_hists.at(0)->Clone("temp_hist"));
-
-            for (unsigned int i = 0; i < osc_hists.size(); ++i) {
-                #ifdef SUPER_DEBUG
-                    std::cout << "[Reactor::GetOscReactorHists]: filling hists.at(" << i << ")" << std::endl;
-                #endif
-                temp_hist->Reset("ICES");
-                temp_hist->Add(osc_hists.at(i), Vars->val(iTotNorm) * Vars->val(iNorms.at(i)) / unosc_hist_ints.at(i));
-                hists.push_back((TH1D*)(osc_hists.at(i)->Clone(("model_" + reactor_names.at(i)).c_str())));
-                hists.at(hists.size()-1)->Reset("ICES");
-                Esysts->apply_systematics(iEsys, temp_hist, hists.at(hists.size()-1));
-            }
-        }
-
     
         TH1D* GetModelNoEsys() {return model_noEsys;}
         TH1D* GetModelEsys() {return model_Esys;}
@@ -427,7 +366,19 @@ class Reactor {
             iMinBin = MinBin;
             iMaxBin = MaxBin;
 
-            compute_unosc_integrals();
+            // re-normalise 1D PDFs
+            PWR_promptE_hist->Scale(1. / PWR_promptE_hist->Integral(iMinBin, iMaxBin))
+            PWR_Enu_hist->Scale(1. / PWR_Enu_hist->Integral(iMinBin, iMaxBin))
+            PHWR_Enu_hist->Scale(1. / PHWR_Enu_hist->Integral(iMinBin, iMaxBin))
+
+            // re-normalise 2D PDF
+            double integ;
+            for (unsigned int iEnu = 1; iEnu <= E_conv->GetXaxis()->GetNbins(); ++iEnu) {
+                integ = E_conv->Integral(iEnu, iEnu, iMinBin, iMaxBin);
+                for (unsigned int iBin = 0; iBin <= E_conv->GetYaxis()->GetNbins(); ++iBin) {
+                    E_conv->SetBinContent(iEnu, iBin, E_conv->GetBinContent(iEnu, iBin) / integ);
+                }
+            }
         }
 };
 
@@ -445,82 +396,6 @@ Reactor* Reactor::GetInstance() {
     }
     return ReactorInstance_;
 }
-
-
-/**
- * @brief Split reactor name strings for getting baselines
- * 
- * @param str 
- * @return std::vector<std::string> 
- */
-std::vector<std::string> SplitString(std::string str) {
-    std::istringstream buf(str);
-    std::istream_iterator<std::string> beg(buf), end;
-    std::vector<std::string> tokens(beg, end); //each word of string now in vector
-    std::vector<std::string> info;
-    std::string dummy = "";
-
-    for(int i=0;i<tokens.size();i++){ //combine back to reactor name, core number
-        if(i==0){
-            dummy = tokens.at(i);
-            if(i!=tokens.size()-2){
-                dummy += " ";
-            }
-        }
-        else if(i!=tokens.size()-1){
-            dummy += tokens.at(i);
-            if(i!=tokens.size()-2){
-                dummy += " ";
-            }
-        }
-        else{
-            info.push_back(dummy);
-            info.push_back(tokens.at(i));
-        }
-    }
-
-    return info;
-}
-
-/**
- * @brief Coordinate conversion time, to get baselines
- * 
- * @param longitude 
- * @param latitude 
- * @param altitude 
- * @return TVector3 
- */
-TVector3 LLAtoECEF(const double& longitude, const double& latitude, const double& altitude) {
-  // reference http://www.mathworks.co.uk/help/aeroblks/llatoecefposition.html
-  double toRad = TMath::Pi()/180.;
-  double Earthradius = 6378137.0; //Radius of the Earth (in meters)
-  double f = 1./298.257223563; //Flattening factor WGS84 Model
-  double L, rs, x, y, z;
-  L = atan( pow((1. - f),2)*tan(latitude*toRad))*180./TMath::Pi();
-  rs = sqrt( pow(Earthradius,2)/(1. + (1./pow((1. - f),2) - 1.)*pow(sin(L*toRad),2)));
-  x = (rs*cos(L*toRad)*cos(longitude*toRad) + altitude*cos(latitude*toRad)*cos(longitude*toRad))/1000; // in km
-  y = (rs*cos(L*toRad)*sin(longitude*toRad) + altitude*cos(latitude*toRad)*sin(longitude*toRad))/1000; // in km
-  z = (rs*sin(L*toRad) + altitude*sin(latitude*toRad))/1000; // in km
-
-  TVector3 ECEF = TVector3(x,y,z);
-
-  return ECEF;
-}
-
-/**
- * @brief Compute reactor baseline [km]
- * 
- * @param longitude 
- * @param latitude 
- * @param altitude 
- * @return double 
- */
-double GetReactorDistanceLLA(const double& longitude, const double& latitude, const double &altitude) {
-    const TVector3 SNO_ECEF_coord_ = TVector3(672.87,-4347.18,4600.51);
-    double dist = (LLAtoECEF(longitude, latitude, altitude) - SNO_ECEF_coord_).Mag();
-  return dist;
-}
-
 
 
 //end header guard

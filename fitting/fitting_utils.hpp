@@ -34,22 +34,19 @@
 
 void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin);
-void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin);
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, std::vector<TH1D*>& Sideband_hists, TH2D& E_conv);
-std::vector<std::string> SplitString(std::string str);
+void read_hists_from_file(TFile* fin, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv);
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
 double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
 // double N_IBD = 52.2 * 0.96;     // Classifier cut
-// double IBD_err_indiv = 0.032;   // fractional error in N_IBD for each individual reactor PDF
 double IBD_err_indiv = 0;
-double IBD_err_tot = 0.03;      // fractional error in N_IBD for total reactor IBDs
+double IBD_err = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
 double N_alphaN = 18.2;         // Total number of expected alpha-n
 // double N_alphaN = 18.2 * 0.22;  // Classifier cut
-double alphaN_err_PR = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR)
-double alphaN_err_C12 = 0.3;     // fractional error in N_alphaN for ground state neutrons (C12)
+double alphaN_err_PR = 0;     // fractional error in N_alphaN for PR, on top of GS uncertainty
+double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR & 12C)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
 double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
@@ -97,13 +94,37 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
 void create_fitter(std::string PDFs_address, const double Dm21_2, const double Dm32_2, const double s_12_2, const double s_13_2, RAT::DB* db, const bool useAzimovData) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
+
+    TFile *fin = TFile::Open(file_address.c_str());
+    if (!fin->IsOpen()) {
+        std::cout << "Cannot open input file." << std::endl;
+        exit(1);
+    }
+    // Check for errors
+    TList* list = fin->GetListOfKeys() ;
+    if (!list) {std::cout << "No keys found in file\n" << std::endl; exit(1);}
+
+    // Get hists
     std::vector<TH1D*> reactor_hists;
     std::vector<TH1D*> alphaN_hists;
     std::vector<TH1D*> geoNu_hists;
     std::vector<TH1D*> Accidental_hists;
-    std::vector<TH1D*> Sideband_hists;
     TH2D E_conv;
-    read_hists_from_file(PDFs_address, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, Sideband_hists, E_conv);
+
+    read_hists_from_file(fin, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, E_conv);
+
+    // Get other reactor info
+    TTree *inTree = (TTree*) fin->Get("reactor_vals");
+
+    Double_t PWR_promptE_frac;
+    std::vector<Double_t> PWR_Enu_fracs, PWR_Enu_baselines;
+    std::vector<Double_t> PHWR_Enu_fracs, PHWR_Enu_baselines;
+
+    inTree->SetBranchAddress("PWR_promptE_frac", &PWR_promptE_frac);
+    inTree->SetBranchAddress("PWR_Enu_fracs", &PWR_Enu_fracs);
+    inTree->SetBranchAddress("PWR_Enu_baselines", &PWR_Enu_baselines);
+    inTree->SetBranchAddress("PHWR_Enu_fracs", &PHWR_Enu_fracs);
+    inTree->SetBranchAddress("PHWR_Enu_baselines", &PHWR_Enu_baselines);
 
     // Find data bin limits
     double bin_centre;
@@ -190,20 +211,19 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<double> alphaN_hist_fracs;
     std::vector<unsigned int> alphaN_hist_idx;
     compute_hist_fracs(alphaN_hists, alphaN_names, alphaN_hist_fracs, alphaN_hist_idx, min_bin, max_bin);
-    double PR_frac = alphaN_hist_fracs.at(0);
-    double C12_frac = alphaN_hist_fracs.at(1);
+    double GS_frac = alphaN_hist_fracs.at(0) + alphaN_hist_fracs.at(1);
     double ES_frac = alphaN_hist_fracs.at(2);
 
     // Create alpha-n norm variables (allow to vary by ±3 sigma), and model
-    double PR_Norm_min = (1.0 - 3.0 * alphaN_err_PR) * N_alphaN * PR_frac;
-    if (PR_Norm_min < 0.0) PR_Norm_min = 0.0;
-    double C12_Norm_min = (1.0 - 3.0 * alphaN_err_C12) * N_alphaN * C12_frac;
-    if (C12_Norm_min < 0.0) C12_Norm_min = 0.0;
+    double PR_frac_min = (1.0 - 3.0 * alphaN_err_PR);
+    if (PR_frac_min < 0.0) PR_frac_min = 0.0;
+    double GS_Norm_min = (1.0 - 3.0 * alphaN_err_GS) * N_alphaN * GS_frac;
+    if (GS_Norm_min < 0.0) GS_Norm_min = 0.0;
     double ES_Norm_min = (1.0 - 3.0 * alphaN_err_ES) * N_alphaN * ES_frac;
     if (ES_Norm_min < 0.0) ES_Norm_min = 0.0;
 
-    Vars->AddVar("alphaNNorm_PR", N_alphaN * PR_frac, alphaN_err_PR * N_alphaN * PR_frac, PR_Norm_min, (1.0 + 3.0 * alphaN_err_PR) * N_alphaN * PR_frac);
-    Vars->AddVar("alphaNNorm_C12", N_alphaN * C12_frac, alphaN_err_C12 * N_alphaN * C12_frac, C12_Norm_min, (1.0 + 3.0 * alphaN_err_C12) * N_alphaN * C12_frac);
+    Vars->AddVar("alphaNNorm_PR", 1.0, alphaN_err_PR, PR_frac_min, 1.0 + 3.0 * alphaN_err_PR);
+    Vars->AddVar("alphaNNorm_GS", N_alphaN * GS_frac, alphaN_err_GS * N_alphaN * GS_frac, GS_Norm_min, (1.0 + 3.0 * alphaN_err_GS) * N_alphaN * GS_frac);
     Vars->AddVar("alphaNNorm_ES", N_alphaN * ES_frac, alphaN_err_ES * N_alphaN * ES_frac, ES_Norm_min, (1.0 + 3.0 * alphaN_err_ES) * N_alphaN * ES_frac);
 
     for (unsigned int i = 0; i < 3; ++i) {
@@ -212,34 +232,22 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     }
 
     // Add alpha-n model, linking it to approproate variables and E-systematics defined above
-    alphaNMod->InitAlphaN("alphaNNorm_PR", "alphaNNorm_C12", "alphaNNorm_ES", "EsysBeta", "EsysProton", alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
+    alphaNMod->InitAlphaN("alphaNNorm_PR", "alphaNNorm_GS", "alphaNNorm_ES", "EsysBeta", "EsysProton", alphaN_hists.at(alphaN_hist_idx.at(0)), alphaN_hists.at(alphaN_hist_idx.at(1)), alphaN_hists.at(alphaN_hist_idx.at(2)));
 
     /* ~~~~~~~~ REACTOR-NU ~~~~~~~~ */
 
     // Create reactor norm variables (allow to vary by ±3 sigma), and model
     std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};
 
-    std::vector<double> reac_hist_fracs;
-    compute_reac_unosc_fracs(reactor_hists, reactor_names, reac_hist_fracs, min_bin, max_bin);
-    std::vector<std::string> ReactorNorms_VarNames;
-    double reacNorm;
-    double reacLowLim;
-    for (unsigned int i = 0; i < reac_hist_fracs.size(); ++i) {
-        // Independent scaling factor of reactor PDFs (with norms = number of expected events)
-        reacNorm = reac_hist_fracs.at(i) * N_IBD;
-        reacLowLim = (1.0 - 3.0 * IBD_err_indiv) * reacNorm;
-        if (reacLowLim < 0.0) reacLowLim = 0.0;
-        Vars->AddVar("reactorNorm_" + reactor_names.at(i), reacNorm, IBD_err_indiv * reacNorm, reacLowLim, (1.0 + 3.0 * IBD_err_indiv) * reacNorm, true, false);
-        ReactorNorms_VarNames.push_back("reactorNorm_" + reactor_names.at(i));
-    }
     // Extra overall normalisation (= 1), to add shared unceetainties 
-    reacLowLim = 1.0 - 3.0 * IBD_err_tot;
+    reacLowLim = (1.0 - 3.0 * IBD_err) * N_IBD;
     if (reacLowLim < 0.0) reacLowLim = 0.0;
-    Vars->AddVar("reactorNorm_tot", 1.0, IBD_err_tot, reacLowLim, 1.0 + 3.0 * IBD_err_tot);
+    Vars->AddVar("reactorNorm", N_IBD, IBD_err * N_IBD, reacLowLim, (1.0 + 3.0 * IBD_err) * N_IBD);
 
     // Add reactor model, linking it to approproate variables and E-systematics defined above
-    ReactorMod->InitReactor("deltamsqr21", "deltamsqr32", "sinsqrtheta12", "sinsqrtheta13", ReactorNorms_VarNames,
-                               "reactorNorm_tot", "EsysBeta", reactor_hists, &E_conv, reactor_names, db);
+    ReactorMod->InitReactor("deltamsqr21", "deltamsqr32", "sinsqrtheta12", "sinsqrtheta13",
+                            "reactorNorm", "EsysBeta", reactor_hists, &E_conv, PWR_promptE_frac,
+                            PWR_Enu_fracs, PHWR_Enu_fracs, PWR_Enu_baselines, PHWR_Enu_baselines, db);
     ReactorMod->hold_osc_params_const(true); // This will also compute oscillated reactor specs
 
 
@@ -249,15 +257,6 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     Esysts->AddEsys_trivial("trivial");  // no energy systematics either, for the same reason
     // Add accidentals model, linking it to approproate variables and E-systematics defined above
     BasicMods->AddModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");
-
-    /* ~~~~~~~~ SIDEBAND ~~~~~~~~ */
-    
-    // Create sideband norm variable (allow to vary by ±3 sigma), and model
-    double sidebandNorm_min = (1.0 - 3.0 * sideband_err) * N_side;
-    if (sidebandNorm_min < 0) sidebandNorm_min = 0;
-    Vars->AddVar("sidebandsNorm", N_side, sideband_err * N_side, sidebandNorm_min, (1.0 + 3.0 * sideband_err) * N_side); // no normalisation error, since it is data driven
-    // Add sideband model, linking it to approproate variables and E-systematics defined above
-    BasicMods->AddModel("sidebandsNorm", "EsysBeta", Sideband_hists.at(0), "Sideband");
 
     /* ~~~~~~~~ INITIALISE FITTER ~~~~~~~~ */
 
@@ -348,40 +347,6 @@ void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::
     }
 }
 
-void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std::vector<std::string>& Reactor_names, std::vector<double>& hist_fracs, const unsigned int min_bin, const unsigned int max_bin) {
-
-    double tot_int;
-    for (unsigned int i = 0; i < Reactor_names.size(); ++i) {
-        hist_fracs.push_back(0.0);
-    }
-
-    std::string origin_reactor;
-    bool reactor_not_found;
-    double integral;
-    for (unsigned int i = 0; i < Reactor_hists.size(); ++i) {
-        origin_reactor = SplitString(Reactor_hists.at(i)->GetName())[0];
-        integral = Reactor_hists.at(i)->Integral(min_bin, max_bin);
-        // See if reactor is in Reactor_names (except last element 'WORLD')
-        reactor_not_found = true;
-        for (unsigned int j = 0; j < (Reactor_names.size()-1); ++j) {
-            if (origin_reactor == Reactor_names.at(j)) {
-                hist_fracs.at(j) += integral;
-                reactor_not_found = false;
-                break;
-            }
-        }
-        // Reactor was not in the list, so assign it to 'WORLD' (last element in Reactor_names)
-        if (reactor_not_found) hist_fracs.at(hist_fracs.size()-1) += integral;
-
-        tot_int += integral;
-    }
-
-    // Convert integrals to fractions of total integral
-    for (unsigned int i = 0; i < Reactor_names.size(); ++i) {
-        hist_fracs.at(i) /= tot_int;
-    }
-}
-
 /**
  * @brief Lists all histograms from root file into vectors of reactor, alphaN, geoNu and E_conv hists
  * 
@@ -391,68 +356,24 @@ void compute_reac_unosc_fracs(const std::vector<TH1D*>& Reactor_hists, const std
  * @param geoNu_hists
  * @param E_conv
  */
-void read_hists_from_file(std::string file_address, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, std::vector<TH1D*>& Sideband_hists, TH2D& E_conv) {
+void read_hists_from_file(TFile* fin, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv) {
 
-    TFile *fin = TFile::Open(file_address.c_str());
-    if (!fin->IsOpen()) {
-        std::cout << "Cannot open input file." << std::endl;
-        exit(1);
-    }
-    
-    // Iterate through list of objects in root file
-    TList* list = fin->GetListOfKeys() ;
-    if (!list) {std::cout << "No keys found in file\n" << std::endl; exit(1);}
-    TIter next(list);
-    TObject* obj;
-    TKey* key;
-    std::string name;
+    // Get 1-D hists
+    geoNu_hists.push_back((TH1D*)fin->Get("geoNu_Th"));
+    geoNu_hists.push_back((TH1D*)fin->Get("geoNu_U"));
 
-    // Go through list of histograms and add them to temp list if they are included in name list
-    while((key = (TKey*)next())){
-        obj = key->ReadObj() ;
-        if (obj->InheritsFrom(TH1::Class())) {
-            // Check which histogram in file matches name
-            name = obj->GetName();
-            if (name == "geoNu_Th" || name == "geoNu_U") {
-                geoNu_hists.push_back((TH1D*)obj);
-            } else if (name == "alphaN_PR" || name == "alphaN_C12" || name == "alphaN_O16") {
-                alphaN_hists.push_back((TH1D*)obj);
-            } else if (name == "Accidental") {
-                Accidental_hists.push_back((TH1D*)obj);
-            } else if (name == "sideband") {
-                Sideband_hists.push_back((TH1D*)obj);
-            } else if (name == "E_conversion") {
-                continue;
-            } else {
-                reactor_hists.push_back((TH1D*)obj);
-            }
-        }
-    }
+    alphaN_hists.push_back((TH1D*)fin->Get("alphaN_PR"));
+    alphaN_hists.push_back((TH1D*)fin->Get("alphaN_C12"));
+    alphaN_hists.push_back((TH1D*)fin->Get("alphaN_O16"));
+
+    Accidental_hists.push_back((TH1D*)fin->Get("Accidental"));
+
+    reactor_hists.push_back((TH1D*)fin->Get("PWR_promptE"));
+    reactor_hists.push_back((TH1D*)fin->Get("PWR_Enu"));
+    reactor_hists.push_back((TH1D*)fin->Get("PHWR_Enu"));
 
     // Get 2D hist
     E_conv = *(TH2D*)(fin->Get("E_conversion"));
-
-    // Error handling
-    if (reactor_hists.size() == 0) {
-        std::cout << "ERROR: No reactor IBD histograms!" << std::endl;
-        exit(1);
-    }
-    if (alphaN_hists.size() != 3) {
-        std::cout << "ERROR: Not enough alpha-n histograms! Only " << alphaN_hists.size() << std::endl;
-        exit(1);
-    }
-    if (geoNu_hists.size() != 2) {
-        std::cout << "ERROR: No geo-nu histograms! Only " << geoNu_hists.size() << std::endl;
-        exit(1);
-    }
-    if (Accidental_hists.size() != 1) {
-        std::cout << "ERROR: No accidentals histogram!" << std::endl;
-        exit(1);
-    }
-    if (Sideband_hists.size() != 1) {
-        std::cout << "ERROR: No sideband histogram!" << std::endl;
-        exit(1);
-    }
 }
 
 void setup_param_hists(TH2D* minllHist, std::vector<TH2D*>& par_hists) {

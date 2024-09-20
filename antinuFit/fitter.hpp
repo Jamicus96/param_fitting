@@ -427,8 +427,8 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
         // Add to total overall specrtrum
         total_hist->Add(hists.at(hists.size()-1));
 
-        // Add constituent spectra
-        ReactorMod->Spectra(hists);
+        // Add constituent spectra (none here)
+        // ReactorMod->Spectra(hists);  
     }
 
     if (alphaNMod->IsInit()) {
