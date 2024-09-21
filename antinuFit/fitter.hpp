@@ -518,10 +518,6 @@ void Fitter::SetData(TTree* Data) {
         data_E.push_back(reconEnergy);
     }
 
-    // Temporary addition:
-    data_E.push_back(1.6603);
-    data_E.push_back(1.3997);
-
     #ifdef antinuDEBUG
         std::cout << "[Fitter::SetData]: data_E = [" << data_E.at(0);
         for (unsigned int i = 1; i < data_E.size(); ++i) {
