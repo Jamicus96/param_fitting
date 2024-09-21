@@ -22,7 +22,7 @@ class alphaN {
         TH1D* hist_ProtontR;
         TH1D* hist_C12Scatter;
         TH1D* hist_O16Deex;
-        double Integral_hist_GS, Integral_hist_ES;
+        double Integral_GS, Integral_ES;
         TH1D* model_Proton;
         unsigned int iMinBin, iMaxBin;
     
@@ -91,16 +91,16 @@ class alphaN {
 
                 std::cout << "[alphaN::compute_spec]: Integral_hist_PR = " << Integral_hist_PR << std::endl;
                 std::cout << "[alphaN::compute_spec]: Integral_hist_C12 = " << Integral_hist_C12 << std::endl;
-                std::cout << "[alphaN::compute_spec]: Integral_hist_ES = " << Integral_hist_ES << std::endl;
+                std::cout << "[alphaN::compute_spec]: Integral_ES = " << Integral_ES << std::endl;
             #endif
 
             // Add proton recoil to spectrum, and apply extra proton systematics separately (NormPR is a fractional scaling)
-            model_Proton->Add(hist_ProtontR, Vars->val(iNormPR) * Vars->val(iNormGS) / Integral_hist_GS);
+            model_Proton->Add(hist_ProtontR, Vars->val(iNormPR) * Vars->val(iNormGS) / Integral_GS);
             Esysts->apply_systematics(iEsysP, model_Proton, model_noEsys);
 
             // Add the non proton-recoil spectra to spectrum
-            model_noEsys->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_hist_GS);
-            model_noEsys->Add(hist_O16Deex, Vars->val(iNormES) / Integral_hist_ES);
+            model_noEsys->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_GS);
+            model_noEsys->Add(hist_O16Deex, Vars->val(iNormES) / Integral_ES);
 
             // Apply Normal (beta) energy systematics to all (adds stuff to model_Esys, doesn't reset it)
             Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);  
@@ -115,19 +115,19 @@ class alphaN {
             TH1D* temp_hist = (TH1D*)(hist_ProtontR->Clone("temp_hist"));
             
             temp_hist->Reset("ICES");
-            temp_hist->Add(hist_ProtontR, Vars->val(iNormPR) * Vars->val(iNormGS) / Integral_hist_GS);
+            temp_hist->Add(hist_ProtontR, Vars->val(iNormPR) * Vars->val(iNormGS) / Integral_GS);
             hists.push_back((TH1D*)(hist_ProtontR->Clone("model_alphaN_PR")));
             hists.at(hists.size()-1)->Reset("ICES");
             Esysts->apply_systematics(iEsysP, temp_hist, hists.at(hists.size()-1));
 
             temp_hist->Reset("ICES");
-            temp_hist->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_hist_GS);
+            temp_hist->Add(hist_C12Scatter, Vars->val(iNormGS) / Integral_GS);
             hists.push_back((TH1D*)(hist_C12Scatter->Clone("model_alphaN_C12")));
             hists.at(hists.size()-1)->Reset("ICES");
             Esysts->apply_systematics(iEsys, temp_hist, hists.at(hists.size()-1));
 
             temp_hist->Reset("ICES");
-            temp_hist->Add(hist_O16Deex, Vars->val(iNormES) / Integral_hist_ES);
+            temp_hist->Add(hist_O16Deex, Vars->val(iNormES) / Integral_ES);
             hists.push_back((TH1D*)(hist_O16Deex->Clone("model_alphaN_O16")));
             hists.at(hists.size()-1)->Reset("ICES");
             Esysts->apply_systematics(iEsys, temp_hist, hists.at(hists.size()-1));
@@ -142,7 +142,7 @@ class alphaN {
             iMaxBin = MaxBin;
 
             Integral_GS = hist_ProtontR->Integral(iMinBin, iMaxBin) + hist_C12Scatter->Integral(iMinBin, iMaxBin);
-            Integral_hist_ES = hist_O16Deex->Integral(iMinBin, iMaxBin);
+            Integral_ES = hist_O16Deex->Integral(iMinBin, iMaxBin);
         }
 };
 

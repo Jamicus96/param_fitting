@@ -64,8 +64,8 @@ int main(int argv, char** argc) {
     bool verbose = std::stoi(argc[18]);
 
     if (verbose) {
-        std::cout << "N_IBD = " << N_IBD << " ± (" << IBD_err_indiv*100. << "% (individual), " << IBD_err_tot*100. << "% (total))." << std::endl;
-        std::cout << "N_alphaN = " << N_alphaN << " ± (" << alphaN_err_PR*100. << "% (PR), " << " ± (" << alphaN_err_C12*100. << "% (C12), " << alphaN_err_ES*100. << "% (ES))." << std::endl;
+        std::cout << "N_IBD = " << N_IBD << " ± " << IBD_err*100. << "%." << std::endl;
+        std::cout << "N_alphaN = " << N_alphaN << " ± " << alphaN_err_GS*100. << "( ±" << alphaN_err_PR*100. << " % (PR), % (12C) ) ± " << alphaN_err_ES*100. << "% (ES))." << std::endl;
         std::cout << "N_geoNu = " << N_geoNu << ", U/Th ratio = " << geoNuUThRatio << " ± " << geoNuRatio_err*100. << "%." << std::endl;
         std::cout << "linScale = 1 ± " << linScale_err << "." << std::endl;
         std::cout << "Beta: kB = " << kB << " ± " << kB_err << "." << std::endl;

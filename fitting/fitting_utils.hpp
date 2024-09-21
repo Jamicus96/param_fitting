@@ -95,7 +95,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
 
-    TFile *fin = TFile::Open(file_address.c_str());
+    TFile *fin = TFile::Open(PDFs_address.c_str());
     if (!fin->IsOpen()) {
         std::cout << "Cannot open input file." << std::endl;
         exit(1);
@@ -240,7 +240,7 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
     std::vector<std::string> reactor_names = {"BRUCE", "DARLINGTON", "PICKERING", "WORLD"};
 
     // Extra overall normalisation (= 1), to add shared unceetainties 
-    reacLowLim = (1.0 - 3.0 * IBD_err) * N_IBD;
+    double reacLowLim = (1.0 - 3.0 * IBD_err) * N_IBD;
     if (reacLowLim < 0.0) reacLowLim = 0.0;
     Vars->AddVar("reactorNorm", N_IBD, IBD_err * N_IBD, reacLowLim, (1.0 + 3.0 * IBD_err) * N_IBD);
 
