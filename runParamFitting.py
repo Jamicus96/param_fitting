@@ -20,23 +20,23 @@ def argparser():
     parser.add_argument('--accidentals_ntuple_repo', '-ar', type=str, dest='accidentals_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/accidentals_ntuples/', help='Folder where accidentals ntuples are saved.')
     parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples_extraEvents/', help='Folder where cut ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples/', help='Folder where cut ntuples are saved.')
     parser.add_argument('--scaled_ntuple_repo', '-snr', type=str, dest='scaled_ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples/scaled_reactorIBD/', help='Folder where re-scaled cut reactor IBD ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/MC_cut_ntuples/', help='Folder where re-scaled cut reactor IBD ntuples are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_fitting_final/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/data_fitting_final/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/runList_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/antinu_runlist_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
     parser.add_argument('---use_rl', '-uRL', type=bool, dest='use_rl',
                         default=True, help='Bool to restrict only to file names including run-numbers from the run list defined in rl_file.')
     
     parser.add_argument('--Dm21_min', type=float, dest='Dm21_min', default=0.1E-5, help='Dm_21^2 minimum.')
     parser.add_argument('--Dm21_max', type=float, dest='Dm21_max', default=15.E-5, help='Dm_21^2 maximum.')
-    parser.add_argument('--theta12_min', type=float, dest='theta12_min', default=0., help='theta_12 minimum.')
-    parser.add_argument('--theta12_max', type=float, dest='theta12_max', default=90., help='theta_12 maximum.')
+    parser.add_argument('--s12_2_min', type=float, dest='s12_2_min', default=0., help='theta_12 minimum.')
+    parser.add_argument('--s12_2_max', type=float, dest='s12_2_max', default=1., help='theta_12 maximum.')
 
     parser.add_argument('--PDFbinWidth', '-bw', type=float, dest='PDFbinWidth', default=0.05, help='PDF bin width [MeV]')
     parser.add_argument('--classCut', '-cc', type=float, dest='classCut', default=-9999.0, help='Classifier cut (remove events below this)')
@@ -45,7 +45,7 @@ def argparser():
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
                         default=True, help='For energy correction: True for data, False for MC.')
-    parser.add_argument('---evt_type', '-et', type=str, dest='evt_type', default='any',
+    parser.add_argument('---evt_type', '-et', type=str, dest='evt_type', default='IBD',
                         choices=['any', 'IBD', 'alphaN'], help='For cut efficiency calculation (MC only).')
     parser.add_argument('---use_Azimov', '-uA', type=bool, dest='use_Azimov',
                         default=False, help='Use Azimov data set made from PDFs, instead of ntuple data from cut_ntuple_repo')
@@ -303,12 +303,11 @@ def makePDFs(args):
 
     # Create command
     command = path + 'cutting/make_PDFs.exe '
-    command += cut_ntuple_repo + 'scaled_CUT_ReactorIBD.ntuple.root '
+    command += cut_ntuple_repo + 'scaled_CUT_reactorIBD.ntuple.root '
     command += cut_ntuple_repo + 'CUT_alphaN.ntuple.root '
-    command += cut_ntuple_repo + 'CUT_geoNuTh.ntuple.root '
-    command += cut_ntuple_repo + 'CUT_geoNuU.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_geoNu_Th.ntuple.root '
+    command += cut_ntuple_repo + 'CUT_geoNu_U.ntuple.root '
     command += accidentals_ntuple_repo + 'CUT_accidentals.ntuple.root '
-    command += cut_ntuple_repo + 'bipo_pdf.ntuple.root '
     command += pdf_repo + 'PDFs_' + str(args.PDFbinWidth) + '_cut' + str(args.classCut) + '.root '
     command += str(args.PDFbinWidth) + ' ' + str(args.classCut)
 
@@ -366,7 +365,7 @@ def scale_reactorNtuples(args):
 
 ### Fitting functions ###
 
-def get_param_lims_per_job(Dm21_min, Dm21_max, theta12_min, theta12_max, Nbins, bins_per_job):
+def get_param_lims_per_job(Dm21_min, Dm21_max, s12_2_min, s12_2_max, Nbins, bins_per_job):
     '''Create array with param lims to pass to code in each job, and the hist lims'''
 
     # Work out number of sections (len(idx)) the binning is split into
@@ -380,15 +379,15 @@ def get_param_lims_per_job(Dm21_min, Dm21_max, theta12_min, theta12_max, Nbins, 
 
     # Work out upper and lower limits of each of these section (centers of min and max bins)
     Dm21_step = (Dm21_max - Dm21_min) / float(Nbins - 1)
-    theta12_step = (theta12_max - theta12_min) / float(Nbins - 1)
+    theta12_step = (s12_2_max - s12_2_min) / float(Nbins - 1)
 
     Dm21_mins = Dm21_min + idx * bins_per_job * Dm21_step
-    theta12_mins = theta12_min + idx * bins_per_job * theta12_step
+    s12_2_mins = s12_2_min + idx * bins_per_job * theta12_step
 
     Dm21_maxs = Dm21_min + ((idx + 1.) * bins_per_job - 1.) * Dm21_step
     Dm21_maxs[-1] = Dm21_max
-    theta12_maxs = theta12_min + ((idx + 1.) * bins_per_job - 1.) * theta12_step
-    theta12_maxs[-1] = theta12_max
+    s12_2_maxs = s12_2_min + ((idx + 1.) * bins_per_job - 1.) * theta12_step
+    s12_2_maxs[-1] = s12_2_max
 
     # Work out lower bin number edges of these sections
     Dm21_indices = np.arange(0, Nbins, bins_per_job)
@@ -396,16 +395,16 @@ def get_param_lims_per_job(Dm21_min, Dm21_max, theta12_min, theta12_max, Nbins, 
 
     # Work out overall 2d histogram edges (low edge of min bin and upper edge of max bin)
     Dm21_lower = Dm21_min - 0.5 * Dm21_step
-    theta12_lower = theta12_min - 0.5 * theta12_step
+    theta12_lower = s12_2_min - 0.5 * theta12_step
     Dm21_upper = Dm21_max + 0.5 * Dm21_step
-    theta12_upper = theta12_max + 0.5 * theta12_step
+    theta12_upper = s12_2_max + 0.5 * theta12_step
     hist_lims = str(Dm21_lower) + ' ' + str(Dm21_upper) + ' ' + str(theta12_lower) + ' ' + str(theta12_upper)
 
     # Combine x an y axis section together, to "tile" the whole 2d phase space
     job_lims = []
     for i in range(idx.size):
         for j in range(idx.size):
-            job_lims.append(str(Dm21_mins[i]) + ' ' + str(Dm21_maxs[i]) + ' ' + str(theta12_mins[j]) + ' ' + str(theta12_maxs[j])\
+            job_lims.append(str(Dm21_mins[i]) + ' ' + str(Dm21_maxs[i]) + ' ' + str(s12_2_mins[j]) + ' ' + str(s12_2_maxs[j])\
                              + ' ' + str(Dm21_indices[i]) + ' ' + str(theta12_indices[j]))
 
     # Get number of bins for each job
@@ -459,7 +458,7 @@ def doFitting(args):
     path = getRepoAddress()
 
     # How to split up phase space into manageable jobs
-    job_lims, hist_lims, nBins_job = get_param_lims_per_job(args.Dm21_min, args.Dm21_max, args.theta12_min, args.theta12_max, args.Nbins, args.bins_per_job)
+    job_lims, hist_lims, nBins_job = get_param_lims_per_job(args.Dm21_min, args.Dm21_max, args.s12_2_min, args.s12_2_max, args.Nbins, args.bins_per_job)
 
     ### MAKE JOB SCRIPTS ###
     print('Creating split hist job scripts...')

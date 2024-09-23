@@ -34,7 +34,7 @@ std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& his
 void read_hists_from_files(const std::vector<std::string>& hists_addresses, std::vector<TH2D*>& hists, std::string hist_name);
 std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikelihood);
 void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::vector<double>& data);
-std::vector<double> GetFitSpectra(std::vector<TH1D*>& hists, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov);
+void GetFitSpectra(std::vector<TH1D*>& hists, std::vector<double>& data, TFile *fin, TFile* DataFile, double Dm21_2, double S_12_2, const bool use_Azimov);
 void overallFit(std::string txt_fileName, const bool use_Azimov);
 
 
@@ -75,18 +75,29 @@ int main(int argv, char** argc) {
     std::cout << "Fitting spectra to dataset..." << std::endl;
     std::vector<double> min_vals = combine_hists(minllHist, hists, start_Dm_idx, end_Dm_idx, start_th_idx, end_th_idx);
 
-    std::cout << "min_ll = " << min_vals.at(0) << ", at Dm_21^2 = " << min_vals.at(1) << " and theta_12 = " << min_vals.at(2) << std::endl;
+    std::cout << "min_ll = " << min_vals.at(0) << ", at Dm_21^2 = " << min_vals.at(1) << " and s_12_2 = " << min_vals.at(2) << std::endl;
 
     std::vector<TH2D*> new_hists = likelihood_ratio_hists(minllHist, min_vals.at(0));
 
     std::vector<TH1D*> spectra;
-    std::vector<double> data = GetFitSpectra(spectra, PDFs_address, data_ntuple_address, min_vals.at(1), min_vals.at(2), use_Azimov);
+    std::vector<double> data;
+    TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+    TFile *fin = TFile::Open(PDFs_address.c_str());
+    if (!fin->IsOpen()) {
+        std::cout << "Cannot open input file." << std::endl;
+        exit(1);
+    }
+    GetFitSpectra(spectra, data, fin, DataFile, min_vals.at(1), min_vals.at(2), use_Azimov);
+
+    std::cout << "Ouside GetFitSpectra()" << std::endl;
 
     // Print hist to text file too
     std::string txt_fileName = out_address.substr(0, out_address.find_last_of(".")) + ".txt";
+    std::cout << "txt_fileName = " << txt_fileName << std::endl;
     print_to_txt(txt_fileName, new_hists.at(0), spectra, data);
 
     // Write hist to file and close
+    std::cout << "Writing to root file" << std::endl;
     TFile *outroot = new TFile(out_address.c_str(), "RECREATE");
     minllHist->Write();
     new_hists.at(0)->Write();
@@ -99,7 +110,11 @@ int main(int argv, char** argc) {
     delete(outroot);
 
     // Try overall fit
+    std::cout << "Trying overall fit" << std::endl;
     overallFit(txt_fileName, use_Azimov);
+
+    // DataFile->Close();
+    // fin->Close();
 
     return 0;
 }
@@ -109,7 +124,7 @@ std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& his
 
     double min_ll = 99999.;
     double min_Dm21;
-    double min_Theta12;
+    double min_s_12_2;
     double content;
 
     unsigned int min_hist;
@@ -127,7 +142,7 @@ std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& his
                 if ((content < min_ll) && (content != 0.0)) {
                     min_ll = content;
                     min_hist = n;
-                    min_Theta12 = minllHist->GetXaxis()->GetBinCenter(i + 1);
+                    min_s_12_2 = minllHist->GetXaxis()->GetBinCenter(i + 1);
                     min_Dm21 = minllHist->GetYaxis()->GetBinCenter(j + 1);
                 }
                 if (content == 0.0) foudZero = true;
@@ -137,7 +152,7 @@ std::vector<double> combine_hists(TH2D* minllHist, const std::vector<TH2D*>& his
     }
     std::cout << "minimum found in hist " << min_hist << std::endl;
 
-    return {min_ll, min_Dm21, min_Theta12};
+    return {min_ll, min_Dm21, min_s_12_2};
 }
 
 
@@ -214,10 +229,15 @@ std::vector<TH2D*> likelihood_ratio_hists(TH2D* minllHist, double minimisedLikel
  * @param minllHist 
  */
 void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<TH1D*>& hists, const std::vector<double>& data) {
+    std::cout << "start of print_to_txt()" << std::endl;
     std::ofstream datafile;
+    std::cout << "1" << std::endl;
     datafile.open(txt_fileName.c_str(), std::ios::trunc);
+    std::cout << "2" << std::endl;
 
     datafile << "# Delta log-likelihood:" << std::endl;
+
+    std::cout << "3" << std::endl;
 
     double Dm21;
     double theta12;
@@ -239,6 +259,8 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<T
         datafile << std::endl;
     }
 
+    std::cout << "4" << std::endl;
+
     datafile << "# Spectra:" << std::endl;
 
     datafile << "NA";
@@ -254,6 +276,8 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<T
         datafile << std::endl;
     }
 
+    std::cout << "5" << std::endl;
+
     if (data.size() > 0) {
         datafile << "# Data:" << std::endl;
         datafile << data.at(0);
@@ -262,10 +286,12 @@ void print_to_txt(std::string txt_fileName, TH2D* minllHist, const std::vector<T
         }
         datafile << std::endl;
     }
+
+    std::cout << "6" << std::endl;
 }
 
 
-std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_address, std::string data_ntuple_address, double Dm21_2, double S_12_2, const bool use_Azimov) {
+void GetFitSpectra(std::vector<TH1D*>& spectra, std::vector<double>& data, TFile *fin, TFile* DataFile, double Dm21_2, double S_12_2, const bool use_Azimov) {
 
     // Get DB
     RAT::DB::Get()->SetAirplaneModeStatus(true);
@@ -280,11 +306,12 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
 
     // Create fitter object
     if (use_Azimov) {
-        create_fitter(PDFs_address, Dm21_2, fDmSqr32, pow(sin(S_12_2  * TMath::Pi() / 180.), 2), fSSqrTheta13, db);
+        create_fitter(fin, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db);
     } else {
-        TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+        // TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
         TTree* DataInfo = (TTree *) DataFile->Get("prompt");
-        create_fitter(PDFs_address, Dm21_2, fDmSqr32, pow(sin(S_12_2  * TMath::Pi() / 180.), 2), fSSqrTheta13, db, DataInfo);
+        create_fitter(fin, Dm21_2, fDmSqr32, S_12_2, fSSqrTheta13, db, DataInfo);
+        // DataFile->Close();
     }
     Fitter* antinuFitter = Fitter::GetInstance();
     FitVars* Vars = FitVars::GetInstance();
@@ -300,9 +327,8 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
     antinuFitter->GetAllSpectra(spectra);
 
     // Add data hist to list
-    std::vector<double> data;
     if (use_Azimov) spectra.push_back(antinuFitter->DataHist());
-    else data = antinuFitter->DataNtuple();
+    else antinuFitter->DataNtuple(data);
 
     // Print some extra things
     std::vector<std::string> VarNames;
@@ -342,14 +368,14 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
         std::cout << std::endl;
     }
 
-    char* name;
-    Double_t value, verr, vlow, vhigh;
-    std::cout << "\nGetParameters:" << std::endl;
-    for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
-        antinuFitter->GetParameter(i, name, value, verr, vlow, vhigh);
-        std::cout << Vars->name(i) << ": name = " << name << ", value = " << value << ", verr = "
-                  << verr << ", vlow = " << vlow << ", vhigh = " << vhigh << std::endl;
-    }
+    // char* name;
+    // Double_t value, verr, vlow, vhigh;
+    // std::cout << "\nGetParameters:" << std::endl;
+    // for (unsigned int i = 0; i < Vars->GetNumVars(); ++i) {
+    //     antinuFitter->GetParameter(i, name, value, verr, vlow, vhigh);
+    //     std::cout << Vars->name(i) << ": name = " << name << ", value = " << value << ", verr = "
+    //               << verr << ", vlow = " << vlow << ", vhigh = " << vhigh << std::endl;
+    // }
 
     Double_t eplus, eminus, eparab, globcc;
     std::cout << "\nGetErrors:" << std::endl;
@@ -373,7 +399,8 @@ std::vector<double> GetFitSpectra(std::vector<TH1D*>& spectra, std::string PDFs_
         std::cout << std::endl;
     }
 
-    return data;
+    std::cout << "Reached end of GetFitSpectra()" << std::endl;
+    return;
 }
 
 
@@ -398,8 +425,8 @@ void overallFit(std::string txt_fileName, const bool use_Azimov) {
 
     double Dm212err = 0.18E-5;
     double s122err = 0.013;
-    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, true);
-    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, true);
+    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, false);
+    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, false);
 
     ReactorMod->hold_osc_params_const(false);
     geoNuMod->hold_osc_params_const(false);

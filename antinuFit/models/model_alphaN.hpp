@@ -8,8 +8,6 @@
 #include <TH1.h>
 #include "fitVars.hpp"
 
-#define antinuDEBUG
-
 class alphaN {
     private:
         static alphaN *alphaNInstance_;

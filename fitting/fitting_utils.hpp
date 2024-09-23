@@ -32,7 +32,7 @@
 #include "cutting_utils.hpp"
 
 
-void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
+void create_fitter(TFile *fin, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, const bool useAzimovData = true);
 void compute_hist_fracs(const std::vector<TH1D*>& hists, const std::vector<std::string>& hist_names, std::vector<double>& hist_fracs, std::vector<unsigned int>& hist_idx, const unsigned int min_bin, const unsigned int max_bin);
 void read_hists_from_file(TFile* fin, std::vector<TH1D*>& reactor_hists, std::vector<TH1D*>& alphaN_hists, std::vector<TH1D*>& geoNu_hists, std::vector<TH1D*>& Accidental_hists, TH2D& E_conv);
 
@@ -43,21 +43,20 @@ double N_IBD = 52.2;            // Total number of expected reactor IBDs (at 300
 double IBD_err_indiv = 0;
 double IBD_err = 0.03;      // fractional error in N_IBD for total reactor IBDs
 
-double N_alphaN = 18.2;         // Total number of expected alpha-n
+double N_alphaN = 16.5;         // Total number of expected alpha-n
 // double N_alphaN = 18.2 * 0.22;  // Classifier cut
 double alphaN_err_PR = 0;     // fractional error in N_alphaN for PR, on top of GS uncertainty
 double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR & 12C)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
-double N_geoNu = 12.5;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
+double N_geoNu = 11.6;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
 // double N_geoNu = 12.5 * 0.89;   // Classifier cut
 // double geoNu_err = 1.0;         // fractional error in N_geoNu for individual Th and U spectra
 double geoNuUThRatio = 3.7;
 double geoNuRatio_err = 0.35;  // fractional error
 
-double N_acc = 0.3;               // Total number of expected accidentals coincidence events (no err)
-double N_side = 1.1;               // Total number of expected sideband events
-double sideband_err = 1.0;      // fractional error
+double N_acc = 0.59;               // Total number of expected accidentals coincidence events (no err)
+double acc_err = 0.4;      // fractional error
 
 double linScale_err = 0.011;    // Error in linear scaling (scaling = 1) (not fractional)
 double kB = 0.074;              // Birk's constant for betas
@@ -71,8 +70,8 @@ double kB_err_P = 0;            // Error in kB_P for proton recoils (not fractio
 
 /* ~~~~~~~~ SET UP FITTER ~~~~~~~~ */
 
-void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, TTree* Data) {
-    create_fitter(PDFs_address, Dm21_2, Dm32_2, s_12_2, s_13_2, db, false);
+void create_fitter(TFile *fin, double Dm21_2, double Dm32_2, double s_12_2, double s_13_2, RAT::DB* db, TTree* Data) {
+    create_fitter(fin, Dm21_2, Dm32_2, s_12_2, s_13_2, db, false);
     Fitter* antinuFitter = Fitter::GetInstance();
     antinuFitter->SetData(Data);
 }
@@ -91,15 +90,15 @@ void create_fitter(std::string PDFs_address, double Dm21_2, double Dm32_2, doubl
  * @param s_13_2 
  * @param db 
  */
-void create_fitter(std::string PDFs_address, const double Dm21_2, const double Dm32_2, const double s_12_2, const double s_13_2, RAT::DB* db, const bool useAzimovData) {
+void create_fitter(TFile *fin, const double Dm21_2, const double Dm32_2, const double s_12_2, const double s_13_2, RAT::DB* db, const bool useAzimovData) {
     // Read in file
     std::cout << "Reading in hists from file..." << std::endl;
 
-    TFile *fin = TFile::Open(PDFs_address.c_str());
-    if (!fin->IsOpen()) {
-        std::cout << "Cannot open input file." << std::endl;
-        exit(1);
-    }
+    // TFile *fin = TFile::Open(PDFs_address.c_str());
+    // if (!fin->IsOpen()) {
+    //     std::cout << "Cannot open input file." << std::endl;
+    //     exit(1);
+    // }
     // Check for errors
     TList* list = fin->GetListOfKeys() ;
     if (!list) {std::cout << "No keys found in file\n" << std::endl; exit(1);}
@@ -113,18 +112,47 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     read_hists_from_file(fin, reactor_hists, alphaN_hists, geoNu_hists, Accidental_hists, E_conv);
 
-    // Get other reactor info
-    TTree *inTree = (TTree*) fin->Get("reactor_vals");
+    /* ~~~~~~~~ Get other reactor info ~~~~~~~~ */
 
-    Double_t PWR_promptE_frac;
-    std::vector<Double_t> PWR_Enu_fracs, PWR_Enu_baselines;
-    std::vector<Double_t> PHWR_Enu_fracs, PHWR_Enu_baselines;
+    // Open TTress
+    TTree *treePWR_promptE = (TTree*) fin->Get("PWR_promptE_info");
+    TTree *treePWR_Enu = (TTree*) fin->Get("PWR_Enu_info");
+    TTree *treePHWR_Enu = (TTree*) fin->Get("PHWR_Enu_info");
 
-    inTree->SetBranchAddress("PWR_promptE_frac", &PWR_promptE_frac);
-    inTree->SetBranchAddress("PWR_Enu_fracs", &PWR_Enu_fracs);
-    inTree->SetBranchAddress("PWR_Enu_baselines", &PWR_Enu_baselines);
-    inTree->SetBranchAddress("PHWR_Enu_fracs", &PHWR_Enu_fracs);
-    inTree->SetBranchAddress("PHWR_Enu_baselines", &PHWR_Enu_baselines);
+    // Link them to variables
+    Double_t PWR_promptE_frac_temp;
+    Double_t PWR_Enu_frac, PWR_Enu_baseline;
+    Double_t PHWR_Enu_frac, PHWR_Enu_baseline;
+
+    treePWR_promptE->SetBranchAddress("frac", &PWR_promptE_frac_temp);
+    treePWR_Enu->SetBranchAddress("frac", &PWR_Enu_frac);
+    treePWR_Enu->SetBranchAddress("baseline", &PWR_Enu_baseline);
+    treePHWR_Enu->SetBranchAddress("frac", &PHWR_Enu_frac);
+    treePHWR_Enu->SetBranchAddress("baseline", &PHWR_Enu_baseline);
+
+    // Record them
+    treePWR_promptE->GetEntry(0);
+    double PWR_promptE_frac = PWR_promptE_frac_temp;
+
+    std::vector<double> PWR_Enu_fracs, PWR_Enu_baselines;
+    for (unsigned int a = 0; a < treePWR_Enu->GetEntries(); ++a) {
+        treePWR_Enu->GetEntry(a);
+        PWR_Enu_fracs.push_back(PWR_Enu_frac);
+        PWR_Enu_baselines.push_back(PWR_Enu_baseline);
+    }
+
+    std::vector<double> PHWR_Enu_fracs, PHWR_Enu_baselines;
+    for (unsigned int a = 0; a < treePHWR_Enu->GetEntries(); ++a) {
+        treePHWR_Enu->GetEntry(a);
+        PHWR_Enu_fracs.push_back(PHWR_Enu_frac);
+        PHWR_Enu_baselines.push_back(PHWR_Enu_baseline);
+    }
+
+    std::cout << "PWR_promptE_frac = " << PWR_promptE_frac << std::endl;
+    std::cout << "PWR_Enu_fracs.size() = " << PWR_Enu_fracs.size() << std::endl;
+    std::cout << "PWR_Enu_baselines.size() = " << PWR_Enu_baselines.size() << std::endl;
+    std::cout << "PHWR_Enu_fracs.size() = " << PHWR_Enu_fracs.size() << std::endl;
+    std::cout << "PHWR_Enu_baselines.size() = " << PHWR_Enu_baselines.size() << std::endl;
 
     // Find data bin limits
     double bin_centre;
@@ -253,8 +281,10 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
 
     /* ~~~~~~~~ ACCIDENTALS ~~~~~~~~ */
     
-    Vars->AddVar("AccidentalsNorm", N_acc, 0, N_acc, N_acc, true, false); // no normalisation error, since it is data driven
-    Esysts->AddEsys_trivial("trivial");  // no energy systematics either, for the same reason
+    double accLowLim = (1.0 - 3.0 * acc_err) * N_acc;
+    if (accLowLim < 0.0) accLowLim = 0.0;
+    Vars->AddVar("AccidentalsNorm", N_acc, acc_err * N_acc, accLowLim, (1.0 + 3.0 * acc_err) * N_acc);
+    Esysts->AddEsys_trivial("trivial");  // no energy systematics either, because it is data-driven
     // Add accidentals model, linking it to approproate variables and E-systematics defined above
     BasicMods->AddModel("AccidentalsNorm", "trivial", Accidental_hists.at(0), "Accidentals");
 
@@ -301,6 +331,8 @@ void create_fitter(std::string PDFs_address, const double Dm21_2, const double D
         // Add Azimov dataset as data
         antinuFitter->SetData(data);
     }
+
+    // fin->Close();
 }
 
 

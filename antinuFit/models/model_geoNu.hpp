@@ -9,7 +9,6 @@
 #include "fitVars.hpp"
 #include "E_systematics.hpp"
 
-#define antinuDEBUG
 
 class geoNu {
     private:

@@ -26,8 +26,8 @@
 
 
 void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minllHist, std::vector<TH2D*>& par_hists, const std::vector<unsigned int>& start_idx, const bool verbose);
-std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min,
-                                                     const double Theta12_max, const unsigned int Theta12_nSteps);
+std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double s12_2_min,
+                                                     const double s12_2_max, const unsigned int s12_2_nStep);
 
 
 
@@ -45,34 +45,34 @@ int main(int argv, char** argc) {
     // 2d hist limit args
     double Dm21_lower = std::atof(argc[5]);
     double Dm21_upper = std::atof(argc[6]);
-    double Theta12_lower = std::atof(argc[7]);  // degrees
-    double Theta12_upper = std::atof(argc[8]);  // degrees
+    double s12_2_lower = std::atof(argc[7]);
+    double s12_2_upper = std::atof(argc[8]);
     unsigned int N_bins = std::atoi(argc[9]);
 
     // variable paramters limit args
     double Dm21_min = std::atof(argc[10]);
     double Dm21_max = std::atof(argc[11]);
-    double Theta12_min = std::atof(argc[12]);  // degrees
-    double Theta12_max = std::atof(argc[13]);  // degrees
+    double s12_2_min = std::atof(argc[12]);
+    double s12_2_max = std::atof(argc[13]);
 
     unsigned int start_idx_Dm21 = std::atoi(argc[14]);
-    unsigned int start_idx_theta = std::atoi(argc[15]);
+    unsigned int start_idx_s12_2 = std::atoi(argc[15]);
 
     unsigned int Dm21_nSteps = std::atoi(argc[16]);
-    unsigned int Theta12_nSteps = std::atoi(argc[17]);
+    unsigned int s12_2_nStep = std::atoi(argc[17]);
 
     bool verbose = std::stoi(argc[18]);
 
     if (verbose) {
         std::cout << "N_IBD = " << N_IBD << " ± " << IBD_err*100. << "%." << std::endl;
-        std::cout << "N_alphaN = " << N_alphaN << " ± " << alphaN_err_GS*100. << "( ±" << alphaN_err_PR*100. << " % (PR), % (12C) ) ± " << alphaN_err_ES*100. << "% (ES))." << std::endl;
+        std::cout << "N_alphaN = " << N_alphaN << " ± (" << alphaN_err_GS*100. << "% (GS) ( * " << alphaN_err_PR*100. << "% (PR), % (12C) ) ± " << alphaN_err_ES*100. << "% (ES))." << std::endl;
         std::cout << "N_geoNu = " << N_geoNu << ", U/Th ratio = " << geoNuUThRatio << " ± " << geoNuRatio_err*100. << "%." << std::endl;
         std::cout << "linScale = 1 ± " << linScale_err << "." << std::endl;
         std::cout << "Beta: kB = " << kB << " ± " << kB_err << "." << std::endl;
         std::cout << "Proton: kB = " << kB_P << " ± " << kB_err_P << "." << std::endl;
         std::cout << "sigPerSqrtE = 0 + " << sigPerSqrtE << "." << std::endl;
-        std::cout << "fit params: Dm_21^2 € [" << Dm21_min << ", " << Dm21_max << "] (#" << Dm21_nSteps << "), " << "theta_12^2 € [" << Theta12_min << ", " << Theta12_max << "] (#" << Theta12_nSteps << ")." << std::endl;
-        std::cout << "hist params: Dm_21^2 lims € {" << Dm21_lower << ", " << Dm21_upper << "}, " << "theta_12^2 lims € {" << Theta12_lower << ", " << Theta12_upper << "}, Nbins = " << N_bins << "." << std::endl;
+        std::cout << "fit params: Dm_21^2 € [" << Dm21_min << ", " << Dm21_max << "] (#" << Dm21_nSteps << "), " << "s_12^2 € [" << s12_2_min << ", " << s12_2_max << "] (#" << s12_2_nStep << ")." << std::endl;
+        std::cout << "hist params: Dm_21^2 lims € {" << Dm21_lower << ", " << Dm21_upper << "}, " << "s_12^2 lims € {" << s12_2_lower << ", " << s12_2_upper << "}, Nbins = " << N_bins << "." << std::endl;
     }
 
     // Get DB
@@ -90,22 +90,29 @@ int main(int argv, char** argc) {
 
     /* ~~~~~~~~ FITTING ~~~~~~~~ */
 
+    TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+    TFile *fin = TFile::Open(PDFs_address.c_str());
+    if (!fin->IsOpen()) {
+        std::cout << "Cannot open input file." << std::endl;
+        exit(1);
+    }
+
     // Create fitter object
     if (use_Azimov) {
-        create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
+        create_fitter(fin, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db);
     } else {
-        TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
+        // TFile* DataFile = TFile::Open(data_ntuple_address.c_str());
         TTree* DataInfo = (TTree*) DataFile->Get("prompt");
-        create_fitter(PDFs_address, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db, DataInfo);
+        create_fitter(fin, fDmSqr21, fDmSqr32, fSSqrTheta12, fSSqrTheta13, db, DataInfo);
     }
 
     // Make list of Dm_21^2 and s_12^2 values to iterate over
-    std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, Theta12_min, Theta12_max, Theta12_nSteps);
-    std::vector<unsigned int> start_idx = {start_idx_theta, start_idx_Dm21};
+    std::vector<std::vector<double>> var_params = make_var_param_vals(Dm21_min, Dm21_max, Dm21_nSteps, s12_2_min, s12_2_max, s12_2_nStep);
+    std::vector<unsigned int> start_idx = {start_idx_s12_2, start_idx_Dm21};
 
     // Set up 2d log-likelihood histogram
-    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", N_bins, Theta12_lower, Theta12_upper, N_bins, Dm21_lower, Dm21_upper);
-    minllHist->GetXaxis()->SetTitle("Theta_12");
+    TH2D* minllHist = new TH2D("minllHist", "minimised likelihood values", N_bins, s12_2_lower, s12_2_upper, N_bins, Dm21_lower, Dm21_upper);
+    minllHist->GetXaxis()->SetTitle("s_12^2");
     minllHist->GetYaxis()->SetTitle("Delta m_21^2");
     minllHist->GetYaxis()->SetTitleOffset(1);  // Move x-axis label further away from the axis (0 is default)
     minllHist->SetStats(0);  // Remove stats box
@@ -128,6 +135,9 @@ int main(int argv, char** argc) {
     outroot->Write();
     outroot->Close();
     delete(outroot);
+
+    // DataFile->Close();
+    // fin->Close();
 
     return 0;
 }
@@ -155,17 +165,17 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
     geoNu* geoNuMod = geoNu::GetInstance();
 
     // Unpack
-    std::vector<double> sinTheta12 = var_params.at(0);
+    std::vector<double> sinTheta12_2 = var_params.at(0);
     std::vector<double> Dm21 = var_params.at(1);
-    std::cout << "sinTheta12.size() = " << sinTheta12.size() << std::endl;
+    std::cout << "sinTheta12_2.size() = " << sinTheta12_2.size() << std::endl;
     std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     /* ~~~~~  Compute best fit Log likelihood for each set of parameters (fraction of alpha-n vs reactor IBD events is fit in each loop)  ~~~~~ */
     double value;
     std::cout << "Looping over oscillation parameters..." << std::endl;
-    for (unsigned int i = 0; i < sinTheta12.size(); ++i) {
-        // Set sinTheta12 value
-        Vars->val("sinsqrtheta12") = sinTheta12.at(i);
+    for (unsigned int i = 0; i < sinTheta12_2.size(); ++i) {
+        // Set sinTheta12_2 value
+        Vars->val("sinsqrtheta12") = sinTheta12_2.at(i);
         if (verbose) std::cout << "s_12^2 = " << Vars->val("sinsqrtheta12") << std::endl;
         geoNuMod->hold_osc_params_const(true);  // This will also pre-compute the geo-nu survival prob ahead of time
         for (unsigned int j = 0; j < Dm21.size(); ++j) {
@@ -177,8 +187,8 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
             // Perform fit and record log-likelihood
             value = antinuFitter->fit_models();
             if (value  == 0) {  // fit failed, try changing value very slightly (0.1 * the bin width)
-                if (i < (sinTheta12.size()-1)) Vars->val("sinsqrtheta12") = 0.9 * sinTheta12.at(i) + 0.1 * sinTheta12.at(i+1);
-                else Vars->val("sinsqrtheta12") = 0.9 * sinTheta12.at(i) + 0.1 * sinTheta12.at(i-1);
+                if (i < (sinTheta12_2.size()-1)) Vars->val("sinsqrtheta12") = 0.9 * sinTheta12_2.at(i) + 0.1 * sinTheta12_2.at(i+1);
+                else Vars->val("sinsqrtheta12") = 0.9 * sinTheta12_2.at(i) + 0.1 * sinTheta12_2.at(i-1);
 
                 if (j < (Dm21.size()-1)) Vars->val("deltamsqr21") = 0.9 * Dm21.at(j) + 0.1 * Dm21.at(j+1);
                 else Vars->val("deltamsqr21") = 0.9 * Dm21.at(j) + 0.1 * Dm21.at(j-1);
@@ -206,12 +216,12 @@ void Fit_spectra(const std::vector<std::vector<double>>& var_params, TH2D* minll
  * 
  * @param Dm21_min [MeV^2]
  * @param Dm21_max [MeV^2]
- * @param Theta12_min [degrees]
- * @param Theta12_max [degrees]
+ * @param s12_2_min [degrees]
+ * @param s12_2_max [degrees]
  * @param N_steps same number of steps in both directions
  * @return const std::vector<std::vector<double>>& = {s_12^2, Dm_21^2}
  */
-std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double Theta12_min, const double Theta12_max, const unsigned int Theta12_nSteps) {
+std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, const double Dm21_max, const unsigned int Dm21_nSteps, const double s12_2_min, const double s12_2_max, const unsigned int s12_2_nStep) {
 
     // Dm21^2
     std::vector<double> Dm21;
@@ -231,22 +241,22 @@ std::vector<std::vector<double>> make_var_param_vals(const double Dm21_min, cons
     std::cout << "Dm21.size() = " << Dm21.size() << std::endl;
 
     // s_12^2
-    std::vector<double> sinTheta12;
-    if (Theta12_nSteps == 0) {
-        std::cout << "ERROR: Cannot have zero steps! (Theta12_nSteps = 0)" <<std::endl;
+    std::vector<double> sinTheta12_2;
+    if (s12_2_nStep == 0) {
+        std::cout << "ERROR: Cannot have zero steps! (s12_2_nStep = 0)" <<std::endl;
         exit(1);
-    } else if (Theta12_nSteps == 1) {
-        sinTheta12.push_back(pow(sin(0.5 * (Theta12_max + Theta12_min) * TMath::Pi() / 180.), 2));
-        std::cout << "sinTheta12.at(0) = " << sinTheta12.at(0) << std::endl;
+    } else if (s12_2_nStep == 1) {
+        sinTheta12_2.push_back(0.5 * (s12_2_max + s12_2_min));
+        std::cout << "sinTheta12_2.at(0) = " << sinTheta12_2.at(0) << std::endl;
     } else {
-        double Theta12_step = (Theta12_max - Theta12_min) / (double)(Theta12_nSteps - 1);
-        for (unsigned int n = 0; n < Theta12_nSteps; ++n) {
-            sinTheta12.push_back(pow(sin((Theta12_min + (double)n * Theta12_step) * TMath::Pi() / 180.), 2));
-            std::cout << "sinTheta12.at(" << n << ") = " << sinTheta12.at(n) << std::endl;
+        double s_12_2_step = (s12_2_max - s12_2_min) / (double)(s12_2_nStep - 1);
+        for (unsigned int n = 0; n < s12_2_nStep; ++n) {
+            sinTheta12_2.push_back(s12_2_min + (double)n * s_12_2_step);
+            std::cout << "sinTheta12_2.at(" << n << ") = " << sinTheta12_2.at(n) << std::endl;
         }
     }
-    std::cout << "sinTheta12.size() = " << sinTheta12.size() << std::endl;
+    std::cout << "sinTheta12_2.size() = " << sinTheta12_2.size() << std::endl;
 
     // Package them together
-    return {sinTheta12, Dm21};
+    return {sinTheta12_2, Dm21};
 }

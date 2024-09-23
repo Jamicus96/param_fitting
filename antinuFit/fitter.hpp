@@ -15,7 +15,6 @@
 #include "model_geoNu.hpp"
 #include "model.hpp"
 
-
 class Fitter {
     private:
         static Fitter *FitterInstance_;
@@ -86,6 +85,7 @@ class Fitter {
         static void GetAllSpectra(std::vector<TH1D*>& hists);
         static TH1D* DataHist();
         static std::vector<double> DataNtuple();
+        void DataNtuple(std::vector<double>& out_data);
         static void SetData(TH1D* Data);
         static void SetData(TTree* Data);
         static void SetBinLims(const unsigned int Bin_min, const unsigned int Bin_max);
@@ -481,6 +481,11 @@ void Fitter::GetAllSpectra(std::vector<TH1D*>& hists) {
 
 TH1D* Fitter::DataHist() {return data;}
 std::vector<double> Fitter::DataNtuple() {return data_E;}
+void Fitter::DataNtuple(std::vector<double>& out_data) {
+    for (unsigned int iDat = 0; iDat < data_E.size(); ++iDat) {
+        out_data.push_back(data_E.at(iDat));
+    }
+}
 
 void Fitter::InitTotFitModHist(TH1D* exampleHist) {
     tot_fitModel = (TH1D*)(exampleHist->Clone());

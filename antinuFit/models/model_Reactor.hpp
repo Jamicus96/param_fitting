@@ -22,7 +22,6 @@ class Reactor {
         static Reactor *ReactorInstance_;
 
         TH1D *model_noEsys, *model_Esys;
-        double model_noEsys_integral;
         bool isInit;
 
         // Indices pointing to variables
@@ -47,6 +46,7 @@ class Reactor {
         unsigned int hists_Nbins;
         TH2D* E_conv;  // Conversion from E_e to E_nu (normalised for each E_e bin)
         TH1D *PWR_promptE_hist, *PWR_Enu_hist, *PHWR_Enu_hist;
+        TH1D* unscaled_hist;
 
         double fPWR_promptE_frac;
         std::vector<double> fPWR_Enu_fracs, fPHWR_Enu_fracs, fPWR_Enu_baselines, fPHWR_Enu_baselines;
@@ -79,8 +79,8 @@ class Reactor {
         // Initialisers
         void InitReactor(const unsigned int Dm21_2_idx, const unsigned int Dm32_2_idx, const unsigned int s12_2_idx, const unsigned int s13_2_idx,
                 const unsigned int Norm_idx, const unsigned int Esys_idx,
-                const std::vector<TH1D*> Reactor_hists, TH2D* E_conv_hist, const Double_t PWR_promptE_frac, const std::vector<Double_t>& PWR_Enu_fracs,
-                const std::vector<Double_t>& PHWR_Enu_fracs, const std::vector<Double_t>& PWR_Enu_baselines, const std::vector<Double_t>& PHWR_Enu_baselines, RAT::DB* DB) {
+                const std::vector<TH1D*> Reactor_hists, TH2D* E_conv_hist, const double PWR_promptE_frac, const std::vector<double>& PWR_Enu_fracs,
+                const std::vector<double>& PHWR_Enu_fracs, const std::vector<double>& PWR_Enu_baselines, const std::vector<double>& PHWR_Enu_baselines, RAT::DB* DB) {
                         
             if (PWR_Enu_fracs.size() != PWR_Enu_baselines.size() || PHWR_Enu_fracs.size() != PHWR_Enu_baselines.size()) {
                 std::cout << "[Reactor::InitReactor] ERROR: flux fractions and baselines should have the same size!" << std::endl;
@@ -109,23 +109,25 @@ class Reactor {
             E_conv = (TH2D*)(E_conv_hist->Clone("Reactor::E_conv"));
             E_conv->Reset("ICES"); E_conv->Add(E_conv_hist);
 
-            bool bPWR_promptE = false, bPWR_Enu = false, bPHWR_promptE = false, bPHWR_Enu = false;
+            bool bPWR_promptE = false, bPWR_Enu = false, bPHWR_Enu = false;
+            std::string name;
             for (unsigned int i = 0; i < Reactor_hists.size(); ++i) {
-                if (Reactor_hists.at(i)->GetName() == "PWR_promptE") {
+                name = Reactor_hists.at(i)->GetName();
+                if (name == "PWR_promptE") {
                     PWR_promptE_hist = (TH1D*)(Reactor_hists.at(i)->Clone("Reactor::PWR_promptE"));
                     PWR_promptE_hist->Reset("ICES"); PWR_promptE_hist->Add(Reactor_hists.at(i));
                     bPWR_promptE = true;
-                } else if (Reactor_hists.at(i)->GetName() == "PWR_Enu") {
+                } else if (name == "PWR_Enu") {
                     PWR_Enu_hist = (TH1D*)(Reactor_hists.at(i)->Clone("Reactor::PWR_Enu"));
                     PWR_Enu_hist->Reset("ICES"); PWR_Enu_hist->Add(Reactor_hists.at(i));
                     bPWR_Enu = true;
-                } else if (Reactor_hists.at(i)->GetName() == "PHWR_Enu") {
+                } else if (name == "PHWR_Enu") {
                     PHWR_Enu_hist = (TH1D*)(Reactor_hists.at(i)->Clone("Reactor::PHWR_Enu"));
                     PHWR_Enu_hist->Reset("ICES"); PHWR_Enu_hist->Add(Reactor_hists.at(i));
                     bPHWR_Enu = true;
                 }
             }
-            if (!(bPWR_promptE && bPWR_Enu && bPHWR_promptE && bPHWR_Enu)) {
+            if (!(bPWR_promptE && bPWR_Enu && bPHWR_Enu)) {
                 std::cout << "[Reactor::InitReactor]: ERROR: PDF missing!" << std::endl;
                 exit(1);
             }
@@ -152,6 +154,7 @@ class Reactor {
 
             model_noEsys = (TH1D*)(PWR_promptE_hist->Clone("Reactor::model_noEsys"));
             model_Esys = (TH1D*)(PWR_promptE_hist->Clone("Reactor::model_Esys"));
+            unscaled_hist = (TH1D*)(PWR_promptE_hist->Clone("Reactor::unscaled_hist"));
 
             #ifdef antinuDEBUG
                 std::cout << "[Reactor::InitReactor]: iDm_21_2 = " << iDm_21_2 << ", iDm_32_2 = " << iDm_32_2 << ", iS_12_2 = " << iS_12_2 << ", iS_13_2 = " << iS_13_2 << ", iEsys = " << iEsys << ", iNorm = " << iNorm << std::endl;
@@ -162,8 +165,8 @@ class Reactor {
         
         void InitReactor(const std::string Dm21_2_name, const std::string Dm32_2_name, const std::string s12_2_name, const std::string s13_2_name,
                 const std::string Norm_name, const std::string Esys_name, const std::vector<TH1D*>& Reactor_hists, TH2D* E_conv_hist,
-                const Double_t PWR_promptE_frac, const std::vector<Double_t>& PWR_Enu_fracs, const std::vector<Double_t>& PHWR_Enu_fracs,
-                const std::vector<Double_t>& PWR_Enu_baselines, const std::vector<Double_t>& PHWR_Enu_baselines, RAT::DB* DB) {
+                const double PWR_promptE_frac, const std::vector<double>& PWR_Enu_fracs, const std::vector<double>& PHWR_Enu_fracs,
+                const std::vector<double>& PWR_Enu_baselines, const std::vector<double>& PHWR_Enu_baselines, RAT::DB* DB) {
 
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
@@ -180,6 +183,7 @@ class Reactor {
         void compute_spec() {
             FitVars* Vars = FitVars::GetInstance();
             Esys* Esysts = Esys::GetInstance();
+            model_noEsys->Reset("ICES");  // empty it before re-computing it
             model_Esys->Reset("ICES");  // empty it before re-computing it
 
             // If the oscillation constants are being held constant, and the oscillated spectra have already been computed, can skip this expensive step!
@@ -190,12 +194,12 @@ class Reactor {
                 compute_osc_specs();
             }
 
-            model_noEsys->Scale(Vars->val(iNorm) / model_noEsys_integral);
+            model_noEsys->Add(unscaled_hist, Vars->val(iNorm));
             
             // Apply energy systematics
             Esysts->apply_systematics(iEsys, model_noEsys, model_Esys);
 
-            #ifdef antinuDEBUG
+            #ifdef SUPER_DEBUG
                 std::cout << "[Reactor::compute_spec]: Vars->val(iNorm) = " << Vars->val(iNorm) << std::endl;
                 std::cout << "[Reactor::compute_spec]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
                 std::cout << "[Reactor::compute_spec]: model_Esys->Integral(iMinBin, iMaxBin) = " << model_Esys->Integral(iMinBin, iMaxBin) << std::endl;
@@ -205,8 +209,9 @@ class Reactor {
         void compute_osc_specs() {
             // Compute oscillation constants
             compute_oscillation_constants();
+            geoNu_survival_prob();
 
-            model_noEsys->Reset("ICES");  // empty it before re-computing it
+            unscaled_hist->Reset("ICES");  // empty it before re-computing it
 
             // Assume all the histograms have the same E binning
             double Enu, tot_weight, weight;
@@ -218,7 +223,7 @@ class Reactor {
             #endif
 
             // Add constribution from distant reactors (average scaling from oscillation)
-            model_noEsys->Add(PWR_promptE_hist, av_survival_prob * fPWR_promptE_frac);
+            unscaled_hist->Add(PWR_promptE_hist, av_survival_prob * fPWR_promptE_frac);
 
             // Loop over event energy bins (prompt energy)
             for (unsigned int iBin = 1; iBin <= hists_Nbins; ++iBin) {
@@ -254,18 +259,16 @@ class Reactor {
                 }
 
                 // Add total oscillated weight to the bin, multiplied by the total normalisation
-                model_noEsys->AddBinContent(iBin, tot_weight);
+                unscaled_hist->AddBinContent(iBin, tot_weight);
                 
                 #ifdef SUPER_DEBUG
-                    double prompt_E = model_noEsys->GetXaxis()->GetBinCenter(iBin);
+                    double prompt_E = unscaled_hist->GetXaxis()->GetBinCenter(iBin);
                     std::cout << "[Reactor::compute_osc_specs]: iBin = " << iBin << ", prompt_E = " << prompt_E << ", tot_weight = " << tot_weight << std::endl;
                 #endif
             }
 
-            model_noEsys_integral = model_noEsys->Integral(iMinBin, iMaxBin);
-
             #ifdef antinuDEBUG
-                std::cout << "[Reactor::compute_osc_specs]: model_noEsys->Integral(iMinBin, iMaxBin) = " << model_noEsys->Integral(iMinBin, iMaxBin) << std::endl;
+                std::cout << "[Reactor::compute_osc_specs]: unscaled_hist->Integral(iMinBin, iMaxBin) = " << unscaled_hist->Integral(iMinBin, iMaxBin) << std::endl;
             #endif
         }
 
@@ -367,7 +370,6 @@ class Reactor {
                 #ifdef antinuDEBUG
                     std::cout << "[Reactor::hold_osc_params_const]: Holding oscillation parameters constant" << std::endl;
                 #endif
-                geoNu_survival_prob();
                 compute_osc_specs();
                 computed_osc_specs = true;
             } else {

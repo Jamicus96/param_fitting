@@ -8,6 +8,7 @@
 #include <TH1.h>
 #include "fitVars.hpp"
 
+
 class Esys {
     private:
         static Esys *EsysInstance_;

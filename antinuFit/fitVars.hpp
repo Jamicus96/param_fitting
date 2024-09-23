@@ -6,7 +6,6 @@
 #include <iostream>
 #include <TVectorD.h>
 
-
 class FitVars {
     private:
         static FitVars *FitVarInstance_;
@@ -51,7 +50,8 @@ class FitVars {
             verr_copies.push_back(Verr);
             vlows.push_back(Vlow);
             vhighs.push_back(Vhigh);
-            holdConstants.push_back(holdConstant);
+            if (Verr == 0.0 || Vlow == Vhigh) holdConstants.push_back(true);
+            else holdConstants.push_back(holdConstant);
             constraineds.push_back(isConstrained);
         }
 
@@ -64,7 +64,8 @@ class FitVars {
             verr_copies.push_back(0.25 * (Vhigh - Vlow));
             vlows.push_back(Vlow);
             vhighs.push_back(Vhigh);
-            holdConstants.push_back(false);
+            if (Vlow == Vhigh) holdConstants.push_back(true);
+            else holdConstants.push_back(false);
             constraineds.push_back(false);
         }
 
@@ -77,7 +78,8 @@ class FitVars {
             verr_copies.at(idx) = Verr;
             vlows.at(idx) = Vlow;
             vhighs.at(idx) = Vhigh;
-            holdConstants.at(idx) = holdConstant;
+            if (Verr == 0.0 || Vlow == Vhigh) holdConstants.at(idx) = true;
+            else holdConstants.at(idx) = holdConstant;
             constraineds.at(idx) = isConstrained;
         }
 
