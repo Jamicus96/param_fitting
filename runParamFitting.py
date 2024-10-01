@@ -16,17 +16,17 @@ def argparser():
         description='Run parameter fitting code')
 
     parser.add_argument('--ntuple_repo', '-nr', type=str, dest='ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_ntuples/', help='Folder where raw ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/MC_data/Geoibd_URun_709/', help='Folder where raw ntuples are saved.')
     parser.add_argument('--accidentals_ntuple_repo', '-ar', type=str, dest='accidentals_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/accidentals_ntuples/', help='Folder where accidentals ntuples are saved.')
     parser.add_argument('--cut_ntuple_repo', '-cnr', type=str, dest='cut_ntuple_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/data_cut_ntuples/', help='Folder where cut ntuples are saved.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/MC_cut_ntuples_efficiency/geoNu_U/', help='Folder where cut ntuples are saved.')
     parser.add_argument('--scaled_ntuple_repo', '-snr', type=str, dest='scaled_ntuple_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/MC_cut_ntuples/', help='Folder where re-scaled cut reactor IBD ntuples are saved.')
     parser.add_argument('--pdf_repo', '-pr', type=str, dest='pdf_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/PDFs/', help='Folder where param fitting results are saved (2d root hist).')
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
-                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/data_fitting_final/', help='Folder to save recombined root files with tracking information in.')
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/data_fitting_class_varPR/', help='Folder to save recombined root files with tracking information in.')
     
     parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/antinu_runlist_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
@@ -44,7 +44,7 @@ def argparser():
     parser.add_argument('--bins_per_job', '-mb', type=int, dest='bins_per_job', default=25, help='Maximum number of bins looped over in one job.')
 
     parser.add_argument('---is_data', '-iD', type=bool, dest='is_data',
-                        default=True, help='For energy correction: True for data, False for MC.')
+                        default=False, help='For energy correction: True for data, False for MC.')
     parser.add_argument('---evt_type', '-et', type=str, dest='evt_type', default='IBD',
                         choices=['any', 'IBD', 'alphaN'], help='For cut efficiency calculation (MC only).')
     parser.add_argument('---use_Azimov', '-uA', type=bool, dest='use_Azimov',

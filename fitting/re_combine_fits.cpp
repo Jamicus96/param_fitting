@@ -425,8 +425,8 @@ void overallFit(std::string txt_fileName, const bool use_Azimov) {
 
     double Dm212err = 0.18E-5;
     double s122err = 0.013;
-    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, false, false);
-    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, false, false);
+    antinuFitter->resetVar("deltamsqr21", fDmSqr21, Dm212err, 4.E-5, 12.E-5, true, true);
+    antinuFitter->resetVar("sinsqrtheta12", fSSqrTheta12, s122err, 0.05, 0.95, true, true);
 
     ReactorMod->hold_osc_params_const(false);
     geoNuMod->hold_osc_params_const(false);

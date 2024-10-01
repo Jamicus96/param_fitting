@@ -62,7 +62,11 @@ bool pass_classifier(const double energy, const double class_result, const doubl
 
 /* ~~~~~~~~~~~~ IBD cuts ~~~~~~~~~~~~ */
 
-bool pass_prompt_cuts_IBD(const double energy, const TVector3& position) {
+bool pass_FV_cut(const TVector3& position) {
+    return (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) < FV_CUT);
+}
+
+bool pass_promptE_cuts_IBD(const double energy) {
     #ifdef USING_PDF_PADDING
         if (energy < IBD_PDF_MIN_PROMPT_E) return false;  // min energy cut (MeV)
         if (energy > IBD_PDF_MAX_PROMPT_E) return false;  // max energy cut (MeV)
@@ -70,28 +74,41 @@ bool pass_prompt_cuts_IBD(const double energy, const TVector3& position) {
         if (energy < IBD_MIN_PROMPT_E) return false;  // min energy cut (MeV)
         if (energy > IBD_MAX_PROMPT_E) return false;  // max energy cut (MeV)
     #endif
-    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
+
+    return true;
+}
+
+bool pass_prompt_cuts_IBD(const double energy, const TVector3& position) {
+    if (!pass_FV_cut(position)) return false;  // FV cut (mm)
+    return pass_promptE_cuts_IBD(energy);
+}
+
+bool pass_delayedE_cuts_IBD(const double energy) {
+    if (energy < IBD_MIN_DELAYED_E) return false;  // min energy cut (MeV)
+    if (energy > IBD_MAX_DELAYED_E) return false;  // max energy cut (MeV)
 
     return true;
 }
 
 bool pass_delayed_cuts_IBD(const double energy, const TVector3& position) {
-    if (energy < IBD_MIN_DELAYED_E) return false;  // min energy cut (MeV)
-    if (energy > IBD_MAX_DELAYED_E) return false;  // max energy cut (MeV)
-    if (sqrt(position.X()*position.X() + position.Y()*position.Y() + (position.Z() - AV_offset)*(position.Z() - AV_offset)) > FV_CUT) return false;  // FV cut (mm)
+    if (!pass_FV_cut(position)) return false;  // FV cut (mm)
+    return pass_delayedE_cuts_IBD(energy);
+}
+
+bool pass_dT_cut_IBD(const double delay) {
+    if (delay < IBD_MIN_DELAY) return false;  // min delay cut (ns)
+    if (delay > IBD_MAX_DELAY) return false;  // max delay cut (ns)
 
     return true;
 }
 
+bool pass_dR_cut_IBD(const TVector3& prompt_pos, const TVector3& delayed_pos) {
+    return ((delayed_pos - prompt_pos).Mag() < IBD_MAX_DIST);
+}
+
 bool pass_coincidence_cuts_IBD(const double delay, const TVector3& prompt_pos, const TVector3& delayed_pos) {
-    // double delay = (delayed_time - prompt_time) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
-    double distance = (delayed_pos - prompt_pos).Mag();
-
-    if (delay < IBD_MIN_DELAY) return false;  // min delay cut (ns)
-    if (delay > IBD_MAX_DELAY) return false;  // max delay cut (ns)
-    if (distance > IBD_MAX_DIST) return false;  // max distance cut (mm)
-
-    return true;
+    if (!pass_dT_cut_IBD(delay)) return false;  // delay in ns
+    return pass_dR_cut_IBD(prompt_pos, delayed_pos);  // positions in mm
 }
 
 /* ~~~~~~~~~~~~ BiPo cuts ~~~~~~~~~~~~ */

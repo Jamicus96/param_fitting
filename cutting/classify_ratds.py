@@ -31,7 +31,7 @@ def checkRepo(repo_address, verbose=False):
 
     return new_address
 
-run_GTID_map = {
+run_GTID_map_prompt = {
     '300840' : 16172306,
     '300901' : 8076817,
     '300991' : 13283754,
@@ -91,13 +91,73 @@ run_GTID_map = {
     '308956' : 11630946
 }
 
+run_GTID_map_delayed = {
+    '300840' : 16172309,
+    '300901' : 8076819,
+    '300991' : 13283758,
+    '300996' : 8933261,
+    '301016' : 6319828,
+    '301018' : 9587237,
+    '301020' : 8512435,
+    '301071' : 510349,
+    '301096' : 15373147,
+    '301213' : 6603413,
+    '301356' : 15094348,
+    '301357' : 13236220,
+    '301476' : 3223115,
+    '301653' : 1814586,
+    '301664' : 3695232,
+    '301708' : 7245926,
+    '301892' : 7616839,
+    '301947' : 7872260,
+    '301988' : 9445860,
+    '301994' : 10756054,
+    '302005' : 6336782,
+    '302895' : 4803484,
+    '303471' : 1333081,
+    '303738' : 13173842,
+    '303767' : 14585205,
+    '304039' : 12707483,
+    '304120' : 14539200,
+    '304928' : 11611179,
+    '305236' : 10232336,
+    '305536' : 6599505,
+    '305564' : 5834385,
+    '305601' : 16160929,
+    '305665' : 15419462,
+    '305688' : 8780764,
+    '305960' : 8656142,
+    '306357' : 8397989,
+    '306376' : 2229035,
+    '306756' : 5389835,
+    '306806' : 4749730,
+    '307191' : 15357179,
+    '307210' : 13146087,
+    '307315' : 10764974,
+    '307455' : 14047258,
+    '307468' : 3953661,
+    '307580' : 6423281,
+    '307604' : 4791490,
+    '307982' : 11426726,
+    '308131' : 3046899,
+    '308132' : 8667211,
+    '308165' : 2666705,
+    '308174' : 182503,
+    '308406' : 13106495,
+    '308562' : 14264384,
+    '308632' : 7415329,
+    '308693' : 15247847,
+    '308948' : 7864300,
+    '308956' : 11630948
+}
+
 ratds_repo = '/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/data_ratds/'
-commandList_address = ratds_repo + 'job_scripts/commands.txt'
+commandList_address = ratds_repo + 'job_scripts/commands_delayed.txt'
 
 
 new_job_address = ratds_repo + 'job_scripts/'
 new_job_address = checkRepo(new_job_address, True)
-new_job_address += 'cutting_job.job'
+new_job_address += 'cutting_job_delayed.job'
 
 output_logFile_address = ratds_repo + 'log_files/'
 output_logFile_address = checkRepo(output_logFile_address, True)
@@ -110,7 +170,7 @@ for filename in os.listdir(ratds_repo):
     if os.path.isfile(file_address):
         if '.root' in filename:
             run = int(filename.split('_')[1][5:])
-            GTID = run_GTID_map[str(run)]
+            GTID = run_GTID_map_delayed[str(run)]
 
             command = commandBase + file_address + ' ' + str(-8.81) + ' ' + str(run)\
                       + ' ' + str(GTID) + ' ' + str(int(True)) + ' ' + str(int(True))

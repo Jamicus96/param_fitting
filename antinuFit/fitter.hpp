@@ -518,9 +518,24 @@ void Fitter::SetData(TTree* Data) {
     data_E.clear();
     Double_t reconEnergy;
     Data->SetBranchAddress("energy", &reconEnergy);
+
+    Int_t GTID;
+    Data->SetBranchAddress("eventID", &GTID);
+    std::vector<Int_t> cut_GTIDs = {7872258, 15357177, 8656140, 14585202, 13106488, 16172306, 15419458, 8780761, 8933258, 6599503, 7616837, 15373145, 13283754};
+    bool is_cut;
+
     for (unsigned int a = 0; a < Data->GetEntries(); ++a) {
         Data->GetEntry(a);
-        data_E.push_back(reconEnergy);
+
+        is_cut = false;
+        for (unsigned int iGTID = 0; iGTID < cut_GTIDs.size(); ++iGTID) {
+            if (GTID == cut_GTIDs.at(iGTID)) {
+                is_cut = true;
+                break;
+            }
+        }
+
+        if (!is_cut) data_E.push_back(reconEnergy);
     }
 
     #ifdef antinuDEBUG

@@ -151,14 +151,26 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
     unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nvaliddelayed = 0, nvalidpair = 0, nvalid = 0, nMuonCut = 0, nDCcut = 0, nValidCut = 0, negEcut = 0, nvalidMultiplicity = 0;
-    unsigned int nEvtType = 0, nEvtType_insideFV_MC = 0;
+    unsigned int nMuonCut = 0, nValidCut = 0, negEcut = 0, nDCcut = 0;
+    // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+    std::vector<std::string> passNames = {"total", "valid", "FV", "Prompt", "Delayed", "Dt", "DR", "Class", "Mult"};
+    std::vector<unsigned int> dataCounter = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindexNeg = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex0 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex1 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindexAbove2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindexNeg_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex0_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex1_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindex2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned int> EVindexAbove2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int64_t delayedTime, promptTime;
     TVector3 delayedPos, promptPos, multiplicityPos;
     double delay, highNhitDelay, owlNhitDelay;
     bool passMultiplicity;
     double promptEcorr, delayedEcorr;
-    double MC_rPos;
+    double delayed_MC_R, prompt_MC_R;
     // Loop through all events:
     for (int a = 0; a < nentries; ++a) {
         if (a % 10000 == 0) std::cout << "Done " << ((float)a / (float)nentries) * 100.0 << "%" << std::endl;
@@ -181,12 +193,21 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
         if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
 
-        // Counting number of prompt IBD events simulated within FV, outside of veto windows
+        dataCounter.at(0)++;
         if (!is_data) {
-            if (EVindex <= 0) {
-                ++nEvtType;
-                MC_rPos = sqrt(mcX*mcX + mcY*mcY + (mcZ - AV_offset)*(mcZ - AV_offset));
-                if (MC_rPos < FV_CUT) ++nEvtType_insideFV_MC;
+            // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+            if (EVindex < 0) EVindexNeg.at(0)++;
+            if (EVindex == 0) EVindex0.at(0)++;
+            if (EVindex == 1) EVindex1.at(0)++;
+            if (EVindex == 2) EVindex2.at(0)++;
+            if (EVindex > 2) EVindexAbove2.at(0)++;
+            delayed_MC_R = sqrt(mcX*mcX + mcY*mcY + (mcZ - AV_offset)*(mcZ - AV_offset));
+            if (delayed_MC_R < FV_CUT) {
+                if (EVindex < 0) EVindexNeg_MCFV.at(0)++;
+                if (EVindex == 0) EVindex0_MCFV.at(0)++;
+                if (EVindex == 1) EVindex1_MCFV.at(0)++;
+                if (EVindex == 2) EVindex2_MCFV.at(0)++;
+                if (EVindex > 2) EVindexAbove2_MCFV.at(0)++;
             }
         }
 
@@ -195,107 +216,240 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
         if (reconEnergy < 0) {++negEcut; continue;}
         if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
 
+        dataCounter.at(1)++;
+        if (!is_data) {
+            // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+            if (EVindex < 0) EVindexNeg.at(1)++;
+            if (EVindex == 0) EVindex0.at(1)++;
+            if (EVindex == 1) EVindex1.at(1)++;
+            if (EVindex == 2) EVindex2.at(1)++;
+            if (EVindex > 2) EVindexAbove2.at(1)++;
+            if (delayed_MC_R < FV_CUT) {
+                if (EVindex < 0) EVindexNeg_MCFV.at(1)++;
+                if (EVindex == 0) EVindex0_MCFV.at(1)++;
+                if (EVindex == 1) EVindex1_MCFV.at(1)++;
+                if (EVindex == 2) EVindex2_MCFV.at(1)++;
+                if (EVindex > 2) EVindexAbove2_MCFV.at(1)++;
+            }
+        }
+
         // Compute quantities used for cuts
         delayedPos = TVector3(reconX, reconY, reconZ);
+        if (!pass_FV_cut(delayedPos)) continue;
+
+        dataCounter.at(2)++;
+        if (!is_data) {
+            // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+            if (EVindex < 0) EVindexNeg.at(2)++;
+            if (EVindex == 0) EVindex0.at(2)++;
+            if (EVindex == 1) EVindex1.at(2)++;
+            if (EVindex == 2) EVindex2.at(2)++;
+            if (EVindex > 2) EVindexAbove2.at(2)++;
+            if (delayed_MC_R < FV_CUT) {
+                if (EVindex < 0) EVindexNeg_MCFV.at(2)++;
+                if (EVindex == 0) EVindex0_MCFV.at(2)++;
+                if (EVindex == 1) EVindex1_MCFV.at(2)++;
+                if (EVindex == 2) EVindex2_MCFV.at(2)++;
+                if (EVindex > 2) EVindexAbove2_MCFV.at(2)++;
+            }
+        }
+
         delayedEcorr = EnergyCorrection(reconEnergy, delayedPos, is_data, stateCorr, e_cal);
+        if (!pass_promptE_cuts_IBD(delayedEcorr)) continue;
 
-        if (pass_delayed_cuts_IBD(delayedEcorr, delayedPos)) {
-            nvaliddelayed++;
+        dataCounter.at(3)++;
+        if (!is_data) {
+            // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+            if (EVindex < 0) EVindexNeg.at(3)++;
+            if (EVindex == 0) EVindex0.at(3)++;
+            if (EVindex == 1) EVindex1.at(3)++;
+            if (EVindex == 2) EVindex2.at(3)++;
+            if (EVindex > 2) EVindexAbove2.at(3)++;
+            if (delayed_MC_R < FV_CUT) {
+                if (EVindex < 0) EVindexNeg_MCFV.at(3)++;
+                if (EVindex == 0) EVindex0_MCFV.at(3)++;
+                if (EVindex == 1) EVindex1_MCFV.at(3)++;
+                if (EVindex == 2) EVindex2_MCFV.at(3)++;
+                if (EVindex > 2) EVindexAbove2_MCFV.at(3)++;
+            }
+        }
 
-            // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
-            for (int b = 1; b <= 1000; ++b) {
-                if ((a - b) < 0) break;
+        if (!pass_delayedE_cuts_IBD(delayedEcorr)) continue;
+
+        dataCounter.at(4)++;
+        if (!is_data) {
+            // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+            if (EVindex < 0) EVindexNeg.at(4)++;
+            if (EVindex == 0) EVindex0.at(4)++;
+            if (EVindex == 1) EVindex1.at(4)++;
+            if (EVindex == 2) EVindex2.at(4)++;
+            if (EVindex > 2) EVindexAbove2.at(4)++;
+            if (delayed_MC_R < FV_CUT) {
+                if (EVindex < 0) EVindexNeg_MCFV.at(4)++;
+                if (EVindex == 0) EVindex0_MCFV.at(4)++;
+                if (EVindex == 1) EVindex1_MCFV.at(4)++;
+                if (EVindex == 2) EVindex2_MCFV.at(4)++;
+                if (EVindex > 2) EVindexAbove2_MCFV.at(4)++;
+            }
+        }
+
+        // Delayed event is valid, check through the previous 1000 events for event that passes prompt + classifier + tagging cuts
+        for (int b = 1; b <= 1000; ++b) {
+            if ((a - b) < 0) break;
+            EventInfo->GetEntry(a - b);
+
+            promptTime = int64_t(eventTime);
+            highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+            owlNhitDelay = ((promptTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+            if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
+            if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
+            if (!valid) {++nValidCut; continue;}
+            if (reconEnergy < 0) {++negEcut; continue;}
+            if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
+
+            delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
+            if (delay > IBD_MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
+
+            promptPos = TVector3(reconX, reconY, reconZ);
+            promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
+
+            if (!pass_prompt_cuts_IBD(promptEcorr, promptPos)) continue;
+            if (!pass_dT_cut_IBD(delay)) continue;
+
+            dataCounter.at(5)++;
+            if (!is_data) {
+                // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+                if (EVindex < 0) EVindexNeg.at(5)++;
+                if (EVindex == 0) EVindex0.at(5)++;
+                if (EVindex == 1) EVindex1.at(5)++;
+                if (EVindex == 2) EVindex2.at(5)++;
+                if (EVindex > 2) EVindexAbove2.at(5)++;
+                prompt_MC_R = sqrt(mcX*mcX + mcY*mcY + (mcZ - AV_offset)*(mcZ - AV_offset));
+                if ((delayed_MC_R < FV_CUT) && (prompt_MC_R < FV_CUT)) {
+                    if (EVindex < 0) EVindexNeg_MCFV.at(5)++;
+                    if (EVindex == 0) EVindex0_MCFV.at(5)++;
+                    if (EVindex == 1) EVindex1_MCFV.at(5)++;
+                    if (EVindex == 2) EVindex2_MCFV.at(5)++;
+                    if (EVindex > 2) EVindexAbove2_MCFV.at(5)++;
+                }
+            }
+
+            if (!pass_dR_cut_IBD(promptPos, delayedPos)) continue;
+
+            dataCounter.at(6)++;
+            if (!is_data) {
+                // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+                if (EVindex < 0) EVindexNeg.at(6)++;
+                if (EVindex == 0) EVindex0.at(6)++;
+                if (EVindex == 1) EVindex1.at(6)++;
+                if (EVindex == 2) EVindex2.at(6)++;
+                if (EVindex > 2) EVindexAbove2.at(6)++;
+                if ((delayed_MC_R < FV_CUT) && (prompt_MC_R < FV_CUT)) {
+                    if (EVindex < 0) EVindexNeg_MCFV.at(6)++;
+                    if (EVindex == 0) EVindex0_MCFV.at(6)++;
+                    if (EVindex == 1) EVindex1_MCFV.at(6)++;
+                    if (EVindex == 2) EVindex2_MCFV.at(6)++;
+                    if (EVindex > 2) EVindexAbove2_MCFV.at(6)++;
+                }
+            }
+
+            if (!pass_classifier(promptEcorr, classResult, classifier_cut)) continue;
+
+            dataCounter.at(7)++;
+            if (!is_data) {
+                // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+                if (EVindex < 0) EVindexNeg.at(7)++;
+                if (EVindex == 0) EVindex0.at(7)++;
+                if (EVindex == 1) EVindex1.at(7)++;
+                if (EVindex == 2) EVindex2.at(7)++;
+                if (EVindex > 2) EVindexAbove2.at(7)++;
+                if ((delayed_MC_R < FV_CUT) && (prompt_MC_R < FV_CUT)) {
+                    if (EVindex < 0) EVindexNeg_MCFV.at(7)++;
+                    if (EVindex == 0) EVindex0_MCFV.at(7)++;
+                    if (EVindex == 2) EVindex2_MCFV.at(7)++;
+                    if (EVindex > 2) EVindexAbove2_MCFV.at(7)++;
+                }
+            }
+
+            // check for multiplicity (any events around the event pairs that have E>0.4MeV and dr<2m)
+            passMultiplicity = true;
+            for (unsigned int c = 1; c < 1000; ++c) {
+                // before prompt
+                if ((a - b - c) < 0) break;
+                EventInfo->GetEntry(a - b - c);
+
+                delay = ((promptTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                if (delay > 1.) break;
+
+                if (reconEnergy > 0.4) {
+                    multiplicityPos = TVector3(reconX, reconY, reconZ);
+                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                        passMultiplicity = false;
+                        break;
+                    }
+                }
+            }
+            // after prompt is covered by before delayed
+            if (passMultiplicity) {
+                for (unsigned int c = 1; c < 1000; ++c) {
+                    // before delayed
+                    if (c >= b) break;
+                    EventInfo->GetEntry(a - c);
+
+                    delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                    if (delay > 1.) break;
+
+                    if (reconEnergy > 0.4) {
+                        multiplicityPos = TVector3(reconX, reconY, reconZ);
+                        if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                            passMultiplicity = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (passMultiplicity) {
+                for (unsigned int c = 1; c < 1000; ++c) {
+                    // after delayed
+                    if ((a + c) > nentries) break;
+                    EventInfo->GetEntry(a + c);
+
+                    delay = ((int64_t(eventTime) - delayedTime) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
+                    if (delay > 1.) break;
+
+                    if (reconEnergy > 0.4) {
+                        multiplicityPos = TVector3(reconX, reconY, reconZ);
+                        if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
+                            passMultiplicity = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (passMultiplicity) {
+                // Add to output TTrees
                 EventInfo->GetEntry(a - b);
+                reconEnergy = promptEcorr;
+                CutPromptTree->Fill();
+                EventInfo->GetEntry(a);
+                reconEnergy = delayedEcorr;
+                CutDelayedTree->Fill();
 
-                promptTime = int64_t(eventTime);
-                highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-                owlNhitDelay = ((promptTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-                if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
-                if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
-                if (!valid) {++nValidCut; continue;}
-                if (reconEnergy < 0) {++negEcut; continue;}
-                if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
-
-                delay = ((delayedTime - promptTime) & 0x7FFFFFFFFFF) / 50E6 * 1E9; // convert number of ticks in 50MHz clock to ns
-                if (delay > IBD_MAX_DELAY) break;  // If delay becomes larger than cut, stop looking for new events
-
-                promptPos = TVector3(reconX, reconY, reconZ);
-                promptEcorr = EnergyCorrection(reconEnergy, promptPos, is_data, stateCorr, e_cal);
-
-                if (pass_prompt_cuts_IBD(promptEcorr, promptPos) and pass_coincidence_cuts_IBD(delay, promptPos, delayedPos)) {
-                    // Event pair survived analysis cuts
-                    nvalidpair++;
-                    if (pass_classifier(promptEcorr, classResult, classifier_cut)) {
-                        // Event pair survived classifier cut
-                        nvalid++;
-
-                        // check for multiplicity (any events around the event pairs that have E>0.4MeV and dr<2m)
-                        passMultiplicity = true;
-                        for (unsigned int c = 1; c < 1000; ++c) {
-                            // before prompt
-                            if ((a - b - c) < 0) break;
-                            EventInfo->GetEntry(a - b - c);
-
-                            delay = ((promptTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                            if (delay > 1.) break;
-
-                            if (reconEnergy > 0.4) {
-                                multiplicityPos = TVector3(reconX, reconY, reconZ);
-                                if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                                    passMultiplicity = false;
-                                    break;
-                                }
-                            }
-                        }
-                        // after prompt is covered by before delayed
-                        if (passMultiplicity) {
-                            for (unsigned int c = 1; c < 1000; ++c) {
-                                // before delayed
-                                if (c >= b) break;
-                                EventInfo->GetEntry(a - c);
-
-                                delay = ((delayedTime - int64_t(eventTime)) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                                if (delay > 1.) break;
-
-                                if (reconEnergy > 0.4) {
-                                    multiplicityPos = TVector3(reconX, reconY, reconZ);
-                                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                                        passMultiplicity = false;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (passMultiplicity) {
-                            for (unsigned int c = 1; c < 1000; ++c) {
-                                // after delayed
-                                if ((a + c) > nentries) break;
-                                EventInfo->GetEntry(a + c);
-
-                                delay = ((int64_t(eventTime) - delayedTime) & 0x7FFFFFFFFFF) / 50E6 * 1E3; // convert number of ticks in 50MHz clock to ms
-                                if (delay > 1.) break;
-
-                                if (reconEnergy > 0.4) {
-                                    multiplicityPos = TVector3(reconX, reconY, reconZ);
-                                    if ((multiplicityPos - promptPos).Mag() < 2000. || (multiplicityPos - delayedPos).Mag() < 2000.) {
-                                        passMultiplicity = false;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (passMultiplicity) {
-                            // Add to output TTrees
-                            EventInfo->GetEntry(a - b);
-                            reconEnergy = promptEcorr;
-                            CutPromptTree->Fill();
-                            EventInfo->GetEntry(a);
-                            reconEnergy = delayedEcorr;
-                            CutDelayedTree->Fill();
-
-                            ++nvalidMultiplicity;
-                        }
+                dataCounter.at(8)++;
+                if (!is_data) {
+                    // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
+                    if (EVindex < 0) EVindexNeg.at(8)++;
+                    if (EVindex == 0) EVindex0.at(8)++;
+                    if (EVindex == 1) EVindex1.at(8)++;
+                    if (EVindex == 2) EVindex2.at(8)++;
+                    if (EVindex > 2) EVindexAbove2.at(8)++;
+                    if ((delayed_MC_R < FV_CUT) && (prompt_MC_R < FV_CUT)) {
+                        if (EVindex < 0) EVindexNeg_MCFV.at(8)++;
+                        if (EVindex == 0) EVindex0_MCFV.at(8)++;
+                        if (EVindex == 1) EVindex1_MCFV.at(8)++;
+                        if (EVindex == 2) EVindex2_MCFV.at(8)++;
+                        if (EVindex > 2) EVindexAbove2_MCFV.at(8)++;
                     }
                 }
             }
@@ -303,13 +457,13 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     }
 
 
-    std::cout << "From " << nentries << " entries, number of valid delayed events: " << nvaliddelayed
-              << ", number of these event pairs surviving prompt + coincidence cuts: " << nvalidpair
-              << ", number of these event pairs surviving classifier cut: " << nvalid
-              << ", number of that survive multiplicity cut: " << nvalidMultiplicity << std::endl;
-    std::cout << "Events cut from Muon tagging: " << nMuonCut << ", invalid recon: " << nValidCut << ", negative E: " << negEcut << ", failed DC: " << nDCcut << std::endl;
-    std::cout << "Last muon tag time (50MHz clock ticks): " << highNhitTime << std::endl;
-    std::cout << "Number of prompt events simulated (outside veto windows): " << nEvtType << ", inside FV: " << nEvtType_insideFV_MC << std::endl;
+    std::cout << "From " << nentries << " entries, nMuonCut: " << nMuonCut << ", nValidCut: " << nValidCut << ", negEcut: " << negEcut << ", nDCcut: " << nDCcut << std::endl;
+    std::cout << "Passed All EVindex<0 EVindex==0 EVindex==1 EVindex==2 EVindex>2 EVindex<0&&rMC<5.7 EVindex==0&&rMC<5.7 EVindex==1&&rMC<5.7 EVindex==2&&rMC<5.7 EVindex>2&&rMC<5.7" << std::endl;
+    for (unsigned int i = 0; i < passNames.size(); ++i) {
+        std::cout << passNames.at(i) << " " << dataCounter.at(i) << " "
+                  << EVindexNeg.at(i) << " " << EVindex0.at(i) << " " << EVindex1.at(i) << " " << EVindex2.at(i) << " " << EVindexAbove2.at(i) << " "
+                  << EVindexNeg_MCFV.at(i) << " " << EVindex0_MCFV.at(i) << " " << EVindex1_MCFV.at(i) << " " << EVindex2_MCFV.at(i) << " " << EVindexAbove2_MCFV.at(i) << std::endl;
+    }
 
     // Write output ntuple to files, deal with ttrees getting too full to write to one file
     std::cout << "Writing Trees..." << std::endl; 
