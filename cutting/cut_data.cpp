@@ -116,7 +116,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     ULong64_t eventTime, dcApplied, dcFlagged;
     Int_t nHits, GTID, owlnhits;
     Int_t runNum; //run number associated with MC
-    Bool_t* valid;
+    Bool_t valid;
     // Extra MC stuff, if available
     Double_t mcX, mcY, mcZ;
     Int_t EVindex;  // For MC: 0 = prompt, 1 = delayed
