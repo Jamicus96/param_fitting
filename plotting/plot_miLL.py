@@ -30,15 +30,15 @@ def setup_plot_style():
 
 ### COLLECT DATA ###
 
-data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/param_fits_all_constrained.txt'
-logfile = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/replicateTony/real/log_combi_constrained.txt'
+data_address = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/thesis/fitting/param_fits_all_constrained.txt'
+logfile = '/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/thesis/fitting/log_combi_constrained.txt'
 
 min_E = 0.9
 max_E = 8.0
 
 def read_data(data_address):
     Dm21 = []
-    theta_12 = []
+    s_12_2 = []
     minLL = []
 
     Ebin_centers = []
@@ -82,7 +82,7 @@ def read_data(data_address):
                     Dm21 = line_splt
                     first_line = False
                 else:
-                    theta_12.append(line_splt[0])
+                    s_12_2.append(line_splt[0])
                     line_splt.pop(0)
                     minLL.append(line_splt)
             
@@ -108,12 +108,12 @@ def read_data(data_address):
                     ovarallFit_spectra[spec_name] = np.asarray(line_splt, dtype=float)
 
     Dm21 = np.asarray(Dm21, dtype=float)[1:-1] * 1E5
-    theta_12 = np.asarray(theta_12, dtype=float)[1:-1]
+    s_12_2 = np.asarray(s_12_2, dtype=float)[1:-1]
     minLL = np.asarray(minLL, dtype=float)[1:-1, 1:-1]
     minLL = minLL.transpose()
 
     for i in range(len(Dm21)):
-        for j in range(len(theta_12)):
+        for j in range(len(s_12_2)):
             if minLL[i, j] < 0:
                 avNum = 0
                 sum = 0.
@@ -157,7 +157,7 @@ def read_data(data_address):
         ovarallFit_spectra[spec] = ovarallFit_spectra[spec][min_idx:max_idx]
         print(spec + ': ' + str(np.sum(ovarallFit_spectra[spec])))
 
-    return Dm21, theta_12, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data
+    return Dm21, s_12_2, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data
 
 def ll_diff_per_nSig(n):
     '''
@@ -173,22 +173,22 @@ def inv_ll_diff_per_nSig(nSig):
     nDOF = 2
     return scipy.stats.norm.ppf(0.5*(1 + scipy.stats.chi2.cdf(nSig, nDOF)))
 
-def plot_LL(Dm21, theta_12, minLL):
+def plot_LL(Dm21, s_12_2, minLL):
     # Get best fit values
     min_indices = np.where(minLL == np.min(minLL))
     min_theta_idx = min_indices[1][0]
     min_Dm_idx = min_indices[0][0]
 
-    # min_theta_idx = np.argmin(np.abs(theta_12 - 40))
+    # min_theta_idx = np.argmin(np.abs(s_12_2 - 40))
     # min_Dm_idx = np.argmin(minLL[:, min_theta_idx])
 
-    # min_indices = np.where(minLL == np.min(minLL[:, :int(len(theta_12)/2)]))
+    # min_indices = np.where(minLL == np.min(minLL[:, :int(len(s_12_2)/2)]))
     # min_theta_idx = min_indices[1][0]
     # min_Dm_idx = min_indices[0][0]
 
     print(minLL[min_Dm_idx, min_theta_idx])
 
-    min_theta_12 = theta_12[min_theta_idx]
+    min_theta_12 = s_12_2[min_theta_idx]
     min_Dm21 = Dm21[min_Dm_idx]
 
     # Get uncertainties
@@ -210,25 +210,25 @@ def plot_LL(Dm21, theta_12, minLL):
             min_Dm21_min = min_Dm21 - 0.5 * (Dm21[min_Dm_idx - i] + Dm21[min_Dm_idx - i - 1])
             break
 
-    for i in range(min_theta_idx, theta_12.size):
+    for i in range(min_theta_idx, s_12_2.size):
         if (minLL[min_Dm_idx, i] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
-            min_theta12_max = theta_12[i] - min_theta_12
+            min_theta12_max = s_12_2[i] - min_theta_12
             break
         elif (minLL[min_Dm_idx, i] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
-            min_theta12_max = 0.5 * (theta_12[i] + theta_12[i - 1]) - min_theta_12
+            min_theta12_max = 0.5 * (s_12_2[i] + s_12_2[i - 1]) - min_theta_12
             break
 
     for i in range(min_theta_idx):
         if (minLL[min_Dm_idx, min_theta_idx - i] - minLL[min_Dm_idx, min_theta_idx]) == Chi2Diff:
-            min_theta12_min = min_theta_12 - theta_12[min_theta_idx - i]
+            min_theta12_min = min_theta_12 - s_12_2[min_theta_idx - i]
             break
         elif (minLL[min_Dm_idx, min_theta_idx - i] - minLL[min_Dm_idx, min_theta_idx]) > Chi2Diff:
-            min_theta12_min = min_theta_12 - 0.5 * (theta_12[min_theta_idx - i] + theta_12[min_theta_idx - i - 1])
+            min_theta12_min = min_theta_12 - 0.5 * (s_12_2[min_theta_idx - i] + s_12_2[min_theta_idx - i - 1])
             break
 
     # Print fit results
     print('Dm21^2 = {} + {} - {} eV^2'.format(min_Dm21, min_Dm21_max, min_Dm21_min))
-    print('theta_12 = {} + {} - {} degrees'.format(min_theta_12, min_theta12_max, min_theta12_min))
+    print('s_12_2 = {} + {} - {} degrees'.format(min_theta_12, min_theta12_max, min_theta12_min))
 
     ### PLOT DATA ###
     prop_font = setup_plot_style()
@@ -240,16 +240,22 @@ def plot_LL(Dm21, theta_12, minLL):
     ax1 = plt.gca()
 
     # Background heat map
-    im = ax1.imshow(np.sqrt(minLL), cmap=plt.cm.viridis, interpolation='none', extent=[theta_12[0], theta_12[-1], Dm21[0], Dm21[-1]],
+    im = ax1.imshow(np.sqrt(minLL), cmap=plt.cm.viridis, interpolation='none', extent=[s_12_2[0], s_12_2[-1], Dm21[0], Dm21[-1]],
                     aspect='auto', origin='lower', vmin=0, vmax=3.5)
     colbar = plt.colorbar(im)
     colbar.ax.set_ylabel(r'$\sqrt{-2\Delta \mathrm{log}(L)}$', rotation=90, fontproperties=prop_font)
+
+    # #### TEST 3D
+    # fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
+    # X, Y = np.meshgrid(s_12_2, Dm21)
+    # surf = ax1.plot_surface(X, Y, np.sqrt(minLL), cmap=plt.cm.viridis, linewidth=0, antialiased=False)
+    # ####
 
     # Best fit point
     ax1.scatter(min_theta_12, min_Dm21, marker='+', s=100, linewidths=2, color='w')
 
     # Contours
-    X, Y = np.meshgrid(theta_12, Dm21)
+    X, Y = np.meshgrid(s_12_2, Dm21)
     contour_vals = [1, 2, 3] #, 4, 5]
     contour_cols = ['peachpuff','red', 'brown'] # 'sandybrown', 'darkorange', 
     contour_styles = ['-', '--', '-.', '-.', '-.', '-.']
@@ -275,7 +281,7 @@ def plot_LL(Dm21, theta_12, minLL):
     leg.get_frame().set_alpha(0.9)
 
     # Labels
-    ax1.set_xlabel(r'$\theta_{12}$ $\left[{}^{\degree}\right]$', fontproperties=prop_font, x=1, ha='right')
+    ax1.set_xlabel(r'sin${}^2 \theta_{12}$', fontproperties=prop_font, x=1, ha='right')
     ax1.set_ylabel(r'$\Delta m_{21}^2$ $\left[10^{-5} \mathrm{eV}^2\right]$', fontproperties=prop_font, y=1, ha='right')
 
     for label in ax1.get_xticklabels():
@@ -316,8 +322,8 @@ def plot_spectra(Ebin_centers, spectra, ntuple_data):
     fig = plt.subplot(111)
     ax1 = plt.gca()
 
-    ax1.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['alphaN::model_Esys'], spectra['geoNu::model_Esys'], spectra['Accidentals'], spectra['Sideband'],
-                 step='post', labels=[r'reactor-$\nu$ IBD', r'($\alpha$,n)', r'geo-$\nu$ IBD', 'accidentals', 'sideband'], colors=['salmon', 'cornflowerblue', 'palegreen', 'gold', 'violet'], ec='grey', linewidth=1)
+    ax1.stackplot(bin_edges[:-1], spectra['Reactor::model_Esys'], spectra['alphaN::model_Esys'], spectra['geoNu::model_Esys'], spectra['Accidentals'],
+                 step='post', labels=[r'reactor-$\nu$ IBD', r'($\alpha$,n)', r'geo-$\nu$ IBD', 'accidentals'], colors=['salmon', 'cornflowerblue', 'palegreen', 'gold'], ec='grey', linewidth=1)
 
     # plt.stairs(spectra['Total_Model_Spectrum'], edges=bin_edges, color='k', linestyle='dashed', label='total model')
 
@@ -364,7 +370,7 @@ def plot_spectra(Ebin_centers, spectra, ntuple_data):
     ax1.get_yaxis().set_tick_params(which='both',direction='in', width=1)
     ax1.xaxis.set_ticks_position('both')
 
-    ax1.set_title(r'Fit Prompt Energy Spectrum', fontproperties=prop_font)
+    # ax1.set_title(r'Fit Prompt Energy Spectrum', fontproperties=prop_font)
     ax1.text(2.5, 0.05, "SNO+ Preliminary", fontproperties=prop_font)
     plt.show()
 
@@ -408,13 +414,13 @@ def fit_inv_sqrt(x, y):
     return m, c
 
 
-def find_min_and_errs(minLL, Dm21, theta_12):
+def find_min_and_errs(minLL, Dm21, s_12_2):
     # Get best fit values
     min_indices = np.where(minLL == np.min(minLL))
     min_theta_idx = min_indices[1][0]
     min_Dm_idx = min_indices[0][0]
 
-    min_theta_12 = theta_12[min_theta_idx]
+    min_theta_12 = s_12_2[min_theta_idx]
     min_Dm21 = Dm21[min_Dm_idx]
 
     # Get uncertainties
@@ -436,20 +442,20 @@ def find_min_and_errs(minLL, Dm21, theta_12):
             min_Dm21_min = min_Dm21 - 0.5 * (Dm21[min_Dm_idx - i] + Dm21[min_Dm_idx - i - 1])
             break
 
-    for i in range(min_theta_idx, theta_12.size):
+    for i in range(min_theta_idx, s_12_2.size):
         if minLL[min_Dm_idx, i] == Chi2Diff:
-            min_theta12_max = theta_12[i] - min_theta_12
+            min_theta12_max = s_12_2[i] - min_theta_12
             break
         elif minLL[min_Dm_idx, i] > Chi2Diff:
-            min_theta12_max = 0.5 * (theta_12[i] + theta_12[i - 1]) - min_theta_12
+            min_theta12_max = 0.5 * (s_12_2[i] + s_12_2[i - 1]) - min_theta_12
             break
 
     for i in range(min_theta_idx):
         if minLL[min_Dm_idx, min_theta_idx - i] == Chi2Diff:
-            min_theta12_min = min_theta_12 - theta_12[min_theta_idx - i]
+            min_theta12_min = min_theta_12 - s_12_2[min_theta_idx - i]
             break
         elif minLL[min_Dm_idx, min_theta_idx - i] > Chi2Diff:
-            min_theta12_min = min_theta_12 - 0.5 * (theta_12[min_theta_idx - i] + theta_12[min_theta_idx - i - 1])
+            min_theta12_min = min_theta_12 - 0.5 * (s_12_2[min_theta_idx - i] + s_12_2[min_theta_idx - i - 1])
             break
     
     Dm21_fit = (min_Dm21, min_Dm21_min, min_Dm21_max)
@@ -457,7 +463,7 @@ def find_min_and_errs(minLL, Dm21, theta_12):
     return Dm21_fit, theta12_fit
 
 def sensitivity_over_time():
-    Dm21, theta_12, minLL, _, _, _, _ = read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt')
+    Dm21, s_12_2, minLL, _, _, _, _ = read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all.txt')
     Dm21_classCUT, theta_12_classCUT, minLL_classCUT, _, _, _, _= read_data('/Users/jp643/Documents/Studies/PhD/Antinu/param_fitting/likelihoods/updated/param_fits_all_classCUT.txt')
     
     livetime_init = 134.4 / 365.25
@@ -466,7 +472,7 @@ def sensitivity_over_time():
     Dm21_errs = np.zeros(len(livetimes))
     Dm21_errs_classCUT = np.zeros(len(livetimes))
 
-    Dm21_fit, theta12_fit = find_min_and_errs(minLL, Dm21, theta_12)
+    Dm21_fit, theta12_fit = find_min_and_errs(minLL, Dm21, s_12_2)
     min_Dm21, min_Dm21_min, min_Dm21_max = Dm21_fit
     min_theta_12, min_theta12_min, min_theta12_max = theta12_fit
 
@@ -512,8 +518,8 @@ def sensitivity_over_time():
     plt.show()
 
 
-Dm21, theta_12, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data = read_data(data_address)
-plot_LL(Dm21, theta_12, minLL)
+Dm21, s_12_2, minLL, Ebin_centers, spectra, ovarallFit_spectra, ntuple_data = read_data(data_address)
+plot_LL(Dm21, s_12_2, minLL)
 plot_spectra(Ebin_centers, spectra, ntuple_data)
 plot_spectra(Ebin_centers, ovarallFit_spectra, ntuple_data)
 
@@ -577,9 +583,9 @@ def correlation_matrix(logfile_address):
     # tick labelling
     tick_pos = np.arange(0 + 0.5/len(variables), 1 + 0.5/len(variables), 1/len(variables))
 
-    if np.all(variables == np.array(['deltamsqr21', 'sinsqrtheta12', 'linScale', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_PR', 'alphaNNorm_C12', 'alphaNNorm_ES', 'reactorNorm_tot', 'sidebandsNorm'])):
+    if np.all(variables == np.array(['deltamsqr21', 'sinsqrtheta12', 'linScale', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_PR', 'alphaNNorm_GS', 'alphaNNorm_ES', 'reactorNorm', 'AccidentalsNorm'])):
         print('True')
-        variable_names = [r'$\Delta m^2_{21}$', r'$s_{12}^2$', r'$c$', r"$k_B'$", r'$c_P$', r'$\sigma / \sqrt{E}$', r'$R_{U/Th}$', r'$N_{geo-\nu}$', r'$N_{(\alpha, n) PR}$', r'$N_{(\alpha, n) 12C}$', r'$N_{(\alpha, n) 16O}$', r'$N_{reactor}$', r'$N_{sideband}$']
+        variable_names = [r'$\Delta m^2_{21}$', r'$s_{12}^2$', r'$c$', r"$k_B'$", r'$c_P$', r'$\sigma / \sqrt{E}$', r'$R_{U/Th}$', r'$N_{geo-\nu}$', r'$S_{(\alpha, n) PR}$', r'$N_{(\alpha, n) GS}$', r'$N_{(\alpha, n) 16O}$', r'$N_{reactor}$', r'$N_{acc}$']
     else:
         variable_names = variables
     
