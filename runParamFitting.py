@@ -28,7 +28,10 @@ def argparser():
     parser.add_argument('--fit_repo', '-fr', type=str, dest='fit_repo',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/data_fitting_class_varPR/', help='Folder to save recombined root files with tracking information in.')
     
-    parser.add_argument('--rl_file', '-rlr', type=str, dest='rl_file',
+    parser.add_argument('--lt_file', '-ltf', type=str, dest='lt_file',
+                        default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/replicateTony/livetime/antinuTest/livetime_per_run_antinuTest.txt',
+                        help='Text file of run livetimes. Output of livetime calculator (rat-tools). Empty string or False/false means it will not be used.')
+    parser.add_argument('--rl_file', '-rlf', type=str, dest='rl_file',
                         default='/mnt/lustre/scratch/epp/jp643/antinu/param_fitting/thesis/antinu_runlist_UPDATED.txt', help='Text file of runs to include (one run-number per line).')
     parser.add_argument('---use_rl', '-uRL', type=bool, dest='use_rl',
                         default=True, help='Bool to restrict only to file names including run-numbers from the run list defined in rl_file.')
@@ -345,7 +348,7 @@ def scale_reactorNtuples(args):
     commandList_file = open(commandList_address, 'w')
     for file_address in ntuple_addresses:
         outNtuple_address = 'scaled_' + file_address.split('/')[-1][:-12] + '.ntuple.root'
-        command = commandBase + file_address + ' '
+        command = commandBase + file_address + ' ' + args.lt_file + ' '
         command += scaled_cut_ntuple_repo + outNtuple_address
         commandList_file.write(command + '\n')
     commandList_file.close()

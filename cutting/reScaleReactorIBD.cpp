@@ -10,8 +10,31 @@ Based off rat-tools/AntinuTools/scale_reactor_flux.cpp
 #include <RAT/DB.hh>
 #include <TMath.h>
 #include <TVector3.h>
+#include <map>
+#include <fstream>
 
 #define USING_RUN_NUM
+
+/**
+ * @brief Get the livetime scaling due to muon vetos from each run
+ * 
+ * @param run_livetimes_address Output "livetime_per_run_*.txt" from livetime calculator
+ * @param livetime_scalings map <runNum, scaling>
+ */
+void GetVetoLivetimeScaling(std::string run_livetimes_address, std::map<int, double>& livetime_scalings) {
+    if (run_livetimes_address == "" || run_livetimes_address != "false" || run_livetimes_address != "False" || run_livetimes_address != "0") return;
+
+    // Read in text file "<runNum> <livetime [days]> <livetime - veto time [days]"
+    std::ifstream infile(run_livetimes_address);
+
+    int runNum;
+    double livetime, corr_livetime;
+    while (infile >> runNum >> livetime >> corr_livetime) {
+        if (corr_livetime > livetime) {std::cout << "ERROR [corr_livetime > livetime] : " << corr_livetime << " < " << livetime << std::endl; exit(1);}
+        if (livetime == 0) livetime_scalings.insert({runNum, 1.0});
+        else livetime_scalings.insert({runNum, corr_livetime / livetime});
+    }
+}
 
 
 std::vector<std::string> SplitString(std::string str, bool Osc) {
@@ -43,7 +66,7 @@ std::vector<std::string> SplitString(std::string str, bool Osc) {
     return info;
 }
 
-void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
+void ScaleReactorFlux(std::string inputFile, std::string outputFile, const std::map<int, double>& livetime_scalings) {
 
     //load in ntuple
     TFile *reactorFile;
@@ -85,6 +108,7 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
     std::vector<Double_t> reacts_eff_vals;
     int num_excess_eff_evts = 0;
     int num_no_table_evts = 0;
+    double av_pow_scaling = 0, av_livetime_scaling = 0;
     RAT::DBLinkPtr linkdb;
     RAT::DB *db = RAT::DB::Get();
     RAT::DS::Run run;
@@ -116,6 +140,7 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
         }
 
         linkdb = db->GetLink("REACTOR_STATUS", originReactorVect[0]);
+        efficiency = 1./1.2;
         try{
             efficiency = linkdb->GetDArray("core_power_scale_factor")[std::stoi(originReactorVect[1])];
         }
@@ -124,13 +149,23 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
             std::cout << "Reactors status table does not exist for reactor " << originReactorString << ". Removing this event." << std::endl;
             continue;
         }
-        if(efficiency > 1){ //we cant add events, so for now make a note of which reactors this occurs, SOLUTION: simulate higher than design power
+        av_pow_scaling += (efficiency - av_pow_scaling) / (double)(a + 1);
+        if (livetime_scalings.find(runNum) != livetime_scalings.end()) {
+            // Run found in list, apply extra livetime scaling
+            efficiency *= livetime_scalings.at(runNum);
+            av_livetime_scaling += (livetime_scalings.at(runNum) - av_livetime_scaling) / (double)(a + 1);
+        } else {
+            av_livetime_scaling += (1.0 - av_livetime_scaling) / (double)(a + 1);
+        }
+
+        // See if event survives re-scaling
+        if(efficiency > 1){ // we cant add events, so for now make a note of which reactors this occurs, SOLUTION: simulate higher than design power
             num_excess_eff_evts++;
             if(std::find(reacts_eff_names.begin(), reacts_eff_names.end(),originReactorString)==reacts_eff_names.end()){
                 reacts_eff_names.push_back(originReactorString);
             }
         }
-        if(rndm<efficiency){ //if keeping the event, write to new ttree
+        if(rndm < efficiency){ // if keeping the event, write to new ttree
             scaledReactorEventInfo->Fill();
         }
     }
@@ -150,6 +185,9 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
         std::cout << "Could not find a table for " << num_no_table_evts << " events, equal to " << (float(num_no_table_evts) / nentries) * 100 << " percent of events" << std::endl;
     }
 
+    std::cout << "Average power scaling applied: " << av_pow_scaling << std::endl;
+    std::cout << "Average livetime scaling applied: " << av_livetime_scaling << std::endl;
+
     scaled_ntuple->cd();
     scaledReactorEventInfo->Write();
 
@@ -163,7 +201,12 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile) {
 
 int main(int argv, char** argc){
     std::string inputNtuple = argc[1];
-    std::string outputNtuple = argc[2];
+    std::string run_livetimes_address = argc[2];
+    std::string outputNtuple = argc[3];
 
-    ScaleReactorFlux(inputNtuple, outputNtuple);
+    // Get run livetime scalings from muon vetos
+    std::map<int, double> livetime_scalings;
+    GetVetoLivetimeScaling(run_livetimes_address, livetime_scalings);
+
+    ScaleReactorFlux(inputNtuple, outputNtuple, livetime_scalings);
 } 
