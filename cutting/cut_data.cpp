@@ -64,7 +64,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     bool found_highNhit = false, found_owlNhit = false;
     
     // Read in file and find last high nhit event
-    if (previousRunNtuple != "0" && previousRunNtuple != "false" && previousRunNtuple != "False") {
+    if (is_data && previousRunNtuple != "0" && previousRunNtuple != "false" && previousRunNtuple != "False") {
         TFile* previousFile = TFile::Open(previousRunNtuple.c_str());
         TTree* previousEventInfo = (TTree*) previousFile->Get("output");
 
@@ -150,21 +150,21 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
     RAT::DU::DetectorStateCorrection stateCorr = RAT::DU::Utility::Get()->GetDetectorStateCorrection();
     RAT::DU::ReconCalibrator* e_cal = RAT::DU::ReconCalibrator::Get();
 
-    unsigned int nentries = EventInfo->GetEntries();
-    unsigned int nMuonCut = 0, nValidCut = 0, negEcut = 0, nDCcut = 0;
+    int nentries = EventInfo->GetEntries();
+    int nMuonCut = 0, nValidCut = 0, negEcut = 0, nDCcut = 0;
     // total, valid, passFV, passPrompt, passDelayed, passDt, passDR, passClass, passMult
     std::vector<std::string> passNames = {"total", "valid", "FV", "Prompt", "Delayed", "Dt", "DR", "Class", "Mult"};
-    std::vector<unsigned int> dataCounter = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindexNeg = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex0 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex1 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindexAbove2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindexNeg_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex0_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex1_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindex2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<unsigned int> EVindexAbove2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> dataCounter = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindexNeg = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex0 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex1 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindexAbove2 = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindexNeg_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex0_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex1_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindex2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> EVindexAbove2_MCFV = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int64_t delayedTime, promptTime;
     TVector3 delayedPos, promptPos, multiplicityPos;
     double delay, highNhitDelay, owlNhitDelay;
@@ -187,11 +187,13 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
         // Veto logic (accounted for in livetime)
         delayedTime = int64_t(eventTime);
-        if (nHits > 3000) highNhitTime = delayedTime;
-        if (owlnhits > 3) owlNhitTime = delayedTime;
-        highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-        owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-        if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+        if (is_data) {
+            if (nHits > 3000) highNhitTime = delayedTime;
+            if (owlnhits > 3) owlNhitTime = delayedTime;
+            highNhitDelay = ((delayedTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+            owlNhitDelay = ((delayedTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+            if (highNhitDelay < highNhit_deltaT || owlNhitDelay < owlNhit_deltaT) {++nMuonCut; continue;}
+        }
 
         dataCounter.at(0)++;
         if (!is_data) {
@@ -299,10 +301,12 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             EventInfo->GetEntry(a - b);
 
             promptTime = int64_t(eventTime);
-            highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
-            owlNhitDelay = ((promptTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
-            if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
-            if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
+            if (is_data) {
+                highNhitDelay = ((promptTime - highNhitTime) & 0x7FFFFFFFFFF) / 50E6;  // [s] dealing with clock rollover
+                owlNhitDelay = ((promptTime - owlNhitTime) & 0x7FFFFFFFFFF) / 50.0;  // [us] dealing with clock rollover
+                if (highNhitDelay < highNhit_deltaT) {++nMuonCut; break;}
+                if (fabs(owlNhitDelay) < owlNhit_deltaT) {++nMuonCut; continue;}
+            }
             if (!valid) {++nValidCut; continue;}
             if (reconEnergy < 0) {++negEcut; continue;}
             if (!dcAppliedAndPassed(is_data, dcApplied, dcFlagged)) {++nDCcut; continue;}
@@ -373,7 +377,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
             // check for multiplicity (any events around the event pairs that have E>0.4MeV and dr<2m)
             passMultiplicity = true;
-            for (unsigned int c = 1; c < 1000; ++c) {
+            for (int c = 1; c < 1000; ++c) {
                 // before prompt
                 if ((a - b - c) < 0) break;
                 EventInfo->GetEntry(a - b - c);
@@ -391,7 +395,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
             }
             // after prompt is covered by before delayed
             if (passMultiplicity) {
-                for (unsigned int c = 1; c < 1000; ++c) {
+                for (int c = 1; c < 1000; ++c) {
                     // before delayed
                     if (c >= b) break;
                     EventInfo->GetEntry(a - c);
@@ -409,7 +413,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
                 }
             }
             if (passMultiplicity) {
-                for (unsigned int c = 1; c < 1000; ++c) {
+                for (int c = 1; c < 1000; ++c) {
                     // after delayed
                     if ((a + c) > nentries) break;
                     EventInfo->GetEntry(a + c);
@@ -459,7 +463,7 @@ void Apply_tagging_and_cuts(std::string inputNtuple, std::string previousRunNtup
 
     std::cout << "From " << nentries << " entries, nMuonCut: " << nMuonCut << ", nValidCut: " << nValidCut << ", negEcut: " << negEcut << ", nDCcut: " << nDCcut << std::endl;
     std::cout << "Passed All EVindex<0 EVindex==0 EVindex==1 EVindex==2 EVindex>2 EVindex<0&&rMC<5.7 EVindex==0&&rMC<5.7 EVindex==1&&rMC<5.7 EVindex==2&&rMC<5.7 EVindex>2&&rMC<5.7" << std::endl;
-    for (unsigned int i = 0; i < passNames.size(); ++i) {
+    for (int i = 0; i < passNames.size(); ++i) {
         std::cout << passNames.at(i) << " " << dataCounter.at(i) << " "
                   << EVindexNeg.at(i) << " " << EVindex0.at(i) << " " << EVindex1.at(i) << " " << EVindex2.at(i) << " " << EVindexAbove2.at(i) << " "
                   << EVindexNeg_MCFV.at(i) << " " << EVindex0_MCFV.at(i) << " " << EVindex1_MCFV.at(i) << " " << EVindex2_MCFV.at(i) << " " << EVindexAbove2_MCFV.at(i) << std::endl;

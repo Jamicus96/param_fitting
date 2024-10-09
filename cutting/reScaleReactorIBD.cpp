@@ -12,8 +12,12 @@ Based off rat-tools/AntinuTools/scale_reactor_flux.cpp
 #include <TVector3.h>
 #include <map>
 #include <fstream>
+#include <sstream>
+#include <string>
+#include <iostream>
 
 #define USING_RUN_NUM
+// #define VERBOSE
 
 /**
  * @brief Get the livetime scaling due to muon vetos from each run
@@ -22,18 +26,33 @@ Based off rat-tools/AntinuTools/scale_reactor_flux.cpp
  * @param livetime_scalings map <runNum, scaling>
  */
 void GetVetoLivetimeScaling(std::string run_livetimes_address, std::map<int, double>& livetime_scalings) {
-    if (run_livetimes_address == "" || run_livetimes_address != "false" || run_livetimes_address != "False" || run_livetimes_address != "0") return;
+    if (run_livetimes_address == "" || run_livetimes_address == "false" || run_livetimes_address == "False" || run_livetimes_address == "0") return;
 
     // Read in text file "<runNum> <livetime [days]> <livetime - veto time [days]"
+    std::cout << "Reading in livetimes: " << run_livetimes_address << std::endl;
     std::ifstream infile(run_livetimes_address);
+    if (!infile) {std::cout << "Error opening the file. Exit." << std::endl; exit(1);}
 
     int runNum;
     double livetime, corr_livetime;
     while (infile >> runNum >> livetime >> corr_livetime) {
-        if (corr_livetime > livetime) {std::cout << "ERROR [corr_livetime > livetime] : " << corr_livetime << " < " << livetime << std::endl; exit(1);}
-        if (livetime == 0) livetime_scalings.insert({runNum, 1.0});
+        if (corr_livetime > livetime) {
+            std::cout << "ERROR [corr_livetime > livetime] for run " << runNum << ": " << corr_livetime << " > " << livetime << ". Setting scaling to 1." << std::endl;
+            livetime_scalings.insert({runNum, 1.0});
+        }
+        if (corr_livetime == 0) {
+            std::cout << "ERROR [corr_livetime = 0] for run " << runNum << ": corr_livetime = " << corr_livetime << ", livetime = " << livetime << ". Setting scaling to 1." << std::endl;
+            livetime_scalings.insert({runNum, 1.0});
+        }
         else livetime_scalings.insert({runNum, corr_livetime / livetime});
     }
+
+    #ifdef VERBOSE
+        std::cout << "livetime_scalings:" << std::endl;
+        for (auto& x : livetime_scalings) {  
+            std::cout << "[" <<  x.first << "] : " << x.second << std::endl;;
+        }
+    #endif
 }
 
 
@@ -109,21 +128,27 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile, const std::
     int num_excess_eff_evts = 0;
     int num_no_table_evts = 0;
     double av_pow_scaling = 0, av_livetime_scaling = 0;
+    double livetime_scaling = 1;
     RAT::DBLinkPtr linkdb;
     RAT::DB *db = RAT::DB::Get();
     RAT::DS::Run run;
 
-    #ifndef USING_RUN_NUM
-        db->SetAirplaneModeStatus(true);
-        db->LoadDefaults();
+    db->LoadDefaults();
+    db->SetServer("postgres://snoplus@pgsql.snopl.us:5400/ratdb");
+    run.SetRunID(runNum);
+    db->BeginOfRun(run);
+    std::cout << "RAT DB tag: " << db->GetDBTag() << std::endl;
+
+    #ifdef VERBOSE
+        std::cout << "runNum = " << runNum << std::endl;
     #endif
-    #ifdef USING_RUN_NUM
-        db->LoadDefaults();
-        db->SetServer("postgres://snoplus@pgsql.snopl.us:5400/ratdb");
-        run.SetRunID(runNum);
-        db->BeginOfRun(run);
-        std::cout << "RAT DB tag: " << db->GetDBTag() << std::endl;
-    #endif
+
+    if (livetime_scalings.find(runNum) != livetime_scalings.end()) {
+        livetime_scaling = livetime_scalings.at(runNum);
+        #ifdef VERBOSE
+            std::cout << "livetime_scalings.at(runNum) = " << livetime_scalings.at(runNum) << std::endl;
+        #endif
+    }
 
     //go through entries of ttree
     for(Int_t a=0; a<nentries; a++) {
@@ -137,10 +162,21 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile, const std::
             run.SetRunID(runNum);
             db->BeginOfRun(run);
             lastRunNum = runNum;
+            #ifdef VERBOSE
+                std::cout << "runNum = " << runNum << std::endl;
+            #endif
+            if (livetime_scalings.find(runNum) != livetime_scalings.end()) {
+                livetime_scaling = livetime_scalings.at(runNum);
+                #ifdef VERBOSE
+                    std::cout << "livetime_scalings.at(runNum) = " << livetime_scalings.at(runNum) << std::endl;
+                #endif
+            } else {
+                livetime_scaling = 1;
+            }
         }
 
+        // Get power scaling
         linkdb = db->GetLink("REACTOR_STATUS", originReactorVect[0]);
-        efficiency = 1./1.2;
         try{
             efficiency = linkdb->GetDArray("core_power_scale_factor")[std::stoi(originReactorVect[1])];
         }
@@ -149,14 +185,13 @@ void ScaleReactorFlux(std::string inputFile, std::string outputFile, const std::
             std::cout << "Reactors status table does not exist for reactor " << originReactorString << ". Removing this event." << std::endl;
             continue;
         }
+
+        // Rolling averages (for printing)
         av_pow_scaling += (efficiency - av_pow_scaling) / (double)(a + 1);
-        if (livetime_scalings.find(runNum) != livetime_scalings.end()) {
-            // Run found in list, apply extra livetime scaling
-            efficiency *= livetime_scalings.at(runNum);
-            av_livetime_scaling += (livetime_scalings.at(runNum) - av_livetime_scaling) / (double)(a + 1);
-        } else {
-            av_livetime_scaling += (1.0 - av_livetime_scaling) / (double)(a + 1);
-        }
+        av_livetime_scaling += (livetime_scaling - av_livetime_scaling) / (double)(a + 1);
+
+        // Add veto time scaling
+        efficiency *= livetime_scaling;
 
         // See if event survives re-scaling
         if(efficiency > 1){ // we cant add events, so for now make a note of which reactors this occurs, SOLUTION: simulate higher than design power
