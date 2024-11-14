@@ -38,20 +38,20 @@ void read_hists_from_file(TFile* fin, std::vector<TH1D*>& reactor_hists, std::ve
 
 /* ~~~~~~~~ CONSTRAINED PARAMETERS ~~~~~~~~ */
 
-// double N_IBD = 52.2;       // Total number of expected reactor IBDs (at 30000 times rate, Raw entries: 2391909, scaled entries: 1566636, ratio: 0.654973077989171)
-double N_IBD = 52.2 * 0.961;  // Classifier cut
+// double N_IBD = 48.8;            // Total number of expected reactor IBDs (MC at 30000 times rate, with cuts applied: unscaled 2380633 / 30000 = 79.3544, scaled without vetos 1577682 / 30000 = 52.5894, scaled with vetos 1464357 / 30000 = 48.8119)
+double N_IBD = 48.8 * 0.961;  // Classifier cut
 double IBD_err_indiv = 0;
-double IBD_err = 0.03;      // fractional error in N_IBD for total reactor IBDs
+double IBD_err = 0.03;          // fractional error in N_IBD for total reactor IBDs
 
-// double N_alphaN = 16.5;         // Total number of expected alpha-n
-double N_alphaN = 16.5 * 0.23;  // Classifier cut
-// double alphaN_err_PR = 0;     // fractional error in N_alphaN for PR, on top of GS uncertainty
+// double N_alphaN = 16.4;         // Total number of expected alpha-n
+double N_alphaN = 16.4 * 0.23;  // Classifier cut
+// double alphaN_err_PR = 0;       // fractional error in N_alphaN for PR, on top of GS uncertainty
 double alphaN_err_PR = 1;
 double alphaN_err_GS = 0.3;     // fractional error in N_alphaN for ground state neutrons (PR & 12C)
 double alphaN_err_ES = 1.0;     // fractional error in N_alphaN for excited state neutrons (O16)
 
-// double N_geoNu = 11.6;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
-double N_geoNu = 11.6 * 0.902;   // Classifier cut
+// double N_geoNu = 11.8;          // Total number of expected geo-nu IBDs (un-oscillated, 72% cut efficiency)
+double N_geoNu = 11.8 * 0.902;   // Classifier cut
 double geoNuUThRatio = 3.7;
 double geoNuRatio_err = 0.35;  // fractional error
 
