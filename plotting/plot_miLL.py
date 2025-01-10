@@ -584,8 +584,9 @@ def correlation_matrix(logfile_address):
     tick_pos = np.arange(0 + 0.5/len(variables), 1 + 0.5/len(variables), 1/len(variables))
 
     if np.all(variables == np.array(['deltamsqr21', 'sinsqrtheta12', 'linScale', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_PR', 'alphaNNorm_GS', 'alphaNNorm_ES', 'reactorNorm', 'AccidentalsNorm'])):
-        print('True')
         variable_names = [r'$\Delta m^2_{21}$', r'$s_{12}^2$', r'$c$', r"$k_B'$", r'$c_P$', r'$\sigma / \sqrt{E}$', r'$R_{U/Th}$', r'$N_{geo-\nu}$', r'$S_{(\alpha, n) PR}$', r'$N_{(\alpha, n) GS}$', r'$N_{(\alpha, n) 16O}$', r'$N_{reactor}$', r'$N_{acc}$']
+    elif np.all(variables == np.array(['deltamsqr21', 'sinsqrtheta12', 'linScale', 'kBp', 'linScale_P', 'sigPerSqrtE', 'geoNuUThRatio', 'geoNuNorm', 'alphaNNorm_GS', 'alphaNNorm_ES', 'reactorNorm', 'AccidentalsNorm'])):
+        variable_names = [r'$\Delta m^2_{21}$', r'$s_{12}^2$', r'$c$', r"$k_B'$", r'$c_P$', r'$\sigma / \sqrt{E}$', r'$R_{U/Th}$', r'$N_{geo-\nu}$', r'$N_{(\alpha, n) GS}$', r'$N_{(\alpha, n) 16O}$', r'$N_{reactor}$', r'$N_{acc}$']
     else:
         variable_names = variables
     
